@@ -64,10 +64,10 @@ export interface GasEstimate {
 
 // Injective EVM Testnet
 export const INJECTIVE_TESTNET: ChainConfig = {
-  id: 2525,
+  id: 1439,
   name: 'Injective EVM Testnet',
-  rpcUrl: 'https://evm-t.injective.network',
-  explorerUrl: 'https://testnet.explorer.injective.network',
+  rpcUrl: 'https://k8s.testnet.json-rpc.injective.network/',
+  explorerUrl: 'https://testnet.blockscout.injective.network',
   nativeCurrency: {
     name: 'Injective',
     symbol: 'INJ',

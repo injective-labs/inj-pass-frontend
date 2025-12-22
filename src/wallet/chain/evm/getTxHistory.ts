@@ -28,9 +28,8 @@ export async function getTxHistory(
     const currentBlock = await client.getBlockNumber();
     const transactions: TransactionHistory[] = [];
 
-    // Scan recent blocks (limited approach)
-    const blocksToScan = Math.min(100, Number(currentBlock));
-    const startBlock = currentBlock - BigInt(blocksToScan);
+    // Reduce blocks to scan from 100 to 20 for better performance
+    const blocksToScan = Math.min(20, Number(currentBlock));
 
     for (let i = 0; i < blocksToScan && transactions.length < limit; i++) {
       const blockNumber = currentBlock - BigInt(i);
@@ -72,6 +71,7 @@ export async function getTxHistory(
         }
       } catch (blockError) {
         // Skip failed block fetches
+        console.warn(`Failed to fetch block ${blockNumber}:`, blockError);
         continue;
       }
     }

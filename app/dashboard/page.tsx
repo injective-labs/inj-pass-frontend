@@ -21,20 +21,19 @@ export default function DashboardPage() {
     }
 
     loadData();
-  }, [isUnlocked, address, router]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isUnlocked, address]);
 
   const loadData = async () => {
     if (!address) return;
 
     try {
       setLoading(true);
-      const [balanceData, txData] = await Promise.all([
-        getBalance(address, INJECTIVE_TESTNET),
-        getTxHistory(address, 10, INJECTIVE_TESTNET),
-      ]);
+      // Only load balance, skip transaction history for now (RPC intensive)
+      const balanceData = await getBalance(address, INJECTIVE_TESTNET);
       
       setBalance(balanceData);
-      setTransactions(txData);
+      setTransactions([]); // Empty for now
     } catch (error) {
       console.error('Failed to load data:', error);
     } finally {

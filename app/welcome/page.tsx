@@ -1,11 +1,11 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { createByPasskey } from '@/wallet/key-management';
 import { importPrivateKey } from '@/wallet/key-management';
 import { encryptKey } from '@/wallet/keystore';
-import { saveWallet } from '@/wallet/keystore';
+import { saveWallet, hasWallet } from '@/wallet/keystore';
 import { useWallet } from '@/contexts/WalletContext';
 import { sha256 } from '@noble/hashes/sha2.js';
 
@@ -16,24 +16,63 @@ export default function WelcomePage() {
   const [error, setError] = useState('');
   const [showImport, setShowImport] = useState(false);
   const [privateKeyInput, setPrivateKeyInput] = useState('');
+  const [walletExists, setWalletExists] = useState(false);
+
+  useEffect(() => {
+    setWalletExists(hasWallet());
+  }, []);
 
   const handleCreateWithPasskey = async () => {
     setLoading(true);
     setError('');
     
     try {
-      const result = await createByPasskey('user@injective-pass');
-      
-      // Load the wallet that was just created
-      const { loadWallet } = await import('@/wallet/keystore');
-      const keystore = loadWallet();
-      
-      if (!keystore) {
-        throw new Error('Failed to load created wallet');
-      }
+      // Check if wallet already exists in localStorage
+      const walletExists = hasWallet();
 
-      // For demo, we'll need to unlock with the passkey
-      // In production, this would be done separately
+      let credentialId: string;
+      
+      if (walletExists) {
+        // Wallet exists - use unlock flow instead
+        const { loadWallet } = await import('@/wallet/keystore');
+        const keystore = loadWallet();
+        
+        if (!keystore || !keystore.credentialId) {
+          throw new Error('Invalid wallet data');
+        }
+        
+        credentialId = keystore.credentialId;
+        
+        // Unlock existing wallet
+        const { unlockByPasskey } = await import('@/wallet/key-management/createByPasskey');
+        const { decryptKey } = await import('@/wallet/keystore');
+        
+        const entropy = await unlockByPasskey(credentialId);
+        const privateKey = await decryptKey(keystore.encryptedPrivateKey, entropy);
+        
+        unlock(privateKey, keystore);
+      } else {
+        // No wallet - create new one
+        const result = await createByPasskey('user@injective-pass');
+        
+        // Load the wallet that was just created
+        const { loadWallet } = await import('@/wallet/keystore');
+        const keystore = loadWallet();
+        
+        if (!keystore) {
+          throw new Error('Failed to load created wallet');
+        }
+
+        // Unlock the wallet immediately after creation
+        const { unlockByPasskey } = await import('@/wallet/key-management/createByPasskey');
+        const { decryptKey } = await import('@/wallet/keystore');
+        
+        const entropy = await unlockByPasskey(result.credentialId);
+        const privateKey = await decryptKey(keystore.encryptedPrivateKey, entropy);
+        
+        unlock(privateKey, keystore);
+      }
+      
       router.push('/dashboard');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create wallet');
@@ -124,7 +163,7 @@ export default function WelcomePage() {
         {!showImport ? (
           <>
             <button
-              onClick={handleCreateWithPasskey}
+              onClick={walletExists ? handleCreateWithPasskey : () => router.push('/passkey-create')}
               disabled={loading}
               style={{
                 width: '100%',
@@ -146,7 +185,7 @@ export default function WelcomePage() {
                 if (!loading) e.currentTarget.style.backgroundColor = 'var(--accent-color)';
               }}
             >
-              {loading ? 'Creating...' : '🔐 Create with Passkey'}
+              {loading ? 'Unlocking...' : (walletExists ? '🔓 Unlock with Passkey' : '🔐 Create with Passkey')}
             </button>
 
             <button

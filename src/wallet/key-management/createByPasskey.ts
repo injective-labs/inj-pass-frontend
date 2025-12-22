@@ -38,8 +38,10 @@ export async function createByPasskey(
     // 1. Request challenge
     const { challenge, rpId, rpName } = await requestChallenge('register');
 
-    // 2. Create WebAuthn credential
-    const userId = crypto.getRandomValues(new Uint8Array(16));
+    // 2. Create WebAuthn credential with deterministic userId
+    // Use SHA256 of username as userId to ensure same user → same credential
+    const userIdHash = sha256(new TextEncoder().encode(username));
+    const userId = new Uint8Array(userIdHash.buffer.slice(0)) as BufferSource;
     
     const credential = await navigator.credentials.create({
       publicKey: {
@@ -58,7 +60,7 @@ export async function createByPasskey(
         attestation: 'none',
         authenticatorSelection: {
           authenticatorAttachment: 'platform',
-          requireResidentKey: false,
+          requireResidentKey: true, // Store credential on device
           userVerification: 'required',
         },
       },
@@ -85,13 +87,14 @@ export async function createByPasskey(
       throw new Error('Passkey verification failed');
     }
 
-    // 4. Generate wallet private key
-    const walletEntropy = crypto.getRandomValues(new Uint8Array(32));
+    // 4. Derive deterministic wallet private key from credential ID
+    // Same Passkey → Same credentialId → Same private key → Same address
+    const credentialIdBytes = new TextEncoder().encode(verifyResult.credentialId);
+    const walletEntropy = sha256(credentialIdBytes);
     const { privateKey, address } = deriveSecp256k1(walletEntropy);
 
-    // 5. Derive encryption key from credential ID
-    const credentialIdBytes = new TextEncoder().encode(verifyResult.credentialId);
-    const encryptionEntropy = sha256(credentialIdBytes);
+    // 5. Derive encryption key from credential ID (same as wallet entropy for simplicity)
+    const encryptionEntropy = walletEntropy;
 
     // 6. Encrypt and save
     const encryptedPrivateKey = await encryptKey(privateKey, encryptionEntropy);
@@ -139,7 +142,7 @@ export async function unlockByPasskey(credentialId: string): Promise<Uint8Array>
         challenge: base64ToArrayBuffer(challenge),
         allowCredentials: [
           {
-            id: base64ToArrayBuffer(atob(credentialId)),
+            id: base64ToArrayBuffer(credentialId),
             type: 'public-key',
           },
         ],

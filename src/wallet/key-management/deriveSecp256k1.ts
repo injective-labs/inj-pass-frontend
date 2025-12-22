@@ -46,7 +46,8 @@ function isValidPrivateKey(privateKey: Uint8Array): boolean {
   }
 
   // Must be less than curve order
-  const n = secp256k1.CURVE.n;
+  // secp256k1 curve order (n)
+  const n = 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141n;
   const keyBigInt = bytesToBigInt(privateKey);
   
   return keyBigInt > 0n && keyBigInt < n;
