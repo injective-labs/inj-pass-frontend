@@ -1,4 +1,4 @@
-export { deriveSecp256k1, fromHex, isValidAddress, isValidPrivateKeyHex } from './deriveSecp256k1';
+export { deriveSecp256k1, fromHex, toHex, isValidAddress, isValidPrivateKeyHex } from './deriveSecp256k1';
 export { createByPasskey, unlockByPasskey } from './createByPasskey';
 export { createByNFC, unlockByNFC, readNFCTag, isNFCSupported } from './createByNFC';
 export { importPrivateKey, validatePrivateKey } from './importPrivateKey';

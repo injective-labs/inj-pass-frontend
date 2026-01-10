@@ -65,9 +65,14 @@ export default function DashboardPage() {
       {/* Header */}
       <header style={styles.header}>
         <h1 style={styles.title}>Injective Pass</h1>
-        <button onClick={handleLock} style={styles.lockBtn}>
-          🔒 Lock
-        </button>
+        <div style={styles.headerActions}>
+          <button onClick={() => router.push('/settings')} style={styles.settingsBtn}>
+            ⚙️ Settings
+          </button>
+          <button onClick={handleLock} style={styles.lockBtn}>
+            🔒 Lock
+          </button>
+        </div>
       </header>
 
       {/* Address Display */}
@@ -163,10 +168,24 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: 'center',
     marginBottom: '2rem',
   },
+  headerActions: {
+    display: 'flex',
+    gap: '0.75rem',
+    alignItems: 'center',
+  },
   title: {
     fontSize: '1.5rem',
     fontWeight: '700',
     color: 'var(--primary-text)',
+  },
+  settingsBtn: {
+    padding: '0.5rem 1rem',
+    fontSize: '0.875rem',
+    backgroundColor: 'transparent',
+    border: '2px solid var(--surface-border)',
+    borderRadius: '8px',
+    color: 'var(--primary-text)',
+    cursor: 'pointer',
   },
   lockBtn: {
     padding: '0.5rem 1rem',
