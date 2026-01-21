@@ -605,3 +605,32 @@ body.sidebar-mode .sidebar-overlay {
   padding: 3rem 1rem;
   color: var(--secondary-text);
 }
+/* Welcome Page Responsive Styles */
+.welcome-banner {
+  padding: 0.75rem 1rem;
+  min-height: 48px;
+}
+
+@media (max-width: 640px) {
+  .welcome-banner {
+    padding: 0.5rem 0.75rem;
+    min-height: 40px;
+  }
+}
+
+.welcome-buttons-container {
+  display: flex;
+  flex-direction: column;
+  gap: clamp(0.75rem, 2vw, 1rem);
+  align-items: stretch;
+  justify-content: center;
+  width: 100%;
+}
+
+@media (min-width: 640px) {
+  .welcome-buttons-container {
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+  }
+}
