@@ -139,7 +139,7 @@ const handleImport = async () => {
             fontWeight: '600',
             textAlign: 'center',
           }}>
-            INJ Pass received grant from <a href="https://x.com/NinjaLabsHQ" target="_blank" rel="noopener noreferrer" style={{ color: 'white', textDecoration: 'underline', textUnderlineOffset: '2px' }}>Ninja Labs</a>
+            Injective EVM is online <a href="https://injective.com/zh/build" target="_blank" rel="noopener noreferrer" style={{ color: 'white', textDecoration: 'underline', textUnderlineOffset: '2px' }}>Learn More</a>
           </span>
         </div>
       </div>
@@ -180,7 +180,7 @@ const handleImport = async () => {
               <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.562 8.161l-1.84 8.673c-.136.624-.5.778-.999.485l-2.761-2.036-1.332 1.281c-.147.147-.271.271-.556.271l.199-2.822 5.13-4.638c.223-.199-.049-.31-.346-.111l-6.341 3.993-2.733-.853c-.593-.187-.605-.593.126-.879l10.691-4.12c.496-.183.929.112.762.874z"/>
             </svg>
           </a>
-          <a href="https://twitter.com/injective" target="_blank" rel="noopener noreferrer" style={{
+          <a href="https://x.com/INJ_Pass" target="_blank" rel="noopener noreferrer" style={{
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
