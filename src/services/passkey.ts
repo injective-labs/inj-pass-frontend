@@ -10,6 +10,7 @@ export interface PasskeyVerifyResponse {
   credentialId?: string;
   publicKey?: string;
   verified?: boolean;
+  sessionToken?: string; // Added for session management
 }
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL;

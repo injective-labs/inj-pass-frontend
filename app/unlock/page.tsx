@@ -6,6 +6,7 @@ import { useWallet } from '@/contexts/WalletContext';
 import { unlockByPasskey } from '@/wallet/key-management/createByPasskey';
 import { unlockByNFC, readNFCTag } from '@/wallet/key-management/createByNFC';
 import { decryptKey } from '@/wallet/keystore';
+import { saveSessionToken } from '@/services/session';
 import type { LocalKeystore } from '@/types/wallet';
 
 export default function UnlockPage() {
@@ -39,8 +40,13 @@ export default function UnlockPage() {
     setError('');
 
     try {
-      const entropy = await unlockByPasskey(keystore.credentialId);
+      const { entropy, sessionToken } = await unlockByPasskey(keystore.credentialId);
       const privateKey = await decryptKey(keystore.encryptedPrivateKey, entropy);
+      
+      // Save session token if provided by backend
+      if (sessionToken) {
+        saveSessionToken(sessionToken, keystore.address);
+      }
       
       unlock(privateKey, keystore);
       router.push('/dashboard');

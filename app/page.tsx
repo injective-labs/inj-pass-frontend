@@ -6,9 +6,14 @@ import { useWallet } from '@/contexts/WalletContext';
 
 export default function HomePage() {
   const router = useRouter();
-  const { checkExistingWallet, isUnlocked } = useWallet();
+  const { checkExistingWallet, isUnlocked, isInitializing } = useWallet();
 
   useEffect(() => {
+    // Wait for initialization to complete before routing
+    if (isInitializing) {
+      return;
+    }
+
     const hasWallet = checkExistingWallet();
     
     if (hasWallet && !isUnlocked) {
@@ -18,7 +23,7 @@ export default function HomePage() {
     } else {
       router.push('/welcome');
     }
-  }, [checkExistingWallet, isUnlocked, router]);
+  }, [checkExistingWallet, isUnlocked, isInitializing, router]);
 
   return (
     <div style={{

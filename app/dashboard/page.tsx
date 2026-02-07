@@ -6,6 +6,7 @@ import { useWallet } from '@/contexts/WalletContext';
 import { getBalance } from '@/wallet/chain';
 import { Balance, INJECTIVE_TESTNET } from '@/types/chain';
 import { getInjPrice } from '@/services/price';
+import { useSessionManager } from '@/services/useSessionManager';
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -17,6 +18,9 @@ export default function DashboardPage() {
   const [balanceVisible, setBalanceVisible] = useState(true);
   const [activeTab, setActiveTab] = useState<'tokens' | 'nfts' | 'defi'>('tokens');
   const [copied, setCopied] = useState(false);
+
+  // Use session manager to auto-lock on expiry
+  useSessionManager();
 
   useEffect(() => {
     if (!isUnlocked || !address) {

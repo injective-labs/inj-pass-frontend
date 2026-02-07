@@ -131,7 +131,10 @@ export async function createByPasskey(
  * 5. Derive decryption key from credential ID
  * 6. Decrypt and return private key
  */
-export async function unlockByPasskey(credentialId: string): Promise<Uint8Array> {
+export async function unlockByPasskey(credentialId: string): Promise<{
+  entropy: Uint8Array;
+  sessionToken?: string;
+}> {
   try {
     // 1. Request challenge
     const { challenge } = await requestChallenge('authenticate');
@@ -178,7 +181,10 @@ export async function unlockByPasskey(credentialId: string): Promise<Uint8Array>
     const credentialIdBytes = new TextEncoder().encode(credentialId);
     const decryptionEntropy = sha256(credentialIdBytes);
 
-    return decryptionEntropy;
+    return {
+      entropy: decryptionEntropy,
+      sessionToken: verifyResult.sessionToken,
+    };
   } catch (error) {
     throw new Error(
       `Failed to unlock wallet with Passkey: ${error instanceof Error ? error.message : 'Unknown error'}`
