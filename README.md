@@ -1,4 +1,27 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# INJ Pass Frontend
+
+A Next.js-based wallet application for Injective with passkey authentication and session management.
+
+## Features
+
+- 🔐 **Passkey Authentication** - Secure, passwordless login using WebAuthn
+- 🎫 **Session Token Management** - Stay logged in for 30 minutes without re-authentication
+- 💳 **Multi-wallet Support** - Passkey, NFC, and password-based wallets
+- ⚡ **Auto-unlock on Refresh** - Seamless experience across page refreshes
+- 🔒 **Automatic Session Expiry** - Enhanced security with timed logout
+
+## Session Token Authentication
+
+This application implements session token authentication to provide a seamless user experience:
+
+- **Login Once**: Authenticate with passkey, stay logged in for 30 minutes
+- **No Re-auth on Refresh**: Page refreshes don't require passkey authentication
+- **Auto-lock on Expiry**: Wallet automatically locks after 30 minutes
+- **Multi-tab Support**: Session works across multiple browser tabs
+
+For detailed information about the session token implementation, see:
+- [Session Token Integration Guide](./SESSION_TOKEN_INTEGRATION.md) - Backend integration requirements
+- [Session Flow Diagrams](./SESSION_FLOW_DIAGRAM.md) - Visual flow diagrams
 
 ## Getting Started
 
@@ -16,9 +39,44 @@ bun dev
 
 Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Environment Configuration
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Create a `.env.local` file with the following:
+
+```bash
+NEXT_PUBLIC_API_URL=http://localhost:3000/api
+```
+
+For production, update to your production API URL.
+
+## Backend Requirements
+
+The backend must implement the following to support session token authentication:
+
+1. **Passkey Verification** - Return `sessionToken` in `/api/passkey/verify` response
+2. **Session Unlock** - Implement `/api/session/unlock` endpoint
+3. **Redis Storage** - Store sessions with 30-minute TTL
+
+See [SESSION_TOKEN_INTEGRATION.md](./SESSION_TOKEN_INTEGRATION.md) for complete backend requirements.
+
+## Project Structure
+
+- `/app` - Next.js app directory with pages
+- `/src/contexts` - React contexts (WalletContext)
+- `/src/services` - API services and utilities
+  - `session.ts` - Session token management
+  - `passkey.ts` - Passkey authentication
+  - `useSessionManager.ts` - Session expiry hook
+- `/src/wallet` - Wallet key management and cryptography
+- `/src/types` - TypeScript type definitions
+
+## Key Technologies
+
+- **Next.js 16** - React framework with App Router
+- **TypeScript** - Type-safe development
+- **WebAuthn API** - Passkey authentication
+- **Noble Crypto** - Cryptographic operations
+- **Viem** - Ethereum utilities
 
 ## Learn More
 
