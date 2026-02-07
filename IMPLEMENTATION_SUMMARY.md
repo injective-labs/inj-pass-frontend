@@ -136,7 +136,7 @@
 {
   "token": "jwt_or_random_string",
   "expiresAt": 1707318127000, // Unix timestamp
-  "address": "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb"
+  "address": "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb0"
 }
 ```
 
@@ -174,7 +174,7 @@
 **Response:**
 ```json
 {
-  "address": "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb",
+  "address": "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb0",
   "privateKey": "ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"
 }
 ```

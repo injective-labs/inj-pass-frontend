@@ -81,7 +81,7 @@ export const SessionDebugger = {
   /**
    * Create a mock session (for testing without backend)
    */
-  createMockSession(address: string = '0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb'): void {
+  createMockSession(address: string = '0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb0'): void {
     const mockToken = 'mock_token_' + Math.random().toString(36).substring(7);
     saveSessionToken(mockToken, address);
     console.log('✅ Mock session created');
