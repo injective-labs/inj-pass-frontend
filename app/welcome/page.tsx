@@ -72,7 +72,7 @@ const handleImport = async () => {
         const { unlockByPasskey } = await import('@/wallet/key-management/createByPasskey');
         const { decryptKey } = await import('@/wallet/keystore');
         
-        const entropy = await unlockByPasskey(keystore.credentialId);
+        const { entropy } = await unlockByPasskey(keystore.credentialId);
         const privateKey = await decryptKey(keystore.encryptedPrivateKey, entropy);
         
         unlock(privateKey, keystore);
@@ -89,7 +89,7 @@ const handleImport = async () => {
         const { unlockByPasskey } = await import('@/wallet/key-management/createByPasskey');
         const { decryptKey } = await import('@/wallet/keystore');
         
-        const entropy = await unlockByPasskey(result.credentialId);
+        const { entropy } = await unlockByPasskey(result.credentialId);
         const privateKey = await decryptKey(keystore.encryptedPrivateKey, entropy);
         
         unlock(privateKey, keystore);
