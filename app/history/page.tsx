@@ -20,7 +20,7 @@ interface Transaction {
 
 export default function HistoryPage() {
   const router = useRouter();
-  const { isUnlocked } = useWallet();
+  const { isUnlocked, isCheckingSession } = useWallet();
   const [activeFilter, setActiveFilter] = useState<'all' | TransactionType>('all');
 
   // Mock transaction data - replace with actual data from blockchain/API
@@ -91,6 +91,14 @@ export default function HistoryPage() {
     if (days < 7) return `${days}d ago`;
     return date.toLocaleDateString();
   };
+
+  if (isCheckingSession) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <p className="text-white">Loading...</p>
+      </div>
+    );
+  }
 
   if (!isUnlocked) {
     router.push('/');

@@ -9,7 +9,7 @@ import AccountHeader from '../components/AccountHeader';
 
 export default function SettingsPage() {
   const router = useRouter();
-  const { isUnlocked, address, privateKey, keystore, lock } = useWallet();
+  const { isUnlocked, address, privateKey, keystore, lock, isCheckingSession } = useWallet();
   const { hasPin, isPinLocked, autoLockMinutes, setPin, changePin, lockWallet, setAutoLockMinutes, verifyPin } = usePin();
   
   const [showPrivateKey, setShowPrivateKey] = useState(false);
@@ -32,6 +32,11 @@ export default function SettingsPage() {
   const [pinError, setPinError] = useState('');
   const [resettingPin, setResettingPin] = useState(false);
   const [pinResetSuccess, setPinResetSuccess] = useState(false);
+
+  // Wait for session check
+  if (isCheckingSession) {
+    return <div className="min-h-screen flex items-center justify-center"><p className="text-white">Loading...</p></div>;
+  }
 
   if (!isUnlocked || !address) {
     if (typeof window !== 'undefined') {

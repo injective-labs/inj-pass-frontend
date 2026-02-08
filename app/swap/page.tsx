@@ -14,7 +14,7 @@ interface Token {
 
 export default function SwapPage() {
   const router = useRouter();
-  const { isUnlocked } = useWallet();
+  const { isUnlocked, isCheckingSession } = useWallet();
   const [fromToken, setFromToken] = useState<Token>({ symbol: 'INJ', name: 'Injective', icon: '/injswap.png', balance: '0.0000' });
   const [toToken, setToToken] = useState<Token>({ symbol: 'USDT', name: 'Tether USD', icon: '/USDT_Logo.png', balance: '0.00' });
   const [fromAmount, setFromAmount] = useState('');
@@ -125,6 +125,14 @@ export default function SwapPage() {
     // Mock swap execution
     alert('Swap functionality will be implemented with actual DEX integration');
   };
+
+  if (isCheckingSession) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <p className="text-white">Loading...</p>
+      </div>
+    );
+  }
 
   if (!isUnlocked) {
     router.push('/');

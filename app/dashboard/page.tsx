@@ -10,7 +10,7 @@ import Image from 'next/image';
 
 export default function DashboardPage() {
   const router = useRouter();
-  const { isUnlocked, address, lock } = useWallet();
+  const { isUnlocked, address, lock, isCheckingSession } = useWallet();
   const [balance, setBalance] = useState<Balance | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -21,14 +21,23 @@ export default function DashboardPage() {
   const [assetTab, setAssetTab] = useState<'tokens' | 'nfts' | 'defi'>('tokens');
 
   useEffect(() => {
+    // Wait for session check to complete
+    if (isCheckingSession) {
+      console.log('[Dashboard] Still checking session, waiting...');
+      return;
+    }
+
+    console.log('[Dashboard] isUnlocked:', isUnlocked, 'address:', address);
     if (!isUnlocked || !address) {
+      console.log('[Dashboard] Not unlocked, redirecting to /welcome');
       router.push('/welcome');
       return;
     }
 
+    console.log('[Dashboard] Unlocked, loading data...');
     loadData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isUnlocked, address]);
+  }, [isUnlocked, address, isCheckingSession]);
 
   const loadData = async () => {
     if (!address) return;

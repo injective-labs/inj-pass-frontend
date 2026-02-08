@@ -9,7 +9,7 @@ type AddressType = 'evm' | 'cosmos';
 
 export default function ReceivePage() {
   const router = useRouter();
-  const { isUnlocked, address } = useWallet();
+  const { isUnlocked, address, isCheckingSession } = useWallet();
   const [copied, setCopied] = useState(false);
   const [addressType, setAddressType] = useState<AddressType>('evm');
 
@@ -31,6 +31,10 @@ export default function ReceivePage() {
       setTimeout(() => setCopied(false), 2000);
     }
   };
+
+  if (isCheckingSession) {
+    return <div className="min-h-screen flex items-center justify-center"><p className="text-white">Loading...</p></div>;
+  }
 
   if (!isUnlocked || !address) {
     return (

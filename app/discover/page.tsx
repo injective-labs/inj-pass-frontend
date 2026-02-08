@@ -20,7 +20,7 @@ interface DApp {
 
 export default function DiscoverPage() {
   const router = useRouter();
-  const { isUnlocked, address } = useWallet();
+  const { isUnlocked, address, isCheckingSession } = useWallet();
   const [activeCategory, setActiveCategory] = useState<DAppCategory>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState<'settings' | 'wallet' | 'discover'>('discover');
@@ -112,6 +112,14 @@ export default function DiscoverPage() {
   });
 
   const featuredDapps = dapps.filter(dapp => dapp.featured);
+
+  if (isCheckingSession) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <p className="text-white">Loading...</p>
+      </div>
+    );
+  }
 
   if (!isUnlocked) {
     router.push('/');

@@ -13,7 +13,7 @@ interface AddressBookEntry {
 
 export default function SendPage() {
   const router = useRouter();
-  const { isUnlocked, privateKey } = useWallet();
+  const { isUnlocked, privateKey, isCheckingSession } = useWallet();
   const [recipient, setRecipient] = useState('');
   const [amount, setAmount] = useState('');
   const [gasEstimate, setGasEstimate] = useState<GasEstimate | null>(null);
@@ -297,6 +297,14 @@ export default function SendPage() {
       setLoading(false);
     }
   };
+
+  if (isCheckingSession) {
+    return (
+      <div className="min-h-screen pb-24 md:pb-8 bg-black flex items-center justify-center">
+        <p className="text-white">Loading...</p>
+      </div>
+    );
+  }
 
   if (!isUnlocked) {
     return (
