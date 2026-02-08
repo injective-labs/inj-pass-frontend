@@ -1,0 +1,92 @@
+/**
+ * Chain configuration types
+ */
+
+export interface ChainConfig {
+  id: number;
+  name: string;
+  rpcUrl: string;
+  explorerUrl: string;
+  nativeCurrency: {
+    name: string;
+    symbol: string;
+    decimals: number;
+  };
+}
+
+export interface TransactionRequest {
+  to: string;
+  value?: bigint;
+  data?: `0x${string}`;
+  gasLimit?: bigint;
+  maxFeePerGas?: bigint;
+  maxPriorityFeePerGas?: bigint;
+}
+
+export interface TransactionReceipt {
+  hash: string;
+  from: string;
+  to: string | null;
+  value: bigint;
+  gasUsed: bigint;
+  effectiveGasPrice: bigint;
+  blockNumber: bigint;
+  blockHash: string;
+  status: 'success' | 'reverted';
+  timestamp?: number;
+}
+
+export interface TransactionHistory {
+  hash: string;
+  from: string;
+  to: string | null;
+  value: string; // Wei as string
+  timestamp: number;
+  blockNumber: number;
+  status: 'pending' | 'success' | 'failed';
+  gasUsed?: string;
+  gasPrice?: string;
+}
+
+export interface Balance {
+  value: bigint;
+  formatted: string;
+  decimals: number;
+  symbol: string;
+}
+
+export interface GasEstimate {
+  gasLimit: bigint;
+  maxFeePerGas: bigint;
+  maxPriorityFeePerGas: bigint;
+  totalCost: bigint; // in wei
+}
+
+// Injective EVM Testnet
+export const INJECTIVE_TESTNET: ChainConfig = {
+  id: 1439,
+  name: 'Injective EVM Testnet',
+  rpcUrl: 'https://k8s.testnet.json-rpc.injective.network/',
+  explorerUrl: 'https://testnet.blockscout.injective.network',
+  nativeCurrency: {
+    name: 'Injective',
+    symbol: 'INJ',
+    decimals: 18,
+  },
+};
+
+// Injective EVM Mainnet
+export const INJECTIVE_MAINNET: ChainConfig = {
+  id: 2424,
+  name: 'Injective EVM',
+  rpcUrl: 'https://evm.injective.network',
+  explorerUrl: 'https://explorer.injective.network',
+  nativeCurrency: {
+    name: 'Injective',
+    symbol: 'INJ',
+    decimals: 18,
+  },
+};
+
+// Default chain (use testnet for development)
+export const DEFAULT_CHAIN = INJECTIVE_TESTNET;
