@@ -133,7 +133,7 @@ export default function CardsPage() {
       // 3. Verify with backend
       const { verifyPasskey } = await import('@/services/passkey');
       const verifyResult = await verifyPasskey(challenge, {
-        id: credential.id,
+        id: arrayBufferToBase64(credential.rawId), // Use rawId, not credential.id
         rawId: arrayBufferToBase64(credential.rawId),
         response: {
           clientDataJSON: arrayBufferToBase64(response.clientDataJSON),
@@ -242,7 +242,7 @@ export default function CardsPage() {
       // 3. Verify with backend
       const { verifyPasskey } = await import('@/services/passkey');
       const verifyResult = await verifyPasskey(challenge, {
-        id: credential.id,
+        id: arrayBufferToBase64(credential.rawId), // Use rawId, not credential.id
         rawId: arrayBufferToBase64(credential.rawId),
         response: {
           clientDataJSON: arrayBufferToBase64(response.clientDataJSON),
