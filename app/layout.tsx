@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Inter, Space_Grotesk } from "next/font/google";
 import "./globals.css";
 import { WalletProvider } from "@/contexts/WalletContext";
+import { PinProvider } from "@/contexts/PinContext";
 import Script from "next/script";
 import { SidebarOverlay, GeometricShapes } from "./components/LayoutClient";
 
@@ -16,15 +17,15 @@ const spaceGrotesk = Space_Grotesk({
 });
 
 export const metadata: Metadata = {
-  title: "INJ Pass - Secure Wallet",
+  title: "INJ Pass",
   description: "Passkey-powered wallet for Injective",
   icons: {
     icon: [
-      { url: "/lambda.png" },
-      { url: "/lambda.png", sizes: "32x32", type: "image/jpeg" },
-      { url: "/lambda.png", sizes: "16x16", type: "image/jpeg" },
+      { url: "/lambdalogo.png" },
+      { url: "/lambdalogo.png", sizes: "32x32", type: "image/png" },
+      { url: "/lambdalogo.png", sizes: "16x16", type: "image/png" },
     ],
-    apple: "/lambda.png",
+    apple: "/lambdalogo.png",
   },
   appleWebApp: {
     capable: true,
@@ -64,7 +65,9 @@ export default function RootLayout({
         {/* Animated Background and Geometric Shapes */}
         <GeometricShapes />
 
-        <WalletProvider>{children}</WalletProvider>
+        <PinProvider>
+          <WalletProvider>{children}</WalletProvider>
+        </PinProvider>
       </body>
     </html>
   );

@@ -3,16 +3,20 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useWallet } from '@/contexts/WalletContext';
+import { usePin } from '@/contexts/PinContext';
 import { unlockByPasskey } from '@/wallet/key-management/createByPasskey';
 import { unlockByNFC, readNFCTag } from '@/wallet/key-management/createByNFC';
 import { decryptKey } from '@/wallet/keystore';
 import type { LocalKeystore } from '@/types/wallet';
+import Image from 'next/image';
 
 export default function UnlockPage() {
   const router = useRouter();
   const { unlock } = useWallet();
+  const { hasPin, isPinLocked, unlockWallet } = usePin();
   const [keystore, setKeystore] = useState<LocalKeystore | null>(null);
   const [password, setPassword] = useState('');
+  const [pin, setPin] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [nfcScanning, setNfcScanning] = useState(false);
@@ -95,6 +99,89 @@ export default function UnlockPage() {
       setLoading(false);
     }
   };
+
+  const handleUnlockPin = async () => {
+    if (!pin || pin.length !== 6) return;
+
+    setLoading(true);
+    setError('');
+
+    try {
+      const success = await unlockWallet(pin);
+      if (success) {
+        router.push('/dashboard');
+      } else {
+        setError('Incorrect PIN');
+        setPin('');
+      }
+    } catch (err) {
+      setError('Failed to unlock with PIN');
+      setPin('');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // If PIN locked, show PIN unlock screen
+  if (hasPin && isPinLocked) {
+    return (
+      <div className="min-h-screen bg-black flex items-center justify-center px-4">
+        <div className="w-full max-width-md">
+          <div className="text-center mb-8">
+            <div className="w-20 h-20 rounded-full bg-white/5 border border-white/10 flex items-center justify-center mx-auto mb-6 p-4">
+              <Image 
+                src="/lambda.png" 
+                alt="Logo" 
+                width={64} 
+                height={64}
+                className="w-full h-full object-contain"
+              />
+            </div>
+            <h1 className="text-2xl font-bold text-white mb-2">Unlock Wallet</h1>
+            <p className="text-gray-400 text-sm">Enter your 6-digit PIN</p>
+          </div>
+
+          <div className="p-6 rounded-2xl bg-white/5 border border-white/10">
+            <input
+              type="password"
+              inputMode="numeric"
+              maxLength={6}
+              value={pin}
+              onChange={(e) => setPin(e.target.value.replace(/\D/g, ''))}
+              placeholder="••••••"
+              className="w-full py-4 px-4 rounded-xl bg-black border border-white/10 text-white placeholder-gray-500 focus:outline-none focus:border-white/30 transition-all text-center text-3xl tracking-widest font-mono mb-4"
+              autoFocus
+              onKeyDown={(e) => e.key === 'Enter' && handleUnlockPin()}
+            />
+
+            {error && (
+              <div className="mb-4 p-3 rounded-xl bg-red-500/10 border border-red-500/30 text-red-400 text-sm text-center">
+                {error}
+              </div>
+            )}
+
+            <button
+              onClick={handleUnlockPin}
+              disabled={pin.length !== 6 || loading}
+              className="w-full py-4 rounded-xl bg-white text-black font-bold hover:bg-gray-100 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+            >
+              {loading ? 'Unlocking...' : 'Unlock'}
+            </button>
+          </div>
+
+          <button
+            onClick={() => {
+              localStorage.removeItem('wallet_keystore');
+              router.push('/welcome');
+            }}
+            className="w-full mt-4 py-3 rounded-xl bg-white/5 border border-white/10 text-gray-400 font-bold text-sm hover:bg-white/10 transition-all"
+          >
+            Reset Wallet
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   if (!keystore) {
     return (

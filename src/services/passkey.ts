@@ -10,6 +10,20 @@ export interface PasskeyVerifyResponse {
   credentialId?: string;
   publicKey?: string;
   verified?: boolean;
+  token?: string;
+}
+
+export interface TokenVerifyResponse {
+  valid: boolean;
+  credentialId?: string;
+  userId?: string;
+  expiresAt?: number;
+}
+
+export interface TokenRefreshResponse {
+  success: boolean;
+  token?: string;
+  error?: string;
 }
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL;
@@ -86,4 +100,164 @@ export function base64ToArrayBuffer(base64: string): ArrayBuffer {
     bytes[i] = binary.charCodeAt(i);
   }
   return bytes.buffer;
+}
+
+// Token management functions
+const AUTH_TOKEN_KEY = 'auth_token';
+
+/**
+ * Get stored auth token
+ */
+export function getAuthToken(): string | null {
+  return localStorage.getItem(AUTH_TOKEN_KEY);
+}
+
+/**
+ * Store auth token
+ */
+export function setAuthToken(token: string): void {
+  localStorage.setItem(AUTH_TOKEN_KEY, token);
+}
+
+/**
+ * Remove auth token
+ */
+export function removeAuthToken(): void {
+  localStorage.removeItem(AUTH_TOKEN_KEY);
+}
+
+/**
+ * Verify token with backend
+ */
+export async function verifyToken(token?: string): Promise<TokenVerifyResponse> {
+  const authToken = token || getAuthToken();
+  console.log('[verifyToken] Token to verify:', authToken ? 'Present' : 'Missing');
+  if (!authToken) {
+    console.log('[verifyToken] No auth token available');
+    return { valid: false };
+  }
+
+  try {
+    console.log('[verifyToken] Calling API:', `${API_BASE_URL}/passkey/verify-token`);
+    const response = await fetch(`${API_BASE_URL}/passkey/verify-token`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${authToken}`,
+        'Content-Type': 'application/json',
+      },
+    });
+
+    console.log('[verifyToken] Response status:', response.status);
+    if (!response.ok) {
+      console.log('[verifyToken] Response not OK');
+      return { valid: false };
+    }
+
+    const result = await response.json();
+    console.log('[verifyToken] API response:', result);
+    return result;
+  } catch (error) {
+    console.error('[verifyToken] Token verification failed:', error);
+    return { valid: false };
+  }
+}
+
+/**
+ * Refresh token with backend
+ */
+export async function refreshToken(token?: string): Promise<string | null> {
+  const authToken = token || getAuthToken();
+  if (!authToken) {
+    return null;
+  }
+
+  try {
+    const response = await fetch(`${API_BASE_URL}/passkey/refresh-token`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${authToken}`,
+        'Content-Type': 'application/json',
+      },
+    });
+
+    if (!response.ok) {
+      return null;
+    }
+
+    const result: TokenRefreshResponse = await response.json();
+    if (result.success && result.token) {
+      setAuthToken(result.token);
+      return result.token;
+    }
+
+    return null;
+  } catch (error) {
+    console.error('Token refresh failed:', error);
+    return null;
+  }
+}
+
+/**
+ * Logout and revoke token
+ */
+export async function logout(): Promise<boolean> {
+  const authToken = getAuthToken();
+  if (!authToken) {
+    return true;
+  }
+
+  try {
+    await fetch(`${API_BASE_URL}/passkey/logout`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${authToken}`,
+        'Content-Type': 'application/json',
+      },
+    });
+  } catch (error) {
+    console.error('Logout failed:', error);
+  } finally {
+    removeAuthToken();
+  }
+
+  return true;
+}
+
+/**
+ * Check if user has a valid session
+ */
+export async function hasValidSession(): Promise<boolean> {
+  const token = getAuthToken();
+  console.log('[hasValidSession] Auth token:', token ? 'Found' : 'Not found');
+  if (!token) {
+    console.log('[hasValidSession] No token in localStorage');
+    return false;
+  }
+
+  const result = await verifyToken(token);
+  console.log('[hasValidSession] Verify result:', result);
+  return result.valid;
+}
+
+/**
+ * Auto-refresh token if it's close to expiring (within 5 minutes)
+ */
+export async function autoRefreshToken(): Promise<void> {
+  const token = getAuthToken();
+  if (!token) {
+    return;
+  }
+
+  const result = await verifyToken(token);
+  if (!result.valid || !result.expiresAt) {
+    return;
+  }
+
+  const now = Date.now();
+  const timeLeft = result.expiresAt - now;
+  const fiveMinutes = 5 * 60 * 1000;
+
+  if (timeLeft < fiveMinutes && timeLeft > 0) {
+    await refreshToken(token);
+  }
 }

@@ -1,14 +1,19 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useWallet } from '@/contexts/WalletContext';
 import { estimateGas, sendTransaction } from '@/wallet/chain';
 import { INJECTIVE_TESTNET, GasEstimate } from '@/types/chain';
 
+interface AddressBookEntry {
+  name: string;
+  address: string;
+}
+
 export default function SendPage() {
   const router = useRouter();
-  const { isUnlocked, privateKey } = useWallet();
+  const { isUnlocked, privateKey, isCheckingSession } = useWallet();
   const [recipient, setRecipient] = useState('');
   const [amount, setAmount] = useState('');
   const [gasEstimate, setGasEstimate] = useState<GasEstimate | null>(null);
@@ -16,28 +21,258 @@ export default function SendPage() {
   const [estimating, setEstimating] = useState(false);
   const [txHash, setTxHash] = useState('');
   const [error, setError] = useState('');
+  const [costFlashing, setCostFlashing] = useState(false);
+  const [showAddressBook, setShowAddressBook] = useState(false);
+  const [addressBook, setAddressBook] = useState<AddressBookEntry[]>([]);
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [closingAddressBook, setClosingAddressBook] = useState(false);
+  const [closingAddModal, setClosingAddModal] = useState(false);
+  const [newName, setNewName] = useState('');
+  const [newAddress, setNewAddress] = useState('');
 
-  const handleEstimate = async () => {
-    if (!recipient || !amount || !privateKey) return;
+  // Load address book from localStorage
+  useEffect(() => {
+    const saved = localStorage.getItem('addressBook');
+    if (saved) {
+      try {
+        setAddressBook(JSON.parse(saved));
+      } catch (e) {
+        console.error('Failed to load address book:', e);
+      }
+    }
+  }, []);
+
+  // Save address to address book
+  const saveToAddressBook = () => {
+    if (!newName.trim() || !newAddress.trim()) return;
+    
+    const newEntry: AddressBookEntry = {
+      name: newName.trim(),
+      address: newAddress.trim(),
+    };
+    
+    const updated = [...addressBook, newEntry];
+    setAddressBook(updated);
+    localStorage.setItem('addressBook', JSON.stringify(updated));
+    
+    setNewName('');
+    setNewAddress('');
+    setShowAddModal(false);
+  };
+
+  // Delete address from address book
+  const deleteFromAddressBook = (index: number) => {
+    const updated = addressBook.filter((_, i) => i !== index);
+    setAddressBook(updated);
+    localStorage.setItem('addressBook', JSON.stringify(updated));
+  };
+
+  // Select address from address book
+  const selectAddress = (address: string) => {
+    setRecipient(address);
+    closeAddressBook();
+  };
+
+  const closeAddressBook = () => {
+    setClosingAddressBook(true);
+    setTimeout(() => {
+      setShowAddressBook(false);
+      setClosingAddressBook(false);
+    }, 150);
+  };
+
+  const closeAddModal = () => {
+    setClosingAddModal(true);
+    setTimeout(() => {
+      setShowAddModal(false);
+      setClosingAddModal(false);
+      setNewName('');
+      setNewAddress('');
+    }, 200);
+  };
+
+  // Check if address is EVM format (0x...)
+  const isEvmAddress = (address: string): boolean => {
+    return address.startsWith('0x') && address.length === 42;
+  };
+
+  // Check if address is Cosmos format (inj1...)
+  const isCosmosAddress = (address: string): boolean => {
+    return address.startsWith('inj1') && address.length >= 40;
+  };
+
+  // Bech32 decoding
+  const bech32Decode = (address: string): Uint8Array | null => {
+    try {
+      const charset = 'qpzry9x8gf2tvdw0s3jn54khce6mua7l';
+      const separator = address.lastIndexOf('1');
+      if (separator === -1) return null;
+      
+      const data = address.slice(separator + 1);
+      const decoded = data.split('').map(c => charset.indexOf(c));
+      if (decoded.some(d => d === -1)) return null;
+      
+      // Convert 5-bit groups to 8-bit bytes
+      const bytes: number[] = [];
+      let accumulator = 0;
+      let bits = 0;
+      
+      for (let i = 0; i < decoded.length - 6; i++) {
+        accumulator = (accumulator << 5) | decoded[i];
+        bits += 5;
+        if (bits >= 8) {
+          bits -= 8;
+          bytes.push((accumulator >> bits) & 255);
+        }
+      }
+      
+      return new Uint8Array(bytes);
+    } catch {
+      return null;
+    }
+  };
+
+  // Bech32 encoding
+  const bech32Encode = (prefix: string, data: Uint8Array): string => {
+    const charset = 'qpzry9x8gf2tvdw0s3jn54khce6mua7l';
+    const generator = [0x3b6a57b2, 0x26508e6d, 0x1ea119fa, 0x3d4233dd, 0x2a1462b3];
+    
+    // Convert 8-bit bytes to 5-bit groups
+    const converted: number[] = [];
+    let accumulator = 0;
+    let bits = 0;
+    
+    for (const value of data) {
+      accumulator = (accumulator << 8) | value;
+      bits += 8;
+      while (bits >= 5) {
+        bits -= 5;
+        converted.push((accumulator >> bits) & 31);
+      }
+    }
+    
+    if (bits > 0) {
+      converted.push((accumulator << (5 - bits)) & 31);
+    }
+    
+    // Calculate checksum
+    const polymod = (values: number[]): number => {
+      let chk = 1;
+      for (const value of values) {
+        const top = chk >> 25;
+        chk = ((chk & 0x1ffffff) << 5) ^ value;
+        for (let i = 0; i < 5; i++) {
+          if ((top >> i) & 1) {
+            chk ^= generator[i];
+          }
+        }
+      }
+      return chk;
+    };
+    
+    const prefixData = prefix.split('').map(c => c.charCodeAt(0) & 31);
+    const checksum = polymod([...prefixData, 0, ...converted, ...Array(6).fill(0)]) ^ 1;
+    const checksumData = Array(6).fill(0).map((_, i) => (checksum >> (5 * (5 - i))) & 31);
+    
+    return prefix + '1' + [...converted, ...checksumData].map(d => charset[d]).join('');
+  };
+
+  // Convert between EVM and Cosmos addresses
+  const convertAddress = () => {
+    try {
+      if (isEvmAddress(recipient)) {
+        // EVM to Cosmos
+        const hexAddress = recipient.slice(2).toLowerCase();
+        const bytes = new Uint8Array(hexAddress.match(/.{1,2}/g)!.map(byte => parseInt(byte, 16)));
+        const cosmosAddress = bech32Encode('inj', bytes);
+        setRecipient(cosmosAddress);
+      } else if (isCosmosAddress(recipient)) {
+        // Cosmos to EVM
+        const bytes = bech32Decode(recipient);
+        if (!bytes) throw new Error('Invalid bech32 address');
+        const hexAddress = '0x' + Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('');
+        setRecipient(hexAddress);
+      }
+    } catch (err) {
+      setError('Failed to convert address');
+      console.error('Address conversion error:', err);
+    }
+  };
+
+  // Convert cosmos address to EVM for gas estimation
+  const getEvmAddress = useCallback((address: string): string => {
+    if (isEvmAddress(address)) return address;
+    if (isCosmosAddress(address)) {
+      try {
+        const bytes = bech32Decode(address);
+        if (!bytes) return address;
+        return '0x' + Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('');
+      } catch {
+        return address;
+      }
+    }
+    return address;
+  }, []);
+
+  const handleEstimate = useCallback(async (useDefaults = false) => {
+    // Use default values if requested or use actual values
+    let estimateRecipient = useDefaults ? '0x0000000000000000000000000000000000000000' : recipient;
+    const estimateAmount = useDefaults ? '0.001' : amount;
+    
+    if (!estimateRecipient || !estimateAmount || !privateKey) return;
+
+    // Convert cosmos address to EVM for estimation
+    estimateRecipient = getEvmAddress(estimateRecipient);
 
     setEstimating(true);
     setError('');
+    setCostFlashing(true);
     
     try {
       const estimate = await estimateGas(
         '', // from address not needed for estimate
-        recipient,
-        amount,
+        estimateRecipient,
+        estimateAmount,
         undefined,
         INJECTIVE_TESTNET
       );
       setGasEstimate(estimate);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to estimate gas');
+      // Only show error if not using defaults
+      if (!useDefaults) {
+        setError(err instanceof Error ? err.message : 'Failed to estimate gas');
+      }
     } finally {
       setEstimating(false);
+      setTimeout(() => setCostFlashing(false), 300);
     }
-  };
+  }, [recipient, amount, privateKey, getEvmAddress]);
+
+  // Initial gas estimate on page load with default values
+  useEffect(() => {
+    if (privateKey && !recipient && !amount) {
+      handleEstimate(true);
+    }
+  }, [privateKey, recipient, amount, handleEstimate]);
+
+  // Auto-estimate gas when recipient and amount are filled
+  useEffect(() => {
+    if (recipient && amount && privateKey) {
+      handleEstimate(false);
+    }
+  }, [recipient, amount, privateKey, handleEstimate]);
+
+  // Auto-refresh every 3 seconds
+  useEffect(() => {
+    const shouldEstimate = (recipient && amount) || (!recipient && !amount);
+    if (!privateKey || !shouldEstimate) return;
+
+    const interval = setInterval(() => {
+      handleEstimate(!recipient || !amount);
+    }, 3000);
+
+    return () => clearInterval(interval);
+  }, [recipient, amount, privateKey, handleEstimate]);
 
   const handleSend = async () => {
     if (!recipient || !amount || !privateKey) return;
@@ -63,284 +298,382 @@ export default function SendPage() {
     }
   };
 
-  if (!isUnlocked) {
+  if (isCheckingSession) {
     return (
-      <div style={styles.container}>
-        <div style={styles.error}>Please unlock your wallet first</div>
-        <button onClick={() => router.push('/welcome')} style={styles.btn}>
-          Go to Wallet
-        </button>
+      <div className="min-h-screen pb-24 md:pb-8 bg-black flex items-center justify-center">
+        <p className="text-white">Loading...</p>
       </div>
     );
   }
 
-  if (txHash) {
+  if (!isUnlocked) {
     return (
-      <div style={styles.container}>
-        <div style={styles.success}>
-          <div style={styles.successIcon}>✅</div>
-          <h2 style={styles.successTitle}>Transaction Sent!</h2>
-          <div style={styles.txHash}>
-            <div style={styles.label}>Transaction Hash</div>
-            <div style={styles.hashValue}>{txHash.slice(0, 10)}...{txHash.slice(-8)}</div>
-            <button
-              onClick={() => navigator.clipboard.writeText(txHash)}
-              style={styles.copyBtn}
-            >
-              Copy Full Hash
-            </button>
+      <div className="min-h-screen pb-24 md:pb-8 bg-black flex items-center justify-center">
+        <div className="text-center px-4">
+          <div className="mb-6">
+            <svg className="w-16 h-16 mx-auto text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <rect x="3" y="11" width="18" height="11" rx="2" ry="2" strokeWidth={2} />
+              <path d="M7 11V7a5 5 0 0 1 10 0v4" strokeWidth={2} />
+            </svg>
           </div>
-          <a
-            href={`${INJECTIVE_TESTNET.explorerUrl}/tx/${txHash}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            style={styles.explorerLink}
+          <p className="text-gray-400 mb-6">Please unlock your wallet first</p>
+          <button 
+            onClick={() => router.push('/welcome')}
+            className="px-6 py-3 rounded-xl bg-white text-black font-bold hover:bg-gray-100 transition-all"
           >
-            View on Explorer →
-          </a>
-          <button onClick={() => router.push('/dashboard')} style={styles.primaryBtn}>
-            Back to Dashboard
+            Go to Wallet
           </button>
         </div>
       </div>
     );
   }
 
+  if (txHash) {
+    return (
+      <div className="min-h-screen pb-24 md:pb-8 bg-black">
+        <div className="max-w-2xl mx-auto px-4 py-12 text-center">
+          <div className="w-20 h-20 rounded-full bg-green-500/20 border border-green-500/50 flex items-center justify-center mx-auto mb-6">
+            <svg className="w-10 h-10 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+            </svg>
+          </div>
+          
+          <h2 className="text-2xl font-bold text-white mb-6">Transaction Sent!</h2>
+          
+          <div className="p-6 rounded-2xl bg-white/5 border border-white/10 mb-6">
+            <div className="text-xs text-gray-400 mb-2 uppercase tracking-wider">Transaction Hash</div>
+            <div className="font-mono text-sm text-white break-all mb-4">
+              {txHash.slice(0, 10)}...{txHash.slice(-8)}
+            </div>
+            <button
+              onClick={() => navigator.clipboard.writeText(txHash)}
+              className="px-4 py-2 rounded-xl bg-white text-black font-bold text-sm hover:bg-gray-100 transition-all"
+            >
+              Copy Full Hash
+            </button>
+          </div>
+          
+          <a
+            href={`${INJECTIVE_TESTNET.explorerUrl}/tx/${txHash}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-white/5 border border-white/10 text-white font-bold hover:bg-white/10 transition-all mb-4"
+          >
+            View on Explorer
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+            </svg>
+          </a>
+          
+          <div>
+            <button 
+              onClick={() => router.push('/dashboard')}
+              className="px-8 py-3 rounded-xl bg-white text-black font-bold hover:bg-gray-100 transition-all"
+            >
+              Back to Dashboard
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div style={styles.container}>
-      <header style={styles.header}>
-        <button 
-          onClick={() => router.back()}
-          className="p-3 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 transition-all text-gray-400 hover:text-white"
-        >
-          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-          </svg>
-        </button>
-        <h1 style={styles.title}>Send INJ</h1>
-        <div style={{ width: '60px' }} />
-      </header>
-
-      {error && (
-        <div style={styles.errorBanner}>
-          {error}
-        </div>
-      )}
-
-      <div style={styles.form}>
-        <div style={styles.field}>
-          <label style={styles.label}>Recipient Address</label>
-          <input
-            type="text"
-            value={recipient}
-            onChange={(e) => setRecipient(e.target.value)}
-            placeholder="0x..."
-            style={styles.input}
-          />
-        </div>
-
-        <div style={styles.field}>
-          <label style={styles.label}>Amount (INJ)</label>
-          <input
-            type="text"
-            value={amount}
-            onChange={(e) => setAmount(e.target.value)}
-            placeholder="0.001"
-            style={styles.input}
-          />
-        </div>
-
-        <button
-          onClick={handleEstimate}
-          disabled={!recipient || !amount || estimating}
-          style={styles.estimateBtn}
-        >
-          {estimating ? 'Estimating...' : '⛽ Estimate Gas'}
-        </button>
-
-        {gasEstimate && (
-          <div style={styles.gasCard}>
-            <div style={styles.gasRow}>
-              <span>Gas Limit:</span>
-              <span>{gasEstimate.gasLimit.toString()}</span>
+    <div className="min-h-screen pb-24 md:pb-8 bg-black">
+      {/* Header - OKX Style */}
+      <div className="bg-gradient-to-b from-white/5 to-transparent border-b border-white/5 backdrop-blur-sm">
+        <div className="max-w-7xl mx-auto px-4 py-6">
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => router.back()}
+                className="w-10 h-10 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 flex items-center justify-center transition-all"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <polyline points="15 18 9 12 15 6" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </button>
+              <div>
+                <h1 className="text-xl font-bold text-white">Send</h1>
+                <p className="text-gray-400 text-xs">Transfer tokens</p>
+              </div>
             </div>
-            <div style={styles.gasRow}>
-              <span>Max Fee:</span>
-              <span>{(Number(gasEstimate.maxFeePerGas) / 1e9).toFixed(2)} Gwei</span>
-            </div>
-            <div style={styles.gasRow}>
-              <span>Est. Cost:</span>
-              <span>{(Number(gasEstimate.totalCost) / 1e18).toFixed(6)} INJ</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Main Content */}
+      <div className="max-w-2xl mx-auto px-4 py-6">
+        {error && (
+          <div className="mb-6 p-4 rounded-2xl bg-red-500/10 border border-red-500/30 text-red-400 text-sm">
+            <div className="flex items-start gap-3">
+              <svg className="w-5 h-5 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+              {error}
             </div>
           </div>
         )}
 
-        <button
-          onClick={handleSend}
-          disabled={!recipient || !amount || loading || !gasEstimate}
-          style={{
-            ...styles.primaryBtn,
-            opacity: !recipient || !amount || loading || !gasEstimate ? 0.5 : 1,
-          }}
-        >
-          {loading ? 'Sending...' : '📤 Send Transaction'}
-        </button>
+        {/* Form */}
+        <div className="space-y-6">
+          {/* Recipient */}
+          <div>
+            <label className="block text-sm font-bold text-gray-400 uppercase tracking-wider mb-3">
+              Recipient Address
+            </label>
+            <div className="relative">
+              <input
+                type="text"
+                value={recipient}
+                onChange={(e) => setRecipient(e.target.value)}
+                placeholder="0x... or inj1..."
+                className="w-full py-4 px-4 pr-24 rounded-2xl bg-white/5 border border-white/10 text-white placeholder-gray-500 focus:outline-none focus:border-white/30 transition-all font-mono text-sm"
+              />
+              
+              {/* Convert Address Button */}
+              <button
+                onClick={convertAddress}
+                disabled={!isEvmAddress(recipient) && !isCosmosAddress(recipient)}
+                className={`absolute right-16 top-1/2 -translate-y-1/2 p-2 rounded-lg transition-all ${
+                  isEvmAddress(recipient) || isCosmosAddress(recipient)
+                    ? 'hover:bg-white/10 text-gray-400 hover:text-white cursor-pointer'
+                    : 'text-gray-600 cursor-not-allowed opacity-30'
+                }`}
+                title={isEvmAddress(recipient) ? 'Convert to Cosmos address (inj1...)' : isCosmosAddress(recipient) ? 'Convert to EVM address (0x...)' : 'Convert address format'}
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+                </svg>
+              </button>
+
+              {/* Address Book Button */}
+              <button
+                onClick={() => setShowAddressBook(!showAddressBook)}
+                className="absolute right-4 top-1/2 -translate-y-1/2 p-2 rounded-lg hover:bg-white/10 transition-all"
+                title="Address Book"
+              >
+                <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+                </svg>
+              </button>
+
+              {/* Address Book Dropdown */}
+              {showAddressBook && (
+                <>
+                  <div 
+                    className="fixed inset-0 z-40" 
+                    onClick={closeAddressBook}
+                  />
+                  <div className={`dropdown-menu absolute right-0 top-full mt-2 w-full md:w-96 bg-black border border-white/10 rounded-2xl shadow-2xl z-50 max-h-96 overflow-hidden flex flex-col ${closingAddressBook ? 'closing' : ''}`}>
+                    {/* Header */}
+                    <div className="p-4 border-b border-white/10 flex items-center justify-between">
+                      <h3 className="text-sm font-bold text-white uppercase tracking-wider">Address Book</h3>
+                      <button
+                        onClick={() => setShowAddModal(true)}
+                        className="p-2 rounded-lg bg-white/5 hover:bg-white/10 transition-all"
+                        title="Add New Address"
+                      >
+                        <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                        </svg>
+                      </button>
+                    </div>
+
+                    {/* Address List */}
+                    <div className="flex-1 overflow-y-auto">
+                      {addressBook.length === 0 ? (
+                        <div className="p-8 text-center text-gray-500">
+                          <svg className="w-12 h-12 mx-auto mb-3 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+                          </svg>
+                          <p className="text-sm">No saved addresses</p>
+                        </div>
+                      ) : (
+                        <div className="p-2">
+                          {addressBook.map((entry, index) => (
+                            <div
+                              key={index}
+                              className="p-3 rounded-xl hover:bg-white/5 transition-all mb-2 group"
+                            >
+                              <div className="flex items-center justify-between gap-3">
+                                <button
+                                  onClick={() => selectAddress(entry.address)}
+                                  className="flex-1 text-left"
+                                >
+                                  <div className="text-sm font-bold text-white mb-1">{entry.name}</div>
+                                  <div className="text-xs font-mono text-gray-400 truncate">{entry.address}</div>
+                                </button>
+                                <button
+                                  onClick={() => deleteFromAddressBook(index)}
+                                  className="p-2 rounded-lg opacity-0 group-hover:opacity-100 hover:bg-red-500/20 transition-all"
+                                  title="Delete"
+                                >
+                                  <svg className="w-4 h-4 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                  </svg>
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+
+          {/* Amount */}
+          <div>
+            <label className="block text-sm font-bold text-gray-400 uppercase tracking-wider mb-3">
+              Amount
+            </label>
+            <input
+              type="text"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+              placeholder="0.001"
+              className="w-full py-4 px-4 rounded-2xl bg-white/5 border border-white/10 text-white placeholder-gray-500 focus:outline-none focus:border-white/30 transition-all font-mono text-sm"
+            />
+          </div>
+
+          {/* Gas Estimate - Always Display */}
+          <div className="p-5 rounded-2xl bg-black border border-white/10 space-y-3">
+            <div className="flex items-center gap-2 mb-4">
+              <svg className={`w-4 h-4 text-gray-400 ${estimating ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+              <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Gas Estimate</span>
+            </div>
+            
+            <div className="flex justify-between items-center py-2">
+              <span className="text-sm text-gray-400">Gas Limit:</span>
+              <span className="text-sm font-mono text-white">
+                {gasEstimate ? gasEstimate.gasLimit.toString() : '--'}
+              </span>
+            </div>
+            
+            <div className="flex justify-between items-center py-2">
+              <span className="text-sm text-gray-400">Max Fee:</span>
+              <span className="text-sm font-mono text-white">
+                {gasEstimate ? `${(Number(gasEstimate.maxFeePerGas) / 1e9).toFixed(2)} Gwei` : '--'}
+              </span>
+            </div>
+            
+            <div className="flex justify-between items-center py-2 border-t border-white/10 pt-3">
+              <span className="text-sm font-bold text-gray-300">Est. Cost:</span>
+              <span className={`text-sm font-mono font-bold text-white transition-opacity duration-300 ${costFlashing ? 'opacity-30' : 'opacity-100'}`}>
+                {gasEstimate ? `${(Number(gasEstimate.totalCost) / 1e18).toFixed(6)} INJ` : '--'}
+              </span>
+            </div>
+          </div>
+
+          {/* Send Button */}
+          <button
+            onClick={handleSend}
+            disabled={!recipient || !amount || loading || !gasEstimate}
+            className="w-full py-4 rounded-2xl bg-white text-black font-bold hover:bg-gray-100 transition-all disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+          >
+            {loading ? (
+              <>
+                <svg className="w-5 h-5 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+                Sending...
+              </>
+            ) : (
+              <>
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <line x1="12" y1="19" x2="12" y2="5" strokeWidth={2.5} strokeLinecap="round" />
+                  <polyline points="5 12 12 5 19 12" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+                Send Transaction
+              </>
+            )}
+          </button>
+        </div>
       </div>
+
+      {/* Add Address Modal */}
+      {showAddModal && (
+        <div 
+          className={`modal-overlay fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4 ${closingAddModal ? 'closing' : ''}`}
+          onClick={closeAddModal}
+        >
+          <div 
+            className={`modal-content bg-black border border-white/10 rounded-2xl max-w-md w-full shadow-2xl ${closingAddModal ? 'closing' : ''}`}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <div className="p-5 border-b border-white/5 flex items-center justify-between">
+              <h3 className="text-lg font-bold text-white">Add New Address</h3>
+              <button
+                onClick={closeAddModal}
+                className="p-2 rounded-lg hover:bg-white/10 transition-all"
+              >
+                <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            
+            {/* Modal Body */}
+            <div className="p-5 space-y-4">
+              {/* Name Input */}
+              <div>
+                <label className="block text-sm font-bold text-gray-400 uppercase tracking-wider mb-3">
+                  Name
+                </label>
+                <input
+                  type="text"
+                  value={newName}
+                  onChange={(e) => setNewName(e.target.value)}
+                  placeholder="e.g. Alice"
+                  className="w-full py-3 px-4 rounded-xl bg-white/5 border border-white/10 text-white placeholder-gray-500 focus:outline-none focus:border-white/30 transition-all text-sm"
+                  autoFocus
+                />
+              </div>
+
+              {/* Address Input */}
+              <div>
+                <label className="block text-sm font-bold text-gray-400 uppercase tracking-wider mb-3">
+                  Address
+                </label>
+                <input
+                  type="text"
+                  value={newAddress}
+                  onChange={(e) => setNewAddress(e.target.value)}
+                  placeholder="inj1..."
+                  className="w-full py-3 px-4 rounded-xl bg-white/5 border border-white/10 text-white placeholder-gray-500 focus:outline-none focus:border-white/30 transition-all font-mono text-sm"
+                />
+              </div>
+
+              {/* Actions */}
+              <div className="flex gap-3 pt-2">
+                <button
+                  onClick={() => {
+                    setShowAddModal(false);
+                    setNewName('');
+                    setNewAddress('');
+                  }}
+                  className="flex-1 py-3 rounded-xl bg-white/5 border border-white/10 text-gray-400 font-bold text-sm hover:bg-white/10 transition-all"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={saveToAddressBook}
+                  disabled={!newName.trim() || !newAddress.trim()}
+                  className="flex-1 py-3 rounded-xl bg-white text-black font-bold text-sm hover:bg-gray-100 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+                >
+                  Save
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
-
-const styles: Record<string, React.CSSProperties> = {
-  container: {
-    minHeight: '100vh',
-    padding: '1.5rem',
-    backgroundColor: 'var(--bg-color)',
-    maxWidth: '600px',
-    margin: '0 auto',
-  },
-  header: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: '2rem',
-  },
-  backBtn: {
-    padding: '0.5rem 1rem',
-    fontSize: '0.875rem',
-    backgroundColor: 'transparent',
-    border: 'none',
-    color: 'var(--primary-text)',
-    cursor: 'pointer',
-  },
-  title: {
-    fontSize: '1.5rem',
-    fontWeight: '700',
-    color: 'var(--primary-text)',
-  },
-  form: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '1.5rem',
-  },
-  field: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '0.5rem',
-  },
-  label: {
-    fontSize: '0.875rem',
-    fontWeight: '600',
-    color: 'var(--primary-text)',
-  },
-  input: {
-    padding: '0.75rem',
-    fontSize: '1rem',
-    border: '2px solid var(--surface-border)',
-    borderRadius: '8px',
-    backgroundColor: 'var(--surface)',
-    color: 'var(--primary-text)',
-    fontFamily: 'monospace',
-  },
-  estimateBtn: {
-    padding: '0.75rem',
-    fontSize: '0.875rem',
-    backgroundColor: 'var(--surface-muted)',
-    border: '2px solid var(--surface-border)',
-    borderRadius: '8px',
-    color: 'var(--primary-text)',
-    cursor: 'pointer',
-  },
-  gasCard: {
-    padding: '1rem',
-    backgroundColor: 'var(--surface-muted)',
-    borderRadius: '8px',
-    fontSize: '0.875rem',
-  },
-  gasRow: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    padding: '0.5rem 0',
-    color: 'var(--primary-text)',
-  },
-  primaryBtn: {
-    padding: '1rem',
-    fontSize: '1rem',
-    fontWeight: '600',
-    backgroundColor: 'var(--accent-color)',
-    color: 'white',
-    border: 'none',
-    borderRadius: '12px',
-    cursor: 'pointer',
-  },
-  errorBanner: {
-    padding: '1rem',
-    marginBottom: '1.5rem',
-    backgroundColor: '#FEE',
-    border: '1px solid #F88',
-    borderRadius: '8px',
-    color: '#C00',
-    fontSize: '0.875rem',
-  },
-  error: {
-    textAlign: 'center',
-    padding: '2rem',
-    color: 'var(--secondary-text)',
-  },
-  btn: {
-    padding: '0.75rem 1.5rem',
-    fontSize: '1rem',
-    backgroundColor: 'var(--accent-color)',
-    color: 'white',
-    border: 'none',
-    borderRadius: '8px',
-    cursor: 'pointer',
-    margin: '0 auto',
-    display: 'block',
-  },
-  success: {
-    textAlign: 'center',
-    paddingTop: '3rem',
-  },
-  successIcon: {
-    fontSize: '4rem',
-    marginBottom: '1rem',
-  },
-  successTitle: {
-    fontSize: '1.5rem',
-    fontWeight: '700',
-    color: 'var(--primary-text)',
-    marginBottom: '2rem',
-  },
-  txHash: {
-    padding: '1.5rem',
-    backgroundColor: 'var(--surface-muted)',
-    borderRadius: '12px',
-    marginBottom: '1rem',
-  },
-  hashValue: {
-    fontSize: '1rem',
-    fontFamily: 'monospace',
-    color: 'var(--primary-text)',
-    marginTop: '0.5rem',
-    marginBottom: '1rem',
-  },
-  copyBtn: {
-    padding: '0.5rem 1rem',
-    fontSize: '0.875rem',
-    backgroundColor: 'var(--accent-color)',
-    color: 'white',
-    border: 'none',
-    borderRadius: '8px',
-    cursor: 'pointer',
-  },
-  explorerLink: {
-    display: 'inline-block',
-    padding: '0.75rem 1.5rem',
-    marginBottom: '2rem',
-    fontSize: '0.875rem',
-    color: 'var(--accent-color)',
-    textDecoration: 'none',
-    border: '2px solid var(--accent-color)',
-    borderRadius: '8px',
-  },
-};

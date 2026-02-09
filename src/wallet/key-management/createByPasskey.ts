@@ -12,6 +12,7 @@ import {
   verifyPasskey,
   arrayBufferToBase64,
   base64ToArrayBuffer,
+  setAuthToken,
 } from '@/services/passkey';
 import { sha256 } from '@noble/hashes/sha2.js';
 
@@ -85,6 +86,11 @@ export async function createByPasskey(
 
     if (!verifyResult.success || !verifyResult.credentialId) {
       throw new Error('Passkey verification failed');
+    }
+
+    // Save auth token for session management
+    if (verifyResult.token) {
+      setAuthToken(verifyResult.token);
     }
 
     // 4. Derive deterministic wallet private key from credential ID
@@ -172,6 +178,11 @@ export async function unlockByPasskey(credentialId: string): Promise<Uint8Array>
 
     if (!verifyResult.success || !verifyResult.verified) {
       throw new Error('Passkey verification failed');
+    }
+
+    // Save auth token for session management
+    if (verifyResult.token) {
+      setAuthToken(verifyResult.token);
     }
 
     // 4. Derive decryption key

@@ -236,6 +236,10 @@ body.sidebar-mode .sidebar-overlay {
   }
 }
 
+.animate-fade-in {
+  animation: fadeIn 0.4s ease-out;
+}
+
 @keyframes float {
   0%, 100% {
     transform: translate(0, 0) rotate(0deg);
@@ -443,6 +447,97 @@ body.sidebar-mode .sidebar-overlay {
   }
 }
 
+/* Modal Overlay Fade In */
+@keyframes overlayFadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* Modal Content Scale and Fade */
+@keyframes modalSlideUp {
+  from {
+    opacity: 0;
+    transform: translateY(30px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* Dropdown Menu Slide Down */
+@keyframes dropdownSlideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Fade Out Animations for closing popups */
+@keyframes fadeOut {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes modalFadeOut {
+  from {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(10px) scale(0.98);
+  }
+}
+
+@keyframes dropdownFadeOut {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-5px);
+  }
+}
+
+/* Modal Animation Classes */
+.modal-overlay {
+  animation: overlayFadeIn 0.2s ease-out;
+}
+
+.modal-overlay.closing {
+  animation: fadeOut 0.2s ease-out forwards;
+}
+
+.modal-content {
+  animation: modalSlideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.modal-content.closing {
+  animation: modalFadeOut 0.2s ease-out forwards;
+}
+
+.dropdown-menu {
+  animation: dropdownSlideDown 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.dropdown-menu.closing {
+  animation: dropdownFadeOut 0.15s ease-out forwards;
+}
+
 /* --- Dashboard Styles --- */
 .dashboard-header-modern {
   padding: 1.5rem;
@@ -633,4 +728,99 @@ body.sidebar-mode .sidebar-overlay {
     align-items: center;
     justify-content: center;
   }
+}
+
+/* Hide scrollbar for address display */
+.scrollbar-hide {
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;  /* Firefox */
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;  /* Chrome, Safari and Opera */
+}
+
+/* Lambda gradient animation with smooth color transitions */
+@keyframes lambdaGradientShift {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+.lambda-gradient {
+  position: relative;
+  background: linear-gradient(
+    270deg,
+    #667eea,
+    #764ba2,
+    #f093fb,
+    #f5576c,
+    #4facfe,
+    #00f2fe,
+    #43e97b,
+    #38f9d7,
+    #fa709a,
+    #fee140,
+    #30cfd0,
+    #330867,
+    #a8edea,
+    #fed6e3,
+    #ff9a9e,
+    #fecfef,
+    #ffecd2,
+    #fcb69f,
+    #ff6e7f,
+    #bfe9ff,
+    #e0c3fc,
+    #8ec5fc,
+    #f77062,
+    #fe5196,
+    #fccb90,
+    #d57eeb,
+    #89f7fe,
+    #66a6ff,
+    #fddb92,
+    #d1fdff,
+    #667eea
+  );
+  background-size: 600% 600%;
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: lambdaGradientShift 20s ease-in-out infinite;
+  display: inline-block;
+  font-weight: 700;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3)) 
+          drop-shadow(0 4px 8px rgba(0, 0, 0, 0.2))
+          drop-shadow(0 8px 16px rgba(0, 0, 0, 0.15));
+}
+
+/* 3D Text Effect for Hero Title */
+.title-3d {
+  text-shadow: 
+    /* Highlight layers (top) */
+    0 1px 0 rgba(255, 255, 255, 0.15),
+    0 2px 0 rgba(255, 255, 255, 0.12),
+    0 3px 0 rgba(255, 255, 255, 0.09),
+    /* Depth layers (middle) */
+    0 4px 0 rgba(0, 0, 0, 0.05),
+    0 5px 0 rgba(0, 0, 0, 0.08),
+    0 6px 0 rgba(0, 0, 0, 0.1),
+    0 7px 0 rgba(0, 0, 0, 0.12),
+    /* Shadow layers (bottom) */
+    0 8px 2px rgba(0, 0, 0, 0.15),
+    0 10px 4px rgba(0, 0, 0, 0.2),
+    0 15px 8px rgba(0, 0, 0, 0.25),
+    0 20px 12px rgba(0, 0, 0, 0.2),
+    0 25px 20px rgba(0, 0, 0, 0.15),
+    /* Soft glow */
+    0 0 10px rgba(255, 255, 255, 0.05);
+  transform: translateZ(0);
+  -webkit-font-smoothing: antialiased;
 }
