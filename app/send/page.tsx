@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useWallet } from '@/contexts/WalletContext';
 import { estimateGas, sendTransaction } from '@/wallet/chain';
@@ -12,7 +12,7 @@ interface AddressBookEntry {
   address: string;
 }
 
-export default function SendPage() {
+function SendPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { isUnlocked, privateKey, isCheckingSession } = useWallet();
@@ -981,5 +981,17 @@ export default function SendPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function SendPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen pb-24 md:pb-8 bg-black flex items-center justify-center">
+        <p className="text-white">Loading...</p>
+      </div>
+    }>
+      <SendPageContent />
+    </Suspense>
   );
 }
