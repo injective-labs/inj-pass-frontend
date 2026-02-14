@@ -11,6 +11,7 @@ import { startQRScanner, stopQRScanner, clearQRScanner, isCameraSupported, isVal
 import { QRCodeSVG } from 'qrcode.react';
 import type { Address } from 'viem';
 import Image from 'next/image';
+import LoadingSpinner from '@/components/LoadingSpinner';
 
 export default function DashboardPage() {
   const router = useRouter();

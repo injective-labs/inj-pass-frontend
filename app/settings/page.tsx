@@ -6,6 +6,7 @@ import { useWallet } from '@/contexts/WalletContext';
 import { usePin } from '@/contexts/PinContext';
 import { toHex } from '@/wallet/key-management';
 import AccountHeader from '../components/AccountHeader';
+import LoadingSpinner from '@/components/LoadingSpinner';
 
 export default function SettingsPage() {
   const router = useRouter();
@@ -35,7 +36,7 @@ export default function SettingsPage() {
 
   // Wait for session check
   if (isCheckingSession) {
-    return <div className="min-h-screen flex items-center justify-center"><p className="text-white">Loading...</p></div>;
+    return <LoadingSpinner />;
   }
 
   if (!isUnlocked || !address) {

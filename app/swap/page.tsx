@@ -8,6 +8,7 @@ import { getSwapQuote, executeSwap, getTokenBalances } from '@/services/dex-swap
 import { TOKENS } from '@/services/tokens';
 import { privateKeyToHex } from '@/utils/wallet';
 import type { Address } from 'viem';
+import LoadingSpinner from '@/components/LoadingSpinner';
 
 interface Token {
   symbol: string;
@@ -213,11 +214,7 @@ export default function SwapPage() {
   };
 
   if (isCheckingSession) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <p className="text-white">Loading...</p>
-      </div>
-    );
+    return <LoadingSpinner />;
   }
 
   if (!isUnlocked) {

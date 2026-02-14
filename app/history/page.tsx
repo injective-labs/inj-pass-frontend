@@ -5,6 +5,7 @@ import { useWallet } from '@/contexts/WalletContext';
 import { useState, useEffect } from 'react';
 import { getTxHistory } from '@/wallet/chain';
 import { INJECTIVE_MAINNET } from '@/types/chain';
+import LoadingSpinner from '@/components/LoadingSpinner';
 
 type TransactionType = 'send' | 'receive' | 'swap';
 type TransactionStatus = 'completed' | 'pending' | 'failed';
@@ -135,14 +136,7 @@ export default function HistoryPage() {
   };
 
   if (isCheckingSession || isLoading) {
-    return (
-      <div className="min-h-screen bg-black flex items-center justify-center">
-        <div className="text-center">
-          <div className="w-12 h-12 border-4 border-white/20 border-t-white rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-white text-sm">Loading transactions...</p>
-        </div>
-      </div>
-    );
+    return <LoadingSpinner />;
   }
 
   if (!isUnlocked) {

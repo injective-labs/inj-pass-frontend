@@ -6,6 +6,7 @@ import { useWallet } from '@/contexts/WalletContext';
 import { estimateGas, sendTransaction } from '@/wallet/chain';
 import { INJECTIVE_TESTNET, GasEstimate } from '@/types/chain';
 import { isNFCSupported, readNFCCard } from '@/services/nfc';
+import LoadingSpinner from '@/components/LoadingSpinner';
 
 interface AddressBookEntry {
   name: string;
@@ -383,11 +384,7 @@ function SendPageContent() {
   };
 
   if (isCheckingSession) {
-    return (
-      <div className="min-h-screen pb-24 md:pb-8 bg-black flex items-center justify-center">
-        <p className="text-white">Loading...</p>
-      </div>
-    );
+    return <LoadingSpinner />;
   }
 
   if (!isUnlocked) {

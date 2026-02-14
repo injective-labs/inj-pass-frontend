@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useWallet } from '@/contexts/WalletContext';
 import { QRCodeSVG } from 'qrcode.react';
 import { isNFCSupported, readNFCCard, writeNFCCard } from '@/services/nfc';
+import LoadingSpinner from '@/components/LoadingSpinner';
 
 interface BonjourCard {
   uid: string;
@@ -301,11 +302,7 @@ export default function CardsPage() {
   };
 
   if (isCheckingSession) {
-    return (
-      <div className="min-h-screen bg-black flex items-center justify-center">
-        <p className="text-white">Loading...</p>
-      </div>
-    );
+    return <LoadingSpinner />;
   }
 
   const activeCards = boundCards.filter(card => card.isActive).length;

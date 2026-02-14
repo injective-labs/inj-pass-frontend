@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation';
 import { useWallet } from '@/contexts/WalletContext';
 import { QRCodeSVG } from 'qrcode.react';
 import { useState } from 'react';
+import LoadingSpinner from '@/components/LoadingSpinner';
 
 type AddressType = 'evm' | 'cosmos';
 
@@ -33,7 +34,7 @@ export default function ReceivePage() {
   };
 
   if (isCheckingSession) {
-    return <div className="min-h-screen flex items-center justify-center"><p className="text-white">Loading...</p></div>;
+    return <LoadingSpinner />;
   }
 
   if (!isUnlocked || !address) {
