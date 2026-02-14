@@ -3,14 +3,26 @@
  * Uses html5-qrcode library for camera-based QR code scanning
  */
 
-import { Html5Qrcode } from 'html5-qrcode';
+let Html5Qrcode: any = null;
+let html5QrCode: any = null;
+
+// Dynamically import html5-qrcode only on client side
+const loadHtml5QrCode = async () => {
+  if (typeof window === 'undefined') {
+    throw new Error('QR Scanner can only be used in browser');
+  }
+  
+  if (!Html5Qrcode) {
+    const module = await import('html5-qrcode');
+    Html5Qrcode = module.Html5Qrcode;
+  }
+  return Html5Qrcode;
+};
 
 export interface QRScanResult {
   text: string;
   decodedText: string;
 }
-
-let html5QrCode: Html5Qrcode | null = null;
 
 /**
  * Start QR code scanner
@@ -21,12 +33,19 @@ export async function startQRScanner(
   onError?: (error: string) => void
 ): Promise<void> {
   try {
+    console.log('[QR Scanner] Starting...');
+    
+    // Load library
+    const Html5QrcodeClass = await loadHtml5QrCode();
+    
     // Create scanner instance if not exists
     if (!html5QrCode) {
-      html5QrCode = new Html5Qrcode(elementId);
+      html5QrCode = new Html5QrcodeClass(elementId);
+      console.log('[QR Scanner] Instance created');
     }
 
     // Request camera permission and start scanning
+    console.log('[QR Scanner] Requesting camera access...');
     await html5QrCode.start(
       { facingMode: 'environment' }, // Use back camera on mobile
       {
@@ -34,11 +53,11 @@ export async function startQRScanner(
         qrbox: { width: 250, height: 250 }, // Scanning area
         aspectRatio: 1.0,
       },
-      (decodedText) => {
+      (decodedText: string) => {
         console.log('[QR Scanner] Decoded:', decodedText);
         onSuccess(decodedText);
       },
-      (errorMessage) => {
+      (errorMessage: string) => {
         // Don't log every frame error, too verbose
         // console.log('[QR Scanner] Scan error:', errorMessage);
       }
@@ -76,6 +95,7 @@ export function clearQRScanner(): void {
   if (html5QrCode) {
     html5QrCode.clear();
     html5QrCode = null;
+    console.log('[QR Scanner] Cleared');
   }
 }
 
@@ -83,7 +103,10 @@ export function clearQRScanner(): void {
  * Check if camera is supported
  */
 export function isCameraSupported(): boolean {
-  return !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
+  if (typeof window === 'undefined') return false;
+  const supported = !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
+  console.log('[QR Scanner] Camera supported:', supported);
+  return supported;
 }
 
 /**
