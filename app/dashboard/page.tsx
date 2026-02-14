@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useWallet } from '@/contexts/WalletContext';
 import { getBalance } from '@/wallet/chain';
 import { Balance, INJECTIVE_MAINNET } from '@/types/chain';
-import { getInjPrice } from '@/services/price';
+import { getInjPrice, getTokenPrice } from '@/services/price';
 import { getTokenBalances } from '@/services/dex-swap';
 import { startQRScanner, stopQRScanner, clearQRScanner, isCameraSupported, isValidAddress } from '@/services/qr-scanner';
 import { QRCodeSVG } from 'qrcode.react';
@@ -20,6 +20,9 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [injPrice, setInjPrice] = useState<number>(25);
+  const [injPriceChange24h, setInjPriceChange24h] = useState<number>(0);
+  const [usdtPriceChange24h, setUsdtPriceChange24h] = useState<number>(0);
+  const [usdcPriceChange24h, setUsdcPriceChange24h] = useState<number>(0);
   const [balanceVisible, setBalanceVisible] = useState(true);
   const [copied, setCopied] = useState(false);
   const [activeTab, setActiveTab] = useState<'settings' | 'wallet' | 'discover'>('wallet');
@@ -63,14 +66,19 @@ export default function DashboardPage() {
 
     try {
       setLoading(true);
-      const [balanceData, priceData, tokenBalData] = await Promise.all([
+      const [balanceData, injPriceData, usdtPriceData, usdcPriceData, tokenBalData] = await Promise.all([
         getBalance(address, INJECTIVE_MAINNET),
-        getInjPrice(),
+        getTokenPrice('injective-protocol'),
+        getTokenPrice('tether'),
+        getTokenPrice('usd-coin'),
         getTokenBalances(['INJ', 'USDT', 'USDC'], address as Address),
       ]);
       
       setBalance(balanceData);
-      setInjPrice(priceData);
+      setInjPrice(injPriceData.usd);
+      setInjPriceChange24h(injPriceData.usd24hChange || 0);
+      setUsdtPriceChange24h(usdtPriceData.usd24hChange || 0);
+      setUsdcPriceChange24h(usdcPriceData.usd24hChange || 0);
       setTokenBalances({
         INJ: parseFloat(tokenBalData.INJ).toFixed(4),
         USDT: parseFloat(tokenBalData.USDT).toFixed(2),
@@ -324,11 +332,17 @@ export default function DashboardPage() {
                     ≈ ${balanceVisible ? totalUsdValue : '••••••'} USD
                   </div>
                   {/* 24h Change */}
-                  <div className="flex items-center gap-2">
-                    <span className="text-green-400 text-sm font-semibold">+$0.00</span>
-                    <span className="text-green-400 text-sm">+0.00%</span>
-                    <span className="text-gray-500 text-xs">24h</span>
-                  </div>
+                  {balanceVisible && balance && (
+                    <div className="flex items-center gap-2">
+                      <span className={`text-sm font-semibold ${injPriceChange24h >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                        {injPriceChange24h >= 0 ? '+' : ''}${(parseFloat(balance.formatted) * injPrice * injPriceChange24h / 100).toFixed(2)}
+                      </span>
+                      <span className={`text-sm ${injPriceChange24h >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                        {injPriceChange24h >= 0 ? '+' : ''}{injPriceChange24h.toFixed(2)}%
+                      </span>
+                      <span className="text-gray-500 text-xs">24h</span>
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -477,7 +491,9 @@ export default function DashboardPage() {
                 </div>
                 <div className="text-right">
                   <div className="font-bold font-mono">${(parseFloat(tokenBalances.INJ) * injPrice).toFixed(2)}</div>
-                  <div className="text-sm text-gray-500">0.00%</div>
+                  <div className={`text-sm ${injPriceChange24h >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                    {injPriceChange24h >= 0 ? '+' : ''}{injPriceChange24h.toFixed(2)}%
+                  </div>
                 </div>
               </div>
 
@@ -497,7 +513,9 @@ export default function DashboardPage() {
                 </div>
                 <div className="text-right">
                   <div className="font-bold font-mono">${tokenBalances.USDT}</div>
-                  <div className="text-sm text-gray-500">0.00%</div>
+                  <div className={`text-sm ${usdtPriceChange24h >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                    {usdtPriceChange24h >= 0 ? '+' : ''}{usdtPriceChange24h.toFixed(2)}%
+                  </div>
                 </div>
               </div>
 
@@ -517,7 +535,9 @@ export default function DashboardPage() {
                 </div>
                 <div className="text-right">
                   <div className="font-bold font-mono">${tokenBalances.USDC}</div>
-                  <div className="text-sm text-gray-500">0.00%</div>
+                  <div className={`text-sm ${usdcPriceChange24h >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                    {usdcPriceChange24h >= 0 ? '+' : ''}{usdcPriceChange24h.toFixed(2)}%
+                  </div>
                 </div>
               </div>
             </>
