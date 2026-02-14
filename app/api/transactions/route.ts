@@ -17,8 +17,9 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    // Fetch from Blockscout API server-side (no CORS issues) - MAINNET
-    const apiUrl = `${INJECTIVE_MAINNET.explorerUrl}/api/v2/addresses/${address}/transactions`;
+    // Fetch from Blockscout API server-side - MAINNET
+    // Note: Blockscout API is on a separate domain from the explorer frontend
+    const apiUrl = `${INJECTIVE_MAINNET.explorerApiUrl}/api/v2/addresses/${address}/transactions`;
     
     console.log(`[API] Fetching transactions from: ${apiUrl}`);
     

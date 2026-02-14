@@ -9,6 +9,7 @@ export interface ChainConfig {
   name: string;
   rpcUrl: string;
   explorerUrl: string;
+  explorerApiUrl: string; // Blockscout API base URL (separate from frontend)
   nativeCurrency: {
     name: string;
     symbol: string;
@@ -70,6 +71,7 @@ export const INJECTIVE_TESTNET: ChainConfig = {
   name: 'Injective EVM Testnet',
   rpcUrl: 'https://k8s.testnet.json-rpc.injective.network/',
   explorerUrl: 'https://testnet.blockscout.injective.network',
+  explorerApiUrl: 'https://testnet.blockscout-api.injective.network',
   nativeCurrency: {
     name: 'Injective',
     symbol: 'INJ',
@@ -83,6 +85,7 @@ export const INJECTIVE_MAINNET: ChainConfig = {
   name: 'Injective EVM',
   rpcUrl: 'https://sentry.evm-rpc.injective.network/',
   explorerUrl: 'https://blockscout.injective.network',
+  explorerApiUrl: 'https://blockscout-api.injective.network',
   nativeCurrency: {
     name: 'Injective',
     symbol: 'INJ',
