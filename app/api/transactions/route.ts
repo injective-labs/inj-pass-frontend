@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { INJECTIVE_TESTNET } from '@/types/chain';
+import { INJECTIVE_MAINNET } from '@/types/chain';
 
 /**
  * API Route to proxy Blockscout API requests
@@ -17,8 +17,8 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    // Fetch from Blockscout API server-side (no CORS issues)
-    const apiUrl = `${INJECTIVE_TESTNET.explorerUrl}/api/v2/addresses/${address}/transactions`;
+    // Fetch from Blockscout API server-side (no CORS issues) - MAINNET
+    const apiUrl = `${INJECTIVE_MAINNET.explorerUrl}/api/v2/addresses/${address}/transactions`;
     
     console.log(`[API] Fetching transactions from: ${apiUrl}`);
     
