@@ -2,6 +2,8 @@
  * Chain configuration types
  */
 
+import type { Chain } from 'viem';
+
 export interface ChainConfig {
   id: number;
   name: string;
@@ -85,6 +87,49 @@ export const INJECTIVE_MAINNET: ChainConfig = {
     name: 'Injective',
     symbol: 'INJ',
     decimals: 18,
+  },
+};
+
+// Viem-compatible Chain configs for DEX swap
+export const INJECTIVE_MAINNET_CHAIN: Chain = {
+  id: 2424,
+  name: 'Injective EVM',
+  nativeCurrency: {
+    name: 'Injective',
+    symbol: 'INJ',
+    decimals: 18,
+  },
+  rpcUrls: {
+    default: { 
+      http: ['https://evm.injective.network']
+    },
+  },
+  blockExplorers: {
+    default: { 
+      name: 'Blockscout', 
+      url: 'https://explorer.injective.network' 
+    },
+  },
+};
+
+export const INJECTIVE_TESTNET_CHAIN: Chain = {
+  id: 1439,
+  name: 'Injective EVM Testnet',
+  nativeCurrency: {
+    name: 'Injective',
+    symbol: 'INJ',
+    decimals: 18,
+  },
+  rpcUrls: {
+    default: { 
+      http: ['https://k8s.testnet.json-rpc.injective.network/']
+    },
+  },
+  blockExplorers: {
+    default: { 
+      name: 'Blockscout', 
+      url: 'https://testnet.blockscout.injective.network' 
+    },
   },
 };
 
