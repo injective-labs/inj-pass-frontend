@@ -98,21 +98,27 @@ export default function DashboardPage() {
 
   // QR Scanner handlers
   const openQRScanner = async () => {
+    console.log('[Dashboard] openQRScanner called');
+    
     // Check camera support
     if (!isCameraSupported()) {
-      alert('Camera is not supported on this device');
+      console.error('[Dashboard] Camera not supported');
+      alert('Camera is not supported on this device. Please use a device with a camera and grant permission.');
       return;
     }
 
+    console.log('[Dashboard] Opening QR scanner modal');
     setShowQRScanner(true);
     setQrScanning(false);
     setQrSuccess(false);
     setQrError('');
     setScannedAddress('');
     setClosingQRScanner(false);
+    setShowMyQR(false);
 
     // Start scanning after modal opens
     setTimeout(async () => {
+      console.log('[Dashboard] Starting scanner...');
       setQrScanning(true);
       try {
         await startQRScanner(
@@ -141,6 +147,7 @@ export default function DashboardPage() {
             }
           },
           (error) => {
+            console.error('[Dashboard] Scanner error:', error);
             setQrError(error);
             setQrScanning(false);
           }
