@@ -47,12 +47,8 @@ export default function HistoryPage() {
           const isSent = tx.from.toLowerCase() === address.toLowerCase();
           const type: TransactionType = isSent ? 'send' : 'receive';
           
-          // Convert value from wei to INJ
-          const valueInINJ = (BigInt(tx.value) / BigInt(10 ** 18)).toString();
-          const decimals = tx.value.length > 18 ? 4 : 0;
-          const amount = decimals > 0 
-            ? (Number(tx.value) / (10 ** 18)).toFixed(decimals)
-            : valueInINJ;
+          // Convert value from wei to INJ (with 3 decimal places)
+          const amount = (Number(tx.value) / (10 ** 18)).toFixed(3);
 
           // Format address for display (shortened)
           const targetAddress = type === 'send' ? (tx.to || 'Contract Creation') : tx.from;
@@ -94,15 +90,15 @@ export default function HistoryPage() {
       case 'send':
         return (
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <line x1="12" y1="5" x2="12" y2="19" strokeWidth={2} strokeLinecap="round" />
-            <polyline points="19 12 12 19 5 12" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+            <line x1="12" y1="19" x2="12" y2="5" strokeWidth={2} strokeLinecap="round" />
+            <polyline points="5 12 12 5 19 12" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
           </svg>
         );
       case 'receive':
         return (
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <line x1="12" y1="19" x2="12" y2="5" strokeWidth={2} strokeLinecap="round" />
-            <polyline points="5 12 12 5 19 12" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+            <line x1="12" y1="5" x2="12" y2="19" strokeWidth={2} strokeLinecap="round" />
+            <polyline points="19 12 12 19 5 12" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
           </svg>
         );
       case 'swap':
