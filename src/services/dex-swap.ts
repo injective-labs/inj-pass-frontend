@@ -137,7 +137,7 @@ export async function getSwapQuote(
       abi: ROUTER_ABI,
       functionName: 'getAmountsOut',
       args: [amountInWei, path],
-    });
+    }) as bigint[];
 
     // Expected output is the last amount in the array
     const expectedOutputWei = amounts[amounts.length - 1];
@@ -182,7 +182,7 @@ export async function checkAllowance(
     abi: ERC20_ABI,
     functionName: 'allowance',
     args: [ownerAddress, spenderAddress],
-  });
+  }) as bigint;
 
   return allowance;
 }
@@ -342,7 +342,7 @@ export async function getTokenBalance(
         abi: ERC20_ABI,
         functionName: 'balanceOf',
         args: [userAddress],
-      });
+      }) as bigint;
       return formatUnits(balance, tokenInfo.decimals);
     }
   } catch (error) {
