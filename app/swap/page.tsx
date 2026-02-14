@@ -35,6 +35,9 @@ export default function SwapPage() {
   const [priceImpact, setPriceImpact] = useState('0.00');
   const [gasEstimate, setGasEstimate] = useState('0.00025');
   const [error, setError] = useState<string | null>(null);
+  const [txHash, setTxHash] = useState('');
+  const [swapSuccess, setSwapSuccess] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   // Token list with real balances
   const [tokens, setTokens] = useState<Token[]>([
@@ -185,7 +188,7 @@ export default function SwapPage() {
       const pkHex = privateKeyToHex(privateKey);
       
       // Execute swap
-      const txHash = await executeSwap({
+      const hash = await executeSwap({
         fromToken: fromToken.symbol,
         toToken: toToken.symbol,
         amountIn: fromAmount,
@@ -194,12 +197,9 @@ export default function SwapPage() {
         privateKey: pkHex,
       });
 
-      // Show success message
-      alert(`Swap successful!\nTransaction: ${txHash}\n\nView on explorer: https://blockscout.injective.network/tx/${txHash}`);
-
-      // Clear amounts
-      setFromAmount('');
-      setToAmount('');
+      // Show success screen
+      setTxHash(hash);
+      setSwapSuccess(true);
 
       // Refresh balances
       await fetchBalances();
@@ -207,7 +207,6 @@ export default function SwapPage() {
       console.error('Swap failed:', error);
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       setError(`Swap failed: ${errorMessage}`);
-      alert(`Swap failed: ${errorMessage}`);
     } finally {
       setLoading(false);
     }
@@ -224,6 +223,164 @@ export default function SwapPage() {
   if (!isUnlocked) {
     router.push('/');
     return null;
+  }
+
+  // Success screen
+  if (swapSuccess && txHash) {
+    return (
+      <div className="min-h-screen pb-24 md:pb-8 bg-black">
+        {/* Header - Dashboard Style */}
+        <div className="bg-gradient-to-b from-white/5 to-transparent border-b border-white/5 backdrop-blur-sm">
+          <div className="max-w-7xl mx-auto px-4 py-6">
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => router.push('/dashboard')}
+                className="w-10 h-10 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 flex items-center justify-center transition-all"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <polyline points="15 18 9 12 15 6" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </button>
+              <div>
+                <h1 className="text-xl font-bold text-white">Swap Complete</h1>
+                <p className="text-gray-400 text-xs">Your swap has been executed</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Main Content */}
+        <div className="max-w-2xl mx-auto px-4 py-8">
+          {/* Success Message */}
+          <div className="text-center mb-8">
+            <h2 className="text-2xl font-bold text-white mb-2">Swap Successful</h2>
+            <p className="text-gray-400 text-sm">Your tokens have been swapped successfully</p>
+          </div>
+
+          {/* Transaction Hash Card */}
+          <div className="p-6 rounded-2xl bg-black border border-white/10 mb-4">
+            <div className="flex items-center justify-between mb-4">
+              <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Transaction Hash</span>
+              <div className="flex items-center gap-2">
+                {/* Copy Button */}
+                <button
+                  onClick={() => {
+                    navigator.clipboard.writeText(txHash);
+                    setCopied(true);
+                    setTimeout(() => setCopied(false), 2000);
+                  }}
+                  className="p-2 rounded-lg hover:bg-white/10 transition-all group"
+                  title="Copy Hash"
+                >
+                  {copied ? (
+                    <svg className="w-4 h-4 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                  ) : (
+                    <svg className="w-4 h-4 text-gray-400 group-hover:text-white transition-colors" fill="none" stroke="currentColor" viewBox="0 0 16 16">
+                      <rect width="11" height="11" x="4" y="4" rx="1" ry="1" strokeWidth="1.5" />
+                      <path d="M2 10c-0.8 0-1.5-0.7-1.5-1.5V2c0-0.8 0.7-1.5 1.5-1.5h8.5c0.8 0 1.5 0.7 1.5 1.5" strokeWidth="1.5" />
+                    </svg>
+                  )}
+                </button>
+                
+                {/* View Explorer Button */}
+                <a
+                  href={`https://blockscout.injective.network/tx/${txHash}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="p-2 rounded-lg hover:bg-white/10 transition-all group"
+                  title="View on Explorer"
+                >
+                  <svg className="w-4 h-4 text-gray-400 group-hover:text-white transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                  </svg>
+                </a>
+                
+                {/* Share Button */}
+                <button
+                  onClick={() => {
+                    const shareText = `Swap Transaction: ${txHash}`;
+                    if (navigator.share) {
+                      navigator.share({ text: shareText });
+                    } else {
+                      navigator.clipboard.writeText(shareText);
+                    }
+                  }}
+                  className="p-2 rounded-lg hover:bg-white/10 transition-all group"
+                  title="Share"
+                >
+                  <svg className="w-4 h-4 text-gray-400 group-hover:text-white transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+            <div className="font-mono text-sm text-white break-all bg-white/5 p-3 rounded-xl">
+              {txHash}
+            </div>
+          </div>
+
+          {/* Swap Details Card */}
+          <div className="p-5 rounded-2xl bg-black border border-white/10 mb-6 space-y-3">
+            <div className="flex justify-between items-center py-2">
+              <span className="text-sm text-gray-400">Status</span>
+              <span className="text-sm font-bold text-white">Confirmed</span>
+            </div>
+            <div className="flex justify-between items-center py-2 border-t border-white/5">
+              <span className="text-sm text-gray-400">From</span>
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-mono font-bold text-white">{fromAmount} {fromToken.symbol}</span>
+                <Image src={fromToken.icon} alt={fromToken.symbol} width={20} height={20} className="rounded-full" />
+              </div>
+            </div>
+            <div className="flex justify-between items-center py-2 border-t border-white/5">
+              <span className="text-sm text-gray-400">To</span>
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-mono font-bold text-white">{toAmount} {toToken.symbol}</span>
+                <Image src={toToken.icon} alt={toToken.symbol} width={20} height={20} className="rounded-full" />
+              </div>
+            </div>
+            <div className="flex justify-between items-center py-2 border-t border-white/5">
+              <span className="text-sm text-gray-400">Price Impact</span>
+              <span className="text-sm font-mono text-white">{priceImpact}%</span>
+            </div>
+            <div className="flex justify-between items-center py-2 border-t border-white/5">
+              <span className="text-sm text-gray-400">Network</span>
+              <span className="text-sm font-bold text-white">Injective Mainnet</span>
+            </div>
+            <div className="flex justify-between items-center py-2 border-t border-white/5">
+              <span className="text-sm text-gray-400">Timestamp</span>
+              <span className="text-sm font-mono text-white">{new Date().toLocaleString()}</span>
+            </div>
+          </div>
+
+          {/* Actions */}
+          <div className="space-y-3">
+            {/* Back to Dashboard - Main Button */}
+            <button 
+              onClick={() => router.push('/dashboard')}
+              className="w-full py-4 rounded-2xl bg-white text-black font-bold hover:bg-gray-100 transition-all shadow-lg"
+            >
+              Back to Dashboard
+            </button>
+            
+            {/* Make Another Swap - Secondary Button */}
+            <button 
+              onClick={() => {
+                setSwapSuccess(false);
+                setTxHash('');
+                setFromAmount('');
+                setToAmount('');
+              }}
+              className="w-full py-4 rounded-2xl bg-white/5 border border-white/10 text-white font-bold hover:bg-white/10 transition-all"
+            >
+              Make Another Swap
+            </button>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   return (
