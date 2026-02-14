@@ -3,10 +3,12 @@
 import { useState, useEffect, useCallback, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useWallet } from '@/contexts/WalletContext';
+import { usePin } from '@/contexts/PinContext';
 import { estimateGas, sendTransaction } from '@/wallet/chain';
 import { INJECTIVE_TESTNET, GasEstimate } from '@/types/chain';
 import { isNFCSupported, readNFCCard } from '@/services/nfc';
 import LoadingSpinner from '@/components/LoadingSpinner';
+import TransactionAuthModal from '@/components/TransactionAuthModal';
 
 interface AddressBookEntry {
   name: string;
@@ -17,6 +19,7 @@ function SendPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { isUnlocked, privateKey, isCheckingSession } = useWallet();
+  const { isPinLocked, autoLockMinutes } = usePin();
   const [recipient, setRecipient] = useState('');
   const [amount, setAmount] = useState('');
   const [gasEstimate, setGasEstimate] = useState<GasEstimate | null>(null);
@@ -38,6 +41,7 @@ function SendPageContent() {
   const [closingNfcScanner, setClosingNfcScanner] = useState(false);
   const [copied, setCopied] = useState(false);
   const [nfcError, setNfcError] = useState('');
+  const [showAuthModal, setShowAuthModal] = useState(false);
   const [nfcSupported, setNfcSupported] = useState(true);
 
   // Load address book from localStorage
@@ -359,6 +363,17 @@ function SendPageContent() {
     return () => clearInterval(interval);
   }, [recipient, amount, privateKey, handleEstimate]);
 
+  const handleSendClick = () => {
+    // Check if authentication is needed
+    if (isPinLocked || autoLockMinutes === 0) {
+      // Need authentication
+      setShowAuthModal(true);
+    } else {
+      // Within PIN-free window, send directly
+      handleSend();
+    }
+  };
+
   const handleSend = async () => {
     if (!recipient || !amount || !privateKey) return;
 
@@ -381,6 +396,11 @@ function SendPageContent() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleAuthSuccess = () => {
+    setShowAuthModal(false);
+    handleSend();
   };
 
   if (isCheckingSession) {
@@ -745,7 +765,7 @@ function SendPageContent() {
 
           {/* Send Button */}
           <button
-            onClick={handleSend}
+            onClick={handleSendClick}
             disabled={!recipient || !amount || loading || !gasEstimate}
             className="w-full py-4 rounded-2xl bg-white text-black font-bold hover:bg-gray-100 transition-all disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center gap-2"
           >
@@ -977,6 +997,14 @@ function SendPageContent() {
           </div>
         </div>
       )}
+
+      {/* Transaction Authentication Modal */}
+      <TransactionAuthModal
+        isOpen={showAuthModal}
+        onClose={() => setShowAuthModal(false)}
+        onSuccess={handleAuthSuccess}
+        transactionType="send"
+      />
     </div>
   );
 }

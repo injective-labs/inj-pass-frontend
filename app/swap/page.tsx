@@ -3,12 +3,14 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useWallet } from '@/contexts/WalletContext';
+import { usePin } from '@/contexts/PinContext';
 import Image from 'next/image';
 import { getSwapQuote, executeSwap, getTokenBalances } from '@/services/dex-swap';
 import { TOKENS } from '@/services/tokens';
 import { privateKeyToHex } from '@/utils/wallet';
 import type { Address } from 'viem';
 import LoadingSpinner from '@/components/LoadingSpinner';
+import TransactionAuthModal from '@/components/TransactionAuthModal';
 
 interface Token {
   symbol: string;
@@ -20,6 +22,7 @@ interface Token {
 export default function SwapPage() {
   const router = useRouter();
   const { isUnlocked, isCheckingSession, address, privateKey } = useWallet();
+  const { isPinLocked, autoLockMinutes } = usePin();
   const [fromToken, setFromToken] = useState<Token>({ symbol: 'INJ', name: 'Injective', icon: '/injswap.png', balance: '0.0000' });
   const [toToken, setToToken] = useState<Token>({ symbol: 'USDT', name: 'Tether USD', icon: '/USDT_Logo.png', balance: '0.00' });
   const [fromAmount, setFromAmount] = useState('');
@@ -39,6 +42,7 @@ export default function SwapPage() {
   const [txHash, setTxHash] = useState('');
   const [swapSuccess, setSwapSuccess] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [showAuthModal, setShowAuthModal] = useState(false);
 
   // Token list with real balances
   const [tokens, setTokens] = useState<Token[]>([
@@ -170,6 +174,17 @@ export default function SwapPage() {
     }, 150);
   };
 
+  const handleSwapClick = () => {
+    // Check if authentication is needed
+    if (isPinLocked || autoLockMinutes === 0) {
+      // Need authentication
+      setShowAuthModal(true);
+    } else {
+      // Within PIN-free window, swap directly
+      handleSwap();
+    }
+  };
+
   const handleSwap = async () => {
     if (!address || !privateKey) {
       setError('Wallet not connected');
@@ -211,6 +226,11 @@ export default function SwapPage() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleAuthSuccess = () => {
+    setShowAuthModal(false);
+    handleSwap();
   };
 
   if (isCheckingSession) {
@@ -705,7 +725,7 @@ export default function SwapPage() {
 
             {/* Swap Button */}
             <button
-              onClick={handleSwap}
+              onClick={handleSwapClick}
               disabled={!fromAmount || !toAmount || loading || quoteLoading}
               className="w-full py-4 rounded-2xl bg-white text-black font-bold hover:bg-gray-100 transition-all disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center gap-2"
             >
@@ -733,6 +753,14 @@ export default function SwapPage() {
           </div>
         )}
       </div>
+
+      {/* Transaction Authentication Modal */}
+      <TransactionAuthModal
+        isOpen={showAuthModal}
+        onClose={() => setShowAuthModal(false)}
+        onSuccess={handleAuthSuccess}
+        transactionType="swap"
+      />
     </div>
   );
 }

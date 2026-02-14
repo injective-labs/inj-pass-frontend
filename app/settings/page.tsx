@@ -11,7 +11,7 @@ import LoadingSpinner from '@/components/LoadingSpinner';
 export default function SettingsPage() {
   const router = useRouter();
   const { isUnlocked, address, privateKey, keystore, lock, isCheckingSession } = useWallet();
-  const { hasPin, isPinLocked, autoLockMinutes, setPin, changePin, lockWallet, setAutoLockMinutes, verifyPin } = usePin();
+  const { hasPin, isPinLocked, autoLockMinutes, defaultAuthMethod, setPin, changePin, lockWallet, setAutoLockMinutes, setDefaultAuthMethod, verifyPin } = usePin();
   
   const [showPrivateKey, setShowPrivateKey] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -358,6 +358,48 @@ export default function SettingsPage() {
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                   </svg>
                 </button>
+
+                {/* Default Authentication Method */}
+                <div className="p-4 rounded-2xl bg-white/5 border border-white/10">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="w-12 h-12 rounded-full bg-white hover:bg-gray-100 flex items-center justify-center shadow-lg transition-all">
+                        <svg className="w-5 h-5 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
+                        </svg>
+                      </div>
+                      <div className="text-left">
+                        <div className="text-sm font-bold text-white">Default Verification</div>
+                        <div className="text-xs text-gray-400">For Send & Swap transactions</div>
+                      </div>
+                    </div>
+                    
+                    {/* Toggle Buttons */}
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => setDefaultAuthMethod('passkey')}
+                        className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+                          defaultAuthMethod === 'passkey'
+                            ? 'bg-white text-black'
+                            : 'bg-white/5 text-gray-400 hover:bg-white/10 hover:text-white border border-white/10'
+                        }`}
+                      >
+                        Passkey
+                      </button>
+                      <button
+                        onClick={() => setDefaultAuthMethod('pin')}
+                        disabled={!hasPin}
+                        className={`px-4 py-2 rounded-xl text-xs font-bold transition-all disabled:opacity-30 disabled:cursor-not-allowed ${
+                          defaultAuthMethod === 'pin'
+                            ? 'bg-white text-black'
+                            : 'bg-white/5 text-gray-400 hover:bg-white/10 hover:text-white border border-white/10'
+                        }`}
+                      >
+                        PIN
+                      </button>
+                    </div>
+                  </div>
+                </div>
               </>
             )}
           </div>
