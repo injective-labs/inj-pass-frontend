@@ -72,13 +72,7 @@ function createClient() {
 /**
  * Get swap routes (Solidly/Velodrome format)
  */
-interface Route {
-  from: Address;
-  to: Address;
-  stable: boolean;
-}
-
-function getSwapRoutes(fromToken: string, toToken: string): Route[] {
+function getSwapRoutes(fromToken: string, toToken: string) {
   const fromInfo = getTokenInfo(fromToken);
   const toInfo = getTokenInfo(toToken);
   
@@ -102,13 +96,13 @@ function getSwapRoutes(fromToken: string, toToken: string): Route[] {
   const isStableSwap = (fromToken === 'USDC' && toToken === 'USDT') || 
                        (fromToken === 'USDT' && toToken === 'USDC');
 
-  const routes: Route[] = [
+  const routes = [
     {
       from: fromAddr,
       to: toAddr,
       stable: isStableSwap,
     },
-  ];
+  ] as const;
 
   console.log('[DEX] Swap routes:', {
     fromToken,
@@ -192,7 +186,7 @@ export async function getSwapQuote(
     const priceImpact = '0.1'; // Placeholder
 
     // Format route for display
-    const routeDisplay = routes.map(r => {
+    const routeDisplay = (routes as any).map((r: any) => {
       const fromSymbol = getTokenInfoByAddress(r.from)?.symbol || r.from;
       const toSymbol = getTokenInfoByAddress(r.to)?.symbol || r.to;
       return `${fromSymbol} → ${toSymbol} (${r.stable ? 'stable' : 'volatile'})`;
