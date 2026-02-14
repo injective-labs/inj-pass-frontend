@@ -91,14 +91,16 @@ function getSwapPath(fromToken: string, toToken: string): Address[] {
     toAddr = getWrappedToken('INJ').address as Address;
   }
 
-  // Direct pair
-  if (fromToken === 'INJ' || toToken === 'INJ') {
-    return [fromAddr, toAddr];
-  }
+  console.log('[DEX] Swap path:', {
+    fromToken,
+    toToken,
+    fromAddr,
+    toAddr,
+    path: [fromAddr, toAddr]
+  });
 
-  // For USDT <-> USDC, might need to route through WINJ
-  // This depends on the DEX's liquidity pools
-  // Adjust based on actual pool availability
+  // For now, only support direct pairs
+  // If pair doesn't exist, Router will revert
   return [fromAddr, toAddr];
 }
 
@@ -129,8 +131,24 @@ export async function getSwapQuote(
     // Parse input amount
     const amountInWei = parseUnits(amountIn, fromInfo.decimals);
     
+    console.log('[DEX] Getting quote:', {
+      fromToken,
+      toToken,
+      amountIn,
+      amountInWei: amountInWei.toString(),
+      fromDecimals: fromInfo.decimals,
+      toDecimals: toInfo.decimals
+    });
+    
     // Get swap path
     const path = getSwapPath(fromToken, toToken);
+
+    console.log('[DEX] Calling Router:', {
+      router: ROUTER_ADDRESS,
+      function: 'getAmountsOut',
+      amountIn: amountInWei.toString(),
+      path
+    });
 
     // Get amounts out from router
     const amounts = await client.readContract({
@@ -139,6 +157,11 @@ export async function getSwapQuote(
       functionName: 'getAmountsOut',
       args: [amountInWei, path],
     }) as bigint[];
+
+    console.log('[DEX] Quote received:', {
+      amounts: amounts.map(a => a.toString()),
+      expectedOutput: amounts[amounts.length - 1].toString()
+    });
 
     // Expected output is the last amount in the array
     const expectedOutputWei = amounts[amounts.length - 1];
