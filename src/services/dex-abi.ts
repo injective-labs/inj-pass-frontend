@@ -47,12 +47,21 @@ export const ERC20_ABI = [
   },
 ] as const;
 
-// Uniswap V2 Router ABI (compatible with most DEXs)
+// Solidly/Velodrome Router ABI (Pumex uses this)
 export const ROUTER_ABI = [
   {
     inputs: [
       { internalType: 'uint256', name: 'amountIn', type: 'uint256' },
-      { internalType: 'address[]', name: 'path', type: 'address[]' },
+      {
+        internalType: 'tuple[]',
+        name: 'routes',
+        type: 'tuple[]',
+        components: [
+          { internalType: 'address', name: 'from', type: 'address' },
+          { internalType: 'address', name: 'to', type: 'address' },
+          { internalType: 'bool', name: 'stable', type: 'bool' },
+        ],
+      },
     ],
     name: 'getAmountsOut',
     outputs: [{ internalType: 'uint256[]', name: 'amounts', type: 'uint256[]' }],
@@ -63,7 +72,16 @@ export const ROUTER_ABI = [
     inputs: [
       { internalType: 'uint256', name: 'amountIn', type: 'uint256' },
       { internalType: 'uint256', name: 'amountOutMin', type: 'uint256' },
-      { internalType: 'address[]', name: 'path', type: 'address[]' },
+      {
+        internalType: 'tuple[]',
+        name: 'routes',
+        type: 'tuple[]',
+        components: [
+          { internalType: 'address', name: 'from', type: 'address' },
+          { internalType: 'address', name: 'to', type: 'address' },
+          { internalType: 'bool', name: 'stable', type: 'bool' },
+        ],
+      },
       { internalType: 'address', name: 'to', type: 'address' },
       { internalType: 'uint256', name: 'deadline', type: 'uint256' },
     ],
@@ -75,7 +93,16 @@ export const ROUTER_ABI = [
   {
     inputs: [
       { internalType: 'uint256', name: 'amountOutMin', type: 'uint256' },
-      { internalType: 'address[]', name: 'path', type: 'address[]' },
+      {
+        internalType: 'tuple[]',
+        name: 'routes',
+        type: 'tuple[]',
+        components: [
+          { internalType: 'address', name: 'from', type: 'address' },
+          { internalType: 'address', name: 'to', type: 'address' },
+          { internalType: 'bool', name: 'stable', type: 'bool' },
+        ],
+      },
       { internalType: 'address', name: 'to', type: 'address' },
       { internalType: 'uint256', name: 'deadline', type: 'uint256' },
     ],
@@ -88,7 +115,16 @@ export const ROUTER_ABI = [
     inputs: [
       { internalType: 'uint256', name: 'amountIn', type: 'uint256' },
       { internalType: 'uint256', name: 'amountOutMin', type: 'uint256' },
-      { internalType: 'address[]', name: 'path', type: 'address[]' },
+      {
+        internalType: 'tuple[]',
+        name: 'routes',
+        type: 'tuple[]',
+        components: [
+          { internalType: 'address', name: 'from', type: 'address' },
+          { internalType: 'address', name: 'to', type: 'address' },
+          { internalType: 'bool', name: 'stable', type: 'bool' },
+        ],
+      },
       { internalType: 'address', name: 'to', type: 'address' },
       { internalType: 'uint256', name: 'deadline', type: 'uint256' },
     ],

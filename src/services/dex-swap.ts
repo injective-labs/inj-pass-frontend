@@ -22,7 +22,7 @@ import {
 import { privateKeyToAccount } from 'viem/accounts';
 import { INJECTIVE_MAINNET_CHAIN } from '@/types/chain';
 import { ROUTER_ABI, ERC20_ABI } from './dex-abi';
-import { getTokenInfo, getTokenAddress, isNativeToken, getWrappedToken } from './tokens';
+import { getTokenInfo, getTokenAddress, isNativeToken, getWrappedToken, getTokenInfoByAddress } from './tokens';
 
 // ✅ CONFIGURED: Pumex RouterV2 address on Injective EVM Mainnet (Chain ID: 1776)
 // Contract: https://blockscout.injective.network/address/0xC7247df0e97353D676d78f1cc55D3CE39eE32bE1
@@ -70,9 +70,15 @@ function createClient() {
 }
 
 /**
- * Get swap path (token addresses for routing)
+ * Get swap routes (Solidly/Velodrome format)
  */
-function getSwapPath(fromToken: string, toToken: string): Address[] {
+interface Route {
+  from: Address;
+  to: Address;
+  stable: boolean;
+}
+
+function getSwapRoutes(fromToken: string, toToken: string): Route[] {
   const fromInfo = getTokenInfo(fromToken);
   const toInfo = getTokenInfo(toToken);
   
@@ -91,17 +97,26 @@ function getSwapPath(fromToken: string, toToken: string): Address[] {
     toAddr = getWrappedToken('INJ').address as Address;
   }
 
-  console.log('[DEX] Swap path:', {
+  // Determine if this should use stable or volatile pool
+  // INJ pairs use volatile, stablecoin pairs use stable
+  const isStableSwap = (fromToken === 'USDC' && toToken === 'USDT') || 
+                       (fromToken === 'USDT' && toToken === 'USDC');
+
+  const routes: Route[] = [
+    {
+      from: fromAddr,
+      to: toAddr,
+      stable: isStableSwap,
+    },
+  ];
+
+  console.log('[DEX] Swap routes:', {
     fromToken,
     toToken,
-    fromAddr,
-    toAddr,
-    path: [fromAddr, toAddr]
+    routes,
   });
 
-  // For now, only support direct pairs
-  // If pair doesn't exist, Router will revert
-  return [fromAddr, toAddr];
+  return routes;
 }
 
 /**
@@ -140,14 +155,14 @@ export async function getSwapQuote(
       toDecimals: toInfo.decimals
     });
     
-    // Get swap path
-    const path = getSwapPath(fromToken, toToken);
+    // Get swap routes (Solidly/Velodrome format)
+    const routes = getSwapRoutes(fromToken, toToken);
 
     console.log('[DEX] Calling Router:', {
       router: ROUTER_ADDRESS,
       function: 'getAmountsOut',
       amountIn: amountInWei.toString(),
-      path
+      routes
     });
 
     // Get amounts out from router
@@ -155,7 +170,7 @@ export async function getSwapQuote(
       address: ROUTER_ADDRESS,
       abi: ROUTER_ABI,
       functionName: 'getAmountsOut',
-      args: [amountInWei, path],
+      args: [amountInWei, routes],
     }) as bigint[];
 
     console.log('[DEX] Quote received:', {
@@ -176,13 +191,20 @@ export async function getSwapQuote(
     // In production, you'd compare against a price oracle or reference price
     const priceImpact = '0.1'; // Placeholder
 
+    // Format route for display
+    const routeDisplay = routes.map(r => {
+      const fromSymbol = getTokenInfoByAddress(r.from)?.symbol || r.from;
+      const toSymbol = getTokenInfoByAddress(r.to)?.symbol || r.to;
+      return `${fromSymbol} → ${toSymbol} (${r.stable ? 'stable' : 'volatile'})`;
+    });
+
     return {
       fromToken,
       toToken,
       amountIn,
       expectedOutput,
       priceImpact,
-      route: [fromToken, toToken],
+      route: routeDisplay,
       minOutput,
     };
   } catch (error) {
@@ -275,8 +297,8 @@ export async function executeSwap(params: SwapParams): Promise<Hash> {
       transport: http(),
     });
 
-    // Get swap path
-    const path = getSwapPath(fromToken, toToken);
+    // Get swap routes
+    const routes = getSwapRoutes(fromToken, toToken);
 
     // Deadline: 20 minutes from now
     const deadline = BigInt(Math.floor(Date.now() / 1000) + 60 * 20);
@@ -290,7 +312,7 @@ export async function executeSwap(params: SwapParams): Promise<Hash> {
         address: ROUTER_ADDRESS,
         abi: ROUTER_ABI,
         functionName: 'swapExactETHForTokens',
-        args: [minOutputWei, path, userAddress, deadline],
+        args: [minOutputWei, routes, userAddress, deadline],
         value: amountInWei,
       });
     } else if (isNativeToken(toToken)) {
@@ -308,7 +330,7 @@ export async function executeSwap(params: SwapParams): Promise<Hash> {
         address: ROUTER_ADDRESS,
         abi: ROUTER_ABI,
         functionName: 'swapExactTokensForETH',
-        args: [amountInWei, minOutputWei, path, userAddress, deadline],
+        args: [amountInWei, minOutputWei, routes, userAddress, deadline],
       });
     } else {
       // Token -> Token (swapExactTokensForTokens)
@@ -325,7 +347,7 @@ export async function executeSwap(params: SwapParams): Promise<Hash> {
         address: ROUTER_ADDRESS,
         abi: ROUTER_ABI,
         functionName: 'swapExactTokensForTokens',
-        args: [amountInWei, minOutputWei, path, userAddress, deadline],
+        args: [amountInWei, minOutputWei, routes, userAddress, deadline],
       });
     }
 

@@ -81,6 +81,16 @@ export function getTokenInfo(symbol: string): TokenInfo | undefined {
 }
 
 /**
+ * Get token info by address
+ */
+export function getTokenInfoByAddress(address: string): TokenInfo | undefined {
+  const normalizedAddress = address.toLowerCase();
+  return Object.values(TOKENS).find(
+    token => token.address.toLowerCase() === normalizedAddress
+  );
+}
+
+/**
  * Get token address by symbol
  */
 export function getTokenAddress(symbol: string): string {
