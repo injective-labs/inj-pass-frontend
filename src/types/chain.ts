@@ -77,12 +77,12 @@ export const INJECTIVE_TESTNET: ChainConfig = {
   },
 };
 
-// Injective EVM Mainnet
+// Injective EVM Mainnet - CORRECT Configuration
 export const INJECTIVE_MAINNET: ChainConfig = {
-  id: 2424,
+  id: 1776,  // Correct Chain ID for Injective EVM Mainnet
   name: 'Injective EVM',
-  rpcUrl: 'https://evm.injective.network',
-  explorerUrl: 'https://explorer.injective.network',
+  rpcUrl: 'https://sentry.evm-rpc.injective.network/',
+  explorerUrl: 'https://blockscout.injective.network',
   nativeCurrency: {
     name: 'Injective',
     symbol: 'INJ',
@@ -90,9 +90,9 @@ export const INJECTIVE_MAINNET: ChainConfig = {
   },
 };
 
-// Viem-compatible Chain configs for DEX swap
+// Viem-compatible Chain configs for DEX swap - MAINNET (CORRECT)
 export const INJECTIVE_MAINNET_CHAIN: Chain = {
-  id: 2424,
+  id: 1776,  // Correct Chain ID
   name: 'Injective EVM',
   nativeCurrency: {
     name: 'Injective',
@@ -101,13 +101,13 @@ export const INJECTIVE_MAINNET_CHAIN: Chain = {
   },
   rpcUrls: {
     default: { 
-      http: ['https://evm.injective.network']
+      http: ['https://sentry.evm-rpc.injective.network/']
     },
   },
   blockExplorers: {
     default: { 
       name: 'Blockscout', 
-      url: 'https://explorer.injective.network' 
+      url: 'https://blockscout.injective.network' 
     },
   },
 };
@@ -133,5 +133,5 @@ export const INJECTIVE_TESTNET_CHAIN: Chain = {
   },
 };
 
-// Default chain (use testnet for development)
-export const DEFAULT_CHAIN = INJECTIVE_TESTNET;
+// Default chain - USE MAINNET
+export const DEFAULT_CHAIN = INJECTIVE_MAINNET;
