@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useWallet } from '@/contexts/WalletContext';
 import { usePin } from '@/contexts/PinContext';
 import { estimateGas, sendTransaction } from '@/wallet/chain';
-import { INJECTIVE_TESTNET, GasEstimate } from '@/types/chain';
+import { INJECTIVE_MAINNET, GasEstimate } from '@/types/chain';
 import { isNFCSupported, readNFCCard } from '@/services/nfc';
 import LoadingSpinner from '@/components/LoadingSpinner';
 import TransactionAuthModal from '@/components/TransactionAuthModal';
@@ -323,7 +323,7 @@ function SendPageContent() {
         estimateRecipient,
         estimateAmount,
         undefined,
-        INJECTIVE_TESTNET
+        INJECTIVE_MAINNET
       );
       setGasEstimate(estimate);
     } catch (err) {
@@ -387,7 +387,7 @@ function SendPageContent() {
         recipient,
         amount,
         undefined,
-        INJECTIVE_TESTNET
+        INJECTIVE_MAINNET
       );
       
       setTxHash(hash);
@@ -489,7 +489,7 @@ function SendPageContent() {
                 
                 {/* View Explorer Button */}
                 <a
-                  href={`${INJECTIVE_TESTNET.explorerUrl}/tx/${txHash}`}
+                  href={`${INJECTIVE_MAINNET.explorerUrl}/tx/${txHash}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="p-2 rounded-lg hover:bg-white/10 transition-all group"
