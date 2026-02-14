@@ -98,66 +98,75 @@ export default function DashboardPage() {
 
   // QR Scanner handlers
   const openQRScanner = async () => {
-    console.log('[Dashboard] openQRScanner called');
-    
-    // Check camera support
-    if (!isCameraSupported()) {
-      console.error('[Dashboard] Camera not supported');
-      alert('Camera is not supported on this device. Please use a device with a camera and grant permission.');
-      return;
-    }
-
-    console.log('[Dashboard] Opening QR scanner modal');
-    setShowQRScanner(true);
-    setQrScanning(false);
-    setQrSuccess(false);
-    setQrError('');
-    setScannedAddress('');
-    setClosingQRScanner(false);
-    setShowMyQR(false);
-
-    // Start scanning after modal opens
-    setTimeout(async () => {
-      console.log('[Dashboard] Starting scanner...');
-      setQrScanning(true);
-      try {
-        await startQRScanner(
-          'qr-reader',
-          (decodedText) => {
-            console.log('[Dashboard] QR decoded:', decodedText);
-            
-            // Validate address
-            if (isValidAddress(decodedText)) {
-              setScannedAddress(decodedText);
-              setQrSuccess(true);
-              setQrScanning(false);
-              
-              // Stop scanner
-              stopQRScanner();
-              
-              // Redirect to send page after 1 second
-              setTimeout(() => {
-                closeQRScanner();
-                router.push(`/send?address=${decodedText}`);
-              }, 1000);
-            } else {
-              setQrError('Invalid address format. Please scan a valid wallet address.');
-              setQrScanning(false);
-              stopQRScanner();
-            }
-          },
-          (error) => {
-            console.error('[Dashboard] Scanner error:', error);
-            setQrError(error);
-            setQrScanning(false);
-          }
-        );
-      } catch (error) {
-        console.error('[Dashboard] Failed to start QR scanner:', error);
-        setQrError(error instanceof Error ? error.message : 'Failed to start camera');
-        setQrScanning(false);
+    try {
+      console.log('[Dashboard] openQRScanner called');
+      
+      // First, show an alert to confirm button click works
+      alert('Button clicked! Checking camera support...');
+      
+      // Check camera support
+      if (!isCameraSupported()) {
+        console.error('[Dashboard] Camera not supported');
+        alert('Camera is not supported on this device. Please use a device with a camera and grant permission.');
+        return;
       }
-    }, 300);
+
+      alert('Camera supported! Opening scanner...');
+      console.log('[Dashboard] Opening QR scanner modal');
+      setShowQRScanner(true);
+      setQrScanning(false);
+      setQrSuccess(false);
+      setQrError('');
+      setScannedAddress('');
+      setClosingQRScanner(false);
+      setShowMyQR(false);
+
+      // Start scanning after modal opens
+      setTimeout(async () => {
+        console.log('[Dashboard] Starting scanner...');
+        setQrScanning(true);
+        try {
+          await startQRScanner(
+            'qr-reader',
+            (decodedText) => {
+              console.log('[Dashboard] QR decoded:', decodedText);
+              
+              // Validate address
+              if (isValidAddress(decodedText)) {
+                setScannedAddress(decodedText);
+                setQrSuccess(true);
+                setQrScanning(false);
+                
+                // Stop scanner
+                stopQRScanner();
+                
+                // Redirect to send page after 1 second
+                setTimeout(() => {
+                  closeQRScanner();
+                  router.push(`/send?address=${decodedText}`);
+                }, 1000);
+              } else {
+                setQrError('Invalid address format. Please scan a valid wallet address.');
+                setQrScanning(false);
+                stopQRScanner();
+              }
+            },
+            (error) => {
+              console.error('[Dashboard] Scanner error:', error);
+              setQrError(error);
+              setQrScanning(false);
+            }
+          );
+        } catch (error) {
+          console.error('[Dashboard] Failed to start QR scanner:', error);
+          setQrError(error instanceof Error ? error.message : 'Failed to start camera');
+          setQrScanning(false);
+        }
+      }, 300);
+    } catch (error) {
+      alert('Error in openQRScanner: ' + (error instanceof Error ? error.message : 'Unknown error'));
+      console.error('[Dashboard] Error in openQRScanner:', error);
+    }
   };
 
   const closeQRScanner = () => {
