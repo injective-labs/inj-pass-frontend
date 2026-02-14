@@ -848,8 +848,7 @@ body.sidebar-mode .sidebar-overlay {
   }
 }
 
-.nfc-scanner-modal.slide-up,
-.auth-modal.slide-up {
+.nfc-scanner-modal.slide-up {
   animation: slideUp 0.35s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
@@ -865,8 +864,7 @@ body.sidebar-mode .sidebar-overlay {
   }
 }
 
-.nfc-scanner-modal.slide-down,
-.auth-modal.slide-down {
+.nfc-scanner-modal.slide-down {
   animation: slideDown 0.35s cubic-bezier(0.4, 0, 1, 1);
 }
 
