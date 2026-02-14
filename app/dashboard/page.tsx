@@ -101,9 +101,6 @@ export default function DashboardPage() {
     try {
       console.log('[Dashboard] openQRScanner called');
       
-      // First, show an alert to confirm button click works
-      alert('Button clicked! Checking camera support...');
-      
       // Check camera support
       if (!isCameraSupported()) {
         console.error('[Dashboard] Camera not supported');
@@ -111,7 +108,6 @@ export default function DashboardPage() {
         return;
       }
 
-      alert('Camera supported! Opening scanner...');
       console.log('[Dashboard] Opening QR scanner modal');
       setShowQRScanner(true);
       setQrScanning(false);
@@ -121,7 +117,7 @@ export default function DashboardPage() {
       setClosingQRScanner(false);
       setShowMyQR(false);
 
-      // Start scanning after modal opens
+      // Start scanning after modal opens - directly request camera
       setTimeout(async () => {
         console.log('[Dashboard] Starting scanner...');
         setQrScanning(true);
@@ -164,7 +160,7 @@ export default function DashboardPage() {
         }
       }, 300);
     } catch (error) {
-      alert('Error in openQRScanner: ' + (error instanceof Error ? error.message : 'Unknown error'));
+      alert('Error: ' + (error instanceof Error ? error.message : 'Unknown error'));
       console.error('[Dashboard] Error in openQRScanner:', error);
     }
   };
@@ -586,22 +582,22 @@ export default function DashboardPage() {
       {/* QR Scanner Modal */}
       {showQRScanner && (
         <div 
-          className={`fixed inset-0 bg-black/80 backdrop-blur-sm flex items-end justify-center z-50 transition-opacity duration-200 ${closingQRScanner ? 'opacity-0' : 'opacity-100'}`}
+          className={`fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 transition-opacity duration-200 px-4 ${closingQRScanner ? 'opacity-0' : 'opacity-100'}`}
           onClick={closeQRScanner}
         >
           <div 
-            className={`bg-black border-t border-white/10 rounded-t-3xl w-full max-w-2xl shadow-2xl ${
+            className={`bg-black border border-white/10 rounded-2xl w-full max-w-md shadow-2xl overflow-hidden ${
               closingQRScanner ? 'slide-down' : 'slide-up'
             }`}
             onClick={(e) => e.stopPropagation()}
-            style={{ maxHeight: '80vh' }}
+            style={{ maxHeight: '85vh' }}
           >
-            {/* Header */}
-            <div className="p-5 border-b border-white/5">
+            {/* Header - Compact */}
+            <div className="p-4 border-b border-white/5">
               <div className="flex items-center justify-between">
                 <div>
-                  <h3 className="text-lg font-bold text-white mb-1">Scan QR Code</h3>
-                  <p className="text-gray-400 text-xs">Point camera at wallet address QR code</p>
+                  <h3 className="text-base font-bold text-white">Scan QR Code</h3>
+                  <p className="text-gray-400 text-xs">Point camera at wallet address</p>
                 </div>
                 <button
                   onClick={closeQRScanner}
@@ -614,31 +610,31 @@ export default function DashboardPage() {
               </div>
             </div>
             
-            {/* Scanner Body */}
-            <div className="p-8 flex flex-col items-center justify-center min-h-[400px]">
+            {/* Scanner Body - Compact */}
+            <div className="p-4 flex flex-col items-center justify-center" style={{ minHeight: '320px' }}>
               {showMyQR ? (
                 <>
-                  {/* Show My QR Code */}
-                  <div className="text-center mb-6">
-                    <h4 className="text-base font-bold text-white mb-2">My Wallet Address</h4>
-                    <p className="text-gray-400 text-xs">Let others scan this QR code</p>
+                  {/* Show My QR Code - Compact */}
+                  <div className="text-center mb-3">
+                    <h4 className="text-sm font-bold text-white mb-1">My Wallet Address</h4>
+                    <p className="text-gray-400 text-xs">Let others scan this code</p>
                   </div>
 
-                  {/* QR Code */}
-                  <div className="bg-white p-6 rounded-2xl mb-6">
+                  {/* QR Code - Smaller */}
+                  <div className="bg-white p-4 rounded-xl mb-3">
                     <QRCodeSVG 
                       value={address || ''} 
-                      size={220}
+                      size={200}
                       level="H"
                       includeMargin={true}
                     />
                   </div>
 
-                  {/* Address Display */}
-                  <div className="w-full max-w-sm">
-                    <div className="flex items-center justify-between p-4 bg-white/5 rounded-xl border border-white/10">
-                      <span className="text-sm font-mono text-white truncate mr-2">
-                        {address}
+                  {/* Address Display - Compact */}
+                  <div className="w-full">
+                    <div className="flex items-center justify-between p-3 bg-white/5 rounded-xl border border-white/10">
+                      <span className="text-xs font-mono text-white truncate mr-2">
+                        {address?.slice(0, 10)}...{address?.slice(-8)}
                       </span>
                       <button
                         onClick={() => {
@@ -646,7 +642,7 @@ export default function DashboardPage() {
                           setCopied(true);
                           setTimeout(() => setCopied(false), 2000);
                         }}
-                        className="p-2 rounded-lg hover:bg-white/10 transition-all flex-shrink-0"
+                        className="p-1.5 rounded-lg hover:bg-white/10 transition-all flex-shrink-0"
                       >
                         {copied ? (
                           <svg className="w-4 h-4 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -664,74 +660,71 @@ export default function DashboardPage() {
                 </>
               ) : !qrSuccess && !qrError ? (
                 <>
-                  {/* QR Scanner Video */}
-                  <div className="relative w-full max-w-sm mb-6">
+                  {/* QR Scanner Video - Compact */}
+                  <div className="relative w-full mb-4">
                     <div 
                       id="qr-reader" 
-                      className="rounded-2xl overflow-hidden border-4 border-white/20"
+                      className="rounded-xl overflow-hidden border-2 border-white/20"
                       style={{ width: '100%' }}
                     />
                     
                     {/* Scanning overlay */}
                     {qrScanning && (
                       <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                        <div className="w-64 h-64 border-2 border-white/50 rounded-2xl animate-pulse" />
+                        <div className="w-48 h-48 border-2 border-white/50 rounded-xl animate-pulse" />
                       </div>
                     )}
                   </div>
                   
-                  <h4 className="text-base font-bold text-white mb-1">
+                  <h4 className="text-sm font-bold text-white mb-1">
                     {qrScanning ? 'Scanning...' : 'Initializing Camera...'}
                   </h4>
-                  <p className="text-gray-400 text-sm text-center">
-                    {qrScanning ? 'Point your camera at a QR code' : 'Please allow camera access'}
+                  <p className="text-gray-400 text-xs text-center">
+                    {qrScanning ? 'Point camera at QR code' : 'Please allow camera access'}
                   </p>
                 </>
               ) : qrSuccess ? (
                 <>
-                  {/* Success Animation */}
-                  <div className="relative mb-6 flex items-center justify-center w-40 h-40">
-                    {/* Glow rings */}
+                  {/* Success Animation - Compact */}
+                  <div className="relative mb-4 flex items-center justify-center w-32 h-32">
+                    {/* Glow rings - Smaller */}
                     <div className="absolute inset-0 flex items-center justify-center">
-                      <div className="w-40 h-40 rounded-full border-2 border-white/30 animate-ping"></div>
+                      <div className="w-32 h-32 rounded-full border-2 border-white/30 animate-ping"></div>
                     </div>
                     <div className="absolute inset-0 flex items-center justify-center">
-                      <div className="w-32 h-32 rounded-full border-2 border-white/40 animate-ping" style={{ animationDelay: '0.15s' }}></div>
-                    </div>
-                    <div className="absolute inset-0 flex items-center justify-center">
-                      <div className="w-28 h-28 rounded-full border-2 border-white/50 animate-ping" style={{ animationDelay: '0.3s' }}></div>
+                      <div className="w-28 h-28 rounded-full border-2 border-white/40 animate-ping" style={{ animationDelay: '0.15s' }}></div>
                     </div>
                     
-                    {/* Success circle */}
-                    <div className="relative w-24 h-24 rounded-full bg-white flex items-center justify-center success-bounce shadow-2xl">
-                      <svg className="w-12 h-12 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}>
+                    {/* Success circle - Smaller */}
+                    <div className="relative w-20 h-20 rounded-full bg-white flex items-center justify-center success-bounce shadow-2xl">
+                      <svg className="w-10 h-10 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}>
                         <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                       </svg>
                     </div>
                   </div>
                   
-                  <h4 className="text-base font-bold text-white mb-1">QR Code Scanned!</h4>
-                  <p className="text-gray-400 text-sm text-center mb-4">Redirecting to send page...</p>
+                  <h4 className="text-sm font-bold text-white mb-1">QR Code Scanned!</h4>
+                  <p className="text-gray-400 text-xs text-center mb-3">Redirecting to send page...</p>
                   <div className="text-xs font-mono text-gray-500 bg-white/5 px-3 py-2 rounded-lg">
                     {scannedAddress.slice(0, 8)}...{scannedAddress.slice(-6)}
                   </div>
                 </>
               ) : (
                 <>
-                  {/* Error State */}
-                  <div className="w-16 h-16 rounded-full bg-red-500/20 flex items-center justify-center mb-4">
-                    <svg className="w-8 h-8 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  {/* Error State - Compact */}
+                  <div className="w-12 h-12 rounded-full bg-red-500/20 flex items-center justify-center mb-3">
+                    <svg className="w-6 h-6 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                     </svg>
                   </div>
-                  <h4 className="text-base font-bold text-white mb-1">Scan Failed</h4>
-                  <p className="text-red-400 text-sm text-center mb-6">{qrError}</p>
+                  <h4 className="text-sm font-bold text-white mb-1">Scan Failed</h4>
+                  <p className="text-red-400 text-xs text-center mb-4">{qrError}</p>
                   <button
                     onClick={() => {
                       setQrError('');
                       openQRScanner();
                     }}
-                    className="px-8 py-3 rounded-xl bg-white text-black font-bold hover:bg-gray-100 transition-all shadow-lg"
+                    className="px-6 py-2.5 rounded-xl bg-white text-black font-bold hover:bg-gray-100 transition-all shadow-lg text-sm"
                   >
                     Try Again
                   </button>
@@ -739,8 +732,8 @@ export default function DashboardPage() {
               )}
             </div>
 
-            {/* Bottom Action - Toggle to My QR */}
-            <div className="p-5 border-t border-white/5">
+            {/* Bottom Action - Toggle to My QR - Compact */}
+            <div className="p-3 border-t border-white/5">
               <button
                 onClick={() => {
                   if (showMyQR) {
@@ -758,7 +751,7 @@ export default function DashboardPage() {
                     setQrScanning(false);
                   }
                 }}
-                className="w-full py-3 rounded-xl bg-white/5 border border-white/10 text-white font-bold hover:bg-white/10 transition-all flex items-center justify-center gap-2"
+                className="w-full py-2.5 rounded-xl bg-white/5 border border-white/10 text-white font-bold hover:bg-white/10 transition-all flex items-center justify-center gap-2 text-sm"
               >
                 {showMyQR ? (
                   <>

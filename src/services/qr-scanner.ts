@@ -50,7 +50,7 @@ export async function startQRScanner(
       { facingMode: 'environment' }, // Use back camera on mobile
       {
         fps: 10, // Frames per second for scanning
-        qrbox: { width: 250, height: 250 }, // Scanning area
+        qrbox: { width: 200, height: 200 }, // Smaller scanning area
         aspectRatio: 1.0,
       },
       (decodedText: string) => {
