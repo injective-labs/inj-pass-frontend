@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useWallet } from '@/contexts/WalletContext';
 import { estimateGas, sendTransaction } from '@/wallet/chain';
 import { INJECTIVE_TESTNET, GasEstimate } from '@/types/chain';
@@ -14,6 +14,7 @@ interface AddressBookEntry {
 
 export default function SendPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { isUnlocked, privateKey, isCheckingSession } = useWallet();
   const [recipient, setRecipient] = useState('');
   const [amount, setAmount] = useState('');
@@ -49,6 +50,15 @@ export default function SendPage() {
       }
     }
   }, []);
+
+  // Check for address in URL params (from QR scanner)
+  useEffect(() => {
+    const addressParam = searchParams.get('address');
+    if (addressParam) {
+      console.log('[Send] Setting address from URL:', addressParam);
+      setRecipient(addressParam);
+    }
+  }, [searchParams]);
 
   // Save address to address book
   const saveToAddressBook = () => {

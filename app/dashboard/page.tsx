@@ -7,6 +7,7 @@ import { getBalance } from '@/wallet/chain';
 import { Balance, INJECTIVE_MAINNET } from '@/types/chain';
 import { getInjPrice } from '@/services/price';
 import { getTokenBalances } from '@/services/dex-swap';
+import { startQRScanner, stopQRScanner, clearQRScanner, isCameraSupported, isValidAddress } from '@/services/qr-scanner';
 import type { Address } from 'viem';
 import Image from 'next/image';
 
@@ -26,6 +27,14 @@ export default function DashboardPage() {
     USDT: '0.00',
     USDC: '0.00',
   });
+  
+  // QR Scanner states
+  const [showQRScanner, setShowQRScanner] = useState(false);
+  const [qrScanning, setQrScanning] = useState(false);
+  const [qrError, setQrError] = useState('');
+  const [qrSuccess, setQrSuccess] = useState(false);
+  const [scannedAddress, setScannedAddress] = useState('');
+  const [closingQRScanner, setClosingQRScanner] = useState(false);
 
   useEffect(() => {
     // Wait for session check to complete
@@ -83,6 +92,77 @@ export default function DashboardPage() {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     }
+  };
+
+  // QR Scanner handlers
+  const openQRScanner = async () => {
+    // Check camera support
+    if (!isCameraSupported()) {
+      alert('Camera is not supported on this device');
+      return;
+    }
+
+    setShowQRScanner(true);
+    setQrScanning(false);
+    setQrSuccess(false);
+    setQrError('');
+    setScannedAddress('');
+    setClosingQRScanner(false);
+
+    // Start scanning after modal opens
+    setTimeout(async () => {
+      setQrScanning(true);
+      try {
+        await startQRScanner(
+          'qr-reader',
+          (decodedText) => {
+            console.log('[Dashboard] QR decoded:', decodedText);
+            
+            // Validate address
+            if (isValidAddress(decodedText)) {
+              setScannedAddress(decodedText);
+              setQrSuccess(true);
+              setQrScanning(false);
+              
+              // Stop scanner
+              stopQRScanner();
+              
+              // Redirect to send page after 1 second
+              setTimeout(() => {
+                closeQRScanner();
+                router.push(`/send?address=${decodedText}`);
+              }, 1000);
+            } else {
+              setQrError('Invalid address format. Please scan a valid wallet address.');
+              setQrScanning(false);
+              stopQRScanner();
+            }
+          },
+          (error) => {
+            setQrError(error);
+            setQrScanning(false);
+          }
+        );
+      } catch (error) {
+        console.error('[Dashboard] Failed to start QR scanner:', error);
+        setQrError(error instanceof Error ? error.message : 'Failed to start camera');
+        setQrScanning(false);
+      }
+    }, 300);
+  };
+
+  const closeQRScanner = () => {
+    setClosingQRScanner(true);
+    stopQRScanner();
+    setTimeout(() => {
+      setShowQRScanner(false);
+      setQrScanning(false);
+      setQrSuccess(false);
+      setQrError('');
+      setScannedAddress('');
+      setClosingQRScanner(false);
+      clearQRScanner();
+    }, 350);
   };
 
   if (loading) {
@@ -159,6 +239,7 @@ export default function DashboardPage() {
 
             {/* Scan QR Code Button */}
             <button 
+              onClick={openQRScanner}
               className="p-3 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 transition-all"
               title="Scan QR Code"
             >
@@ -480,6 +561,119 @@ export default function DashboardPage() {
           )}
         </div>
       </div>
+
+      {/* QR Scanner Modal */}
+      {showQRScanner && (
+        <div 
+          className={`fixed inset-0 bg-black/80 backdrop-blur-sm flex items-end justify-center z-50 transition-opacity duration-200 ${closingQRScanner ? 'opacity-0' : 'opacity-100'}`}
+          onClick={closeQRScanner}
+        >
+          <div 
+            className={`bg-black border-t border-white/10 rounded-t-3xl w-full max-w-2xl shadow-2xl ${
+              closingQRScanner ? 'slide-down' : 'slide-up'
+            }`}
+            onClick={(e) => e.stopPropagation()}
+            style={{ maxHeight: '80vh' }}
+          >
+            {/* Header */}
+            <div className="p-5 border-b border-white/5">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-lg font-bold text-white mb-1">Scan QR Code</h3>
+                  <p className="text-gray-400 text-xs">Point camera at wallet address QR code</p>
+                </div>
+                <button
+                  onClick={closeQRScanner}
+                  className="p-2 rounded-xl hover:bg-white/10 transition-all"
+                >
+                  <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+            
+            {/* Scanner Body */}
+            <div className="p-8 flex flex-col items-center justify-center min-h-[400px]">
+              {!qrSuccess && !qrError ? (
+                <>
+                  {/* QR Scanner Video */}
+                  <div className="relative w-full max-w-sm mb-6">
+                    <div 
+                      id="qr-reader" 
+                      className="rounded-2xl overflow-hidden border-4 border-white/20"
+                      style={{ width: '100%' }}
+                    />
+                    
+                    {/* Scanning overlay */}
+                    {qrScanning && (
+                      <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                        <div className="w-64 h-64 border-2 border-white/50 rounded-2xl animate-pulse" />
+                      </div>
+                    )}
+                  </div>
+                  
+                  <h4 className="text-base font-bold text-white mb-1">
+                    {qrScanning ? 'Scanning...' : 'Initializing Camera...'}
+                  </h4>
+                  <p className="text-gray-400 text-sm text-center">
+                    {qrScanning ? 'Point your camera at a QR code' : 'Please allow camera access'}
+                  </p>
+                </>
+              ) : qrSuccess ? (
+                <>
+                  {/* Success Animation */}
+                  <div className="relative mb-6 flex items-center justify-center w-40 h-40">
+                    {/* Glow rings */}
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <div className="w-40 h-40 rounded-full border-2 border-white/30 animate-ping"></div>
+                    </div>
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <div className="w-32 h-32 rounded-full border-2 border-white/40 animate-ping" style={{ animationDelay: '0.15s' }}></div>
+                    </div>
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <div className="w-28 h-28 rounded-full border-2 border-white/50 animate-ping" style={{ animationDelay: '0.3s' }}></div>
+                    </div>
+                    
+                    {/* Success circle */}
+                    <div className="relative w-24 h-24 rounded-full bg-white flex items-center justify-center success-bounce shadow-2xl">
+                      <svg className="w-12 h-12 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                      </svg>
+                    </div>
+                  </div>
+                  
+                  <h4 className="text-base font-bold text-white mb-1">QR Code Scanned!</h4>
+                  <p className="text-gray-400 text-sm text-center mb-4">Redirecting to send page...</p>
+                  <div className="text-xs font-mono text-gray-500 bg-white/5 px-3 py-2 rounded-lg">
+                    {scannedAddress.slice(0, 8)}...{scannedAddress.slice(-6)}
+                  </div>
+                </>
+              ) : (
+                <>
+                  {/* Error State */}
+                  <div className="w-16 h-16 rounded-full bg-red-500/20 flex items-center justify-center mb-4">
+                    <svg className="w-8 h-8 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                    </svg>
+                  </div>
+                  <h4 className="text-base font-bold text-white mb-1">Scan Failed</h4>
+                  <p className="text-red-400 text-sm text-center mb-6">{qrError}</p>
+                  <button
+                    onClick={() => {
+                      setQrError('');
+                      openQRScanner();
+                    }}
+                    className="px-8 py-3 rounded-xl bg-white text-black font-bold hover:bg-gray-100 transition-all shadow-lg"
+                  >
+                    Try Again
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Bottom Navigation */}
       <div className="fixed bottom-0 left-0 right-0 bg-black/95 border-t border-white/10 backdrop-blur-lg">
