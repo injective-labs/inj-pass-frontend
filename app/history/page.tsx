@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation';
 import { useWallet } from '@/contexts/WalletContext';
 import { useState, useEffect } from 'react';
 import { getTxHistory } from '@/wallet/chain';
-import { INJECTIVE_TESTNET } from '@/types/chain';
+import { INJECTIVE_MAINNET } from '@/types/chain';
 
 type TransactionType = 'send' | 'receive' | 'swap';
 type TransactionStatus = 'completed' | 'pending' | 'failed';
@@ -174,9 +174,9 @@ export default function HistoryPage() {
                   <h1 className="text-xl font-bold text-white">Transaction History</h1>
                   <p className="text-gray-400 text-xs">View all your transactions</p>
                 </div>
-                {/* Testnet Badge */}
-                <span className="px-3 py-1 rounded-lg text-xs font-bold bg-orange-500/20 text-orange-300 border border-orange-500/30">
-                  TESTNET
+                {/* Mainnet Badge */}
+                <span className="px-3 py-1 rounded-lg text-xs font-bold bg-green-500/20 text-green-300 border border-green-500/30">
+                  MAINNET
                 </span>
               </div>
             </div>
@@ -256,8 +256,8 @@ export default function HistoryPage() {
                   className="flex items-center gap-4 p-4 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10 transition-all cursor-pointer group"
                   onClick={() => {
                     if (tx.txHash) {
-                      // Open transaction in explorer
-                      window.open(`${INJECTIVE_TESTNET.explorerUrl}/tx/${tx.txHash}`, '_blank');
+                      // Open transaction in explorer - Mainnet Blockscout
+                      window.open(`${INJECTIVE_MAINNET.explorerUrl}/tx/${tx.txHash}`, '_blank');
                     }
                   }}
                 >
