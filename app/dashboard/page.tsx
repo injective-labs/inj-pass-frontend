@@ -191,23 +191,8 @@ export default function DashboardPage() {
     }, 350);
   };
 
-  if (loading) {
-    return (
-      <div className="min-h-screen pb-24 md:pb-8 animate-fade-in">
-        <div className="max-w-7xl mx-auto px-4 py-6">
-          {/* Loading Skeleton */}
-          <div className="space-y-6">
-            <div className="h-12 bg-white/5 rounded-2xl animate-pulse"></div>
-            <div className="h-48 bg-white/5 rounded-3xl animate-pulse"></div>
-            <div className="grid grid-cols-4 gap-3">
-              {[1, 2, 3, 4].map(i => (
-                <div key={i} className="h-24 bg-white/5 rounded-2xl animate-pulse"></div>
-              ))}
-            </div>
-          </div>
-        </div>
-      </div>
-    );
+  if (isCheckingSession || loading) {
+    return <LoadingSpinner />;
   }
 
   const formattedBalance = balance ? parseFloat(balance.formatted).toFixed(4) : '0.0000';
