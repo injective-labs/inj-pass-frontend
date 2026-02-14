@@ -4,8 +4,10 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useWallet } from '@/contexts/WalletContext';
 import { getBalance } from '@/wallet/chain';
-import { Balance, INJECTIVE_TESTNET } from '@/types/chain';
+import { Balance, INJECTIVE_MAINNET } from '@/types/chain';
 import { getInjPrice } from '@/services/price';
+import { getTokenBalances } from '@/services/dex-swap';
+import type { Address } from 'viem';
 import Image from 'next/image';
 
 export default function DashboardPage() {
@@ -19,6 +21,11 @@ export default function DashboardPage() {
   const [copied, setCopied] = useState(false);
   const [activeTab, setActiveTab] = useState<'settings' | 'wallet' | 'discover'>('wallet');
   const [assetTab, setAssetTab] = useState<'tokens' | 'nfts' | 'defi'>('tokens');
+  const [tokenBalances, setTokenBalances] = useState<Record<string, string>>({
+    INJ: '0.0000',
+    USDT: '0.00',
+    USDC: '0.00',
+  });
 
   useEffect(() => {
     // Wait for session check to complete
@@ -44,13 +51,19 @@ export default function DashboardPage() {
 
     try {
       setLoading(true);
-      const [balanceData, priceData] = await Promise.all([
-        getBalance(address, INJECTIVE_TESTNET),
+      const [balanceData, priceData, tokenBalData] = await Promise.all([
+        getBalance(address, INJECTIVE_MAINNET),
         getInjPrice(),
+        getTokenBalances(['INJ', 'USDT', 'USDC'], address as Address),
       ]);
       
       setBalance(balanceData);
       setInjPrice(priceData);
+      setTokenBalances({
+        INJ: parseFloat(tokenBalData.INJ).toFixed(4),
+        USDT: parseFloat(tokenBalData.USDT).toFixed(2),
+        USDC: parseFloat(tokenBalData.USDC).toFixed(2),
+      });
     } catch (error) {
       console.error('Failed to load data:', error);
     } finally {
@@ -92,7 +105,10 @@ export default function DashboardPage() {
   }
 
   const formattedBalance = balance ? parseFloat(balance.formatted).toFixed(4) : '0.0000';
-  const usdValue = balance ? (parseFloat(balance.formatted) * injPrice).toFixed(2) : '0.00';
+  const injUsdValue = balance ? (parseFloat(balance.formatted) * injPrice) : 0;
+  const usdtValue = parseFloat(tokenBalances.USDT);
+  const usdcValue = parseFloat(tokenBalances.USDC);
+  const totalUsdValue = (injUsdValue + usdtValue + usdcValue).toFixed(2);
 
   return (
     <div className="min-h-screen pb-24 md:pb-8 bg-black">
@@ -206,7 +222,7 @@ export default function DashboardPage() {
                 </div>
                 <div className="flex items-center gap-4 mt-2">
                   <div className="text-base text-gray-400 font-mono">
-                    ≈ ${balanceVisible ? usdValue : '••••••'} USD
+                    ≈ ${balanceVisible ? totalUsdValue : '••••••'} USD
                   </div>
                   {/* 24h Change */}
                   <div className="flex items-center gap-2">
@@ -358,10 +374,10 @@ export default function DashboardPage() {
                 </div>
                 <div className="flex-1">
                   <div className="font-bold mb-1">INJ</div>
-                  <div className="text-sm text-gray-400">0.0000 INJ</div>
+                  <div className="text-sm text-gray-400">{tokenBalances.INJ} INJ</div>
                 </div>
                 <div className="text-right">
-                  <div className="font-bold font-mono">$0.00</div>
+                  <div className="font-bold font-mono">${(parseFloat(tokenBalances.INJ) * injPrice).toFixed(2)}</div>
                   <div className="text-sm text-gray-500">0.00%</div>
                 </div>
               </div>
@@ -378,10 +394,10 @@ export default function DashboardPage() {
                 </div>
                 <div className="flex-1">
                   <div className="font-bold mb-1">USDT</div>
-                  <div className="text-sm text-gray-400">0.00 USDT</div>
+                  <div className="text-sm text-gray-400">{tokenBalances.USDT} USDT</div>
                 </div>
                 <div className="text-right">
-                  <div className="font-bold font-mono">$0.00</div>
+                  <div className="font-bold font-mono">${tokenBalances.USDT}</div>
                   <div className="text-sm text-gray-500">0.00%</div>
                 </div>
               </div>
@@ -398,10 +414,10 @@ export default function DashboardPage() {
                 </div>
                 <div className="flex-1">
                   <div className="font-bold mb-1">USDC</div>
-                  <div className="text-sm text-gray-400">0.00 USDC</div>
+                  <div className="text-sm text-gray-400">{tokenBalances.USDC} USDC</div>
                 </div>
                 <div className="text-right">
-                  <div className="font-bold font-mono">$0.00</div>
+                  <div className="font-bold font-mono">${tokenBalances.USDC}</div>
                   <div className="text-sm text-gray-500">0.00%</div>
                 </div>
               </div>
