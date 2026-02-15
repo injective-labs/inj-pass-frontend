@@ -540,7 +540,7 @@ function SendPageContent() {
             </div>
             <div className="flex justify-between items-center py-2 border-t border-white/5">
               <span className="text-sm text-gray-400">Network</span>
-              <span className="text-sm font-bold text-white">Injective Testnet</span>
+              <span className="text-sm font-bold text-white">Injective EVM</span>
             </div>
             <div className="flex justify-between items-center py-2 border-t border-white/5">
               <span className="text-sm text-gray-400">Timestamp</span>
@@ -633,7 +633,7 @@ function SendPageContent() {
               <button
                 onClick={openNfcScanner}
                 className="absolute right-12 top-1/2 -translate-y-1/2 p-2 rounded-lg hover:bg-white/10 transition-all"
-                title="Scan Card"
+                title="Scan Card (Experimental)"
               >
                 <svg className="w-5 h-5 text-gray-400 -rotate-45" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 11.5V14m0-2.5v-6a1.5 1.5 0 113 0m-3 6a1.5 1.5 0 00-3 0v2a7.5 7.5 0 0015 0v-5a1.5 1.5 0 00-3 0m-6-3V11m0-5.5v-1a1.5 1.5 0 013 0v1m0 0V11m0-5.5a1.5 1.5 0 013 0v3m0 0V11" />
@@ -885,7 +885,7 @@ function SendPageContent() {
             <div className="p-5 border-b border-white/5">
               <div className="flex items-center justify-between">
                 <div>
-                  <h3 className="text-lg font-bold text-white mb-1">Scan Card</h3>
+                  <h3 className="text-lg font-bold text-white mb-1">Scan Card (Experimental)</h3>
                   <p className="text-gray-400 text-xs">Hold your device near the card</p>
                 </div>
                 <button
