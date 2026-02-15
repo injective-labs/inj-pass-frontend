@@ -753,6 +753,16 @@ body.sidebar-mode .sidebar-overlay {
   }
 }
 
+/* Card shimmer effect */
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
 .lambda-gradient {
   position: relative;
   background: linear-gradient(
@@ -823,4 +833,247 @@ body.sidebar-mode .sidebar-overlay {
     0 0 10px rgba(255, 255, 255, 0.05);
   transform: translateZ(0);
   -webkit-font-smoothing: antialiased;
+}
+
+/* --- NFC Scanner Animations --- */
+/* Slide up from bottom - Smooth and elegant */
+@keyframes slideUp {
+  from {
+    transform: translateY(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.nfc-scanner-modal.slide-up {
+  animation: slideUp 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Slide down to exit - Smooth and elegant */
+@keyframes slideDown {
+  from {
+    transform: translateY(0);
+    opacity: 1;
+  }
+  to {
+    transform: translateY(100%);
+    opacity: 0;
+  }
+}
+
+.nfc-scanner-modal.slide-down {
+  animation: slideDown 0.35s cubic-bezier(0.4, 0, 1, 1);
+}
+
+/* Breathing circles animation - Elegant pulsing */
+@keyframes breathingCircle {
+  0%, 100% {
+    opacity: 0.4;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.3);
+  }
+}
+
+.breathing-circle {
+  animation: breathingCircle 2s ease-in-out infinite;
+}
+
+/* Border running light animation - More subtle */
+@keyframes borderGlow {
+  0% {
+    box-shadow: 
+      0 0 8px 0 rgba(255, 255, 255, 0.1),
+      inset 0 0 8px 0 rgba(255, 255, 255, 0.05);
+  }
+  25% {
+    box-shadow: 
+      3px 3px 12px 2px rgba(255, 255, 255, 0.15),
+      inset 0 0 10px 2px rgba(255, 255, 255, 0.08);
+  }
+  50% {
+    box-shadow: 
+      0 0 15px 3px rgba(255, 255, 255, 0.2),
+      inset 0 0 12px 3px rgba(255, 255, 255, 0.1);
+  }
+  75% {
+    box-shadow: 
+      -3px -3px 12px 2px rgba(255, 255, 255, 0.15),
+      inset 0 0 10px 2px rgba(255, 255, 255, 0.08);
+  }
+  100% {
+    box-shadow: 
+      0 0 8px 0 rgba(255, 255, 255, 0.1),
+      inset 0 0 8px 0 rgba(255, 255, 255, 0.05);
+  }
+}
+
+.border-glow {
+  animation: borderGlow 4s ease-in-out infinite;
+  border-radius: inherit;
+}
+
+/* Success bounce animation - More polished */
+@keyframes successBounce {
+  0% {
+    transform: scale(0.5);
+    opacity: 0;
+  }
+  60% {
+    transform: scale(1.05);
+    opacity: 1;
+  }
+  80% {
+    transform: scale(0.95);
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.success-bounce {
+  animation: successBounce 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* Wave animation for emoji */
+@keyframes wave {
+  0% {
+    transform: rotate(0deg);
+  }
+  10% {
+    transform: rotate(14deg);
+  }
+  20% {
+    transform: rotate(-8deg);
+  }
+  30% {
+    transform: rotate(14deg);
+  }
+  40% {
+    transform: rotate(-4deg);
+  }
+  50% {
+    transform: rotate(10deg);
+  }
+  60% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(0deg);
+  }
+}
+
+.animate-wave {
+  display: inline-block;
+  animation: wave 2s ease-in-out;
+  transform-origin: 70% 70%;
+}
+
+.group:hover .animate-wave {
+  animation: wave 0.6s ease-in-out;
+}
+
+/* Plane flying animation */
+@keyframes planeFly {
+  0% {
+    transform: translate(-100px, 60px) rotate(-45deg);
+    opacity: 0;
+  }
+  20% {
+    opacity: 1;
+  }
+  80% {
+    opacity: 1;
+  }
+  100% {
+    transform: translate(100px, -60px) rotate(-45deg);
+    opacity: 0;
+  }
+}
+
+.plane-fly {
+  animation: planeFly 1.5s ease-in-out forwards;
+}
+
+.plane-container {
+  overflow: visible;
+}
+
+/* Plane breathing ring animation - Slower */
+@keyframes planeBreathingRing {
+  0%, 100% {
+    opacity: 0.2;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.6;
+    transform: scale(1.05);
+  }
+}
+
+.plane-breathing-ring {
+  animation: planeBreathingRing 3s ease-in-out infinite;
+}
+
+/* Modal slide animations */
+@keyframes slideUp {
+  from {
+    transform: translateY(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes slideDown {
+  from {
+    transform: translateY(0);
+    opacity: 1;
+  }
+  to {
+    transform: translateY(100%);
+    opacity: 0;
+  }
+}
+
+.animate-slide-up {
+  animation: slideUp 0.3s ease-out forwards;
+}
+
+.animate-slide-down {
+  animation: slideDown 0.3s ease-in forwards;
+}
+
+/* Tunnel title glow effect */
+@keyframes tunnelTitleGlow {
+  0%, 100% {
+    text-shadow: 
+      0 0 10px rgba(255, 255, 255, 0.3),
+      0 0 20px rgba(124, 58, 237, 0.3),
+      0 0 30px rgba(124, 58, 237, 0.2),
+      0 0 40px rgba(124, 58, 237, 0.1),
+      0 5px 10px rgba(0, 0, 0, 0.5);
+  }
+  50% {
+    text-shadow: 
+      0 0 15px rgba(255, 255, 255, 0.5),
+      0 0 30px rgba(124, 58, 237, 0.5),
+      0 0 45px rgba(124, 58, 237, 0.3),
+      0 0 60px rgba(124, 58, 237, 0.2),
+      0 5px 15px rgba(0, 0, 0, 0.6);
+  }
+}
+
+.tunnel-title {
+  animation: tunnelTitleGlow 3s ease-in-out infinite;
+  transform: translateZ(50px);
+  perspective: 1000px;
 }

@@ -3,6 +3,7 @@
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useWallet } from '@/contexts/WalletContext';
+import LoadingSpinner from '@/components/LoadingSpinner';
 
 export default function HomePage() {
   const router = useRouter();
@@ -30,22 +31,5 @@ export default function HomePage() {
     }
   }, [isUnlocked, isCheckingSession, keystore, router]);
 
-  return (
-    <div style={{
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      minHeight: '100vh',
-      backgroundColor: 'var(--bg-color)',
-    }}>
-      <div style={{ textAlign: 'center' }}>
-        <h1 style={{ fontSize: '2rem', marginBottom: '1rem', color: 'var(--primary-text)' }}>
-          Injective Pass
-        </h1>
-        <p style={{ color: 'var(--secondary-text)' }}>
-          {isCheckingSession ? 'Checking session...' : 'Loading...'}
-        </p>
-      </div>
-    </div>
-  );
+  return <LoadingSpinner />;
 }

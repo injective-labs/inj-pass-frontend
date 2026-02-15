@@ -2,11 +2,14 @@
  * Chain configuration types
  */
 
+import type { Chain } from 'viem';
+
 export interface ChainConfig {
   id: number;
   name: string;
   rpcUrl: string;
   explorerUrl: string;
+  explorerApiUrl: string; // Blockscout API base URL (separate from frontend)
   nativeCurrency: {
     name: string;
     symbol: string;
@@ -68,6 +71,7 @@ export const INJECTIVE_TESTNET: ChainConfig = {
   name: 'Injective EVM Testnet',
   rpcUrl: 'https://k8s.testnet.json-rpc.injective.network/',
   explorerUrl: 'https://testnet.blockscout.injective.network',
+  explorerApiUrl: 'https://testnet.blockscout-api.injective.network',
   nativeCurrency: {
     name: 'Injective',
     symbol: 'INJ',
@@ -75,12 +79,13 @@ export const INJECTIVE_TESTNET: ChainConfig = {
   },
 };
 
-// Injective EVM Mainnet
+// Injective EVM Mainnet - CORRECT Configuration
 export const INJECTIVE_MAINNET: ChainConfig = {
-  id: 2424,
+  id: 1776,  // Correct Chain ID for Injective EVM Mainnet
   name: 'Injective EVM',
-  rpcUrl: 'https://evm.injective.network',
-  explorerUrl: 'https://explorer.injective.network',
+  rpcUrl: 'https://sentry.evm-rpc.injective.network/',
+  explorerUrl: 'https://blockscout.injective.network',
+  explorerApiUrl: 'https://blockscout-api.injective.network',
   nativeCurrency: {
     name: 'Injective',
     symbol: 'INJ',
@@ -88,5 +93,48 @@ export const INJECTIVE_MAINNET: ChainConfig = {
   },
 };
 
-// Default chain (use testnet for development)
-export const DEFAULT_CHAIN = INJECTIVE_TESTNET;
+// Viem-compatible Chain configs for DEX swap - MAINNET (CORRECT)
+export const INJECTIVE_MAINNET_CHAIN: Chain = {
+  id: 1776,  // Correct Chain ID
+  name: 'Injective EVM',
+  nativeCurrency: {
+    name: 'Injective',
+    symbol: 'INJ',
+    decimals: 18,
+  },
+  rpcUrls: {
+    default: { 
+      http: ['https://sentry.evm-rpc.injective.network/']
+    },
+  },
+  blockExplorers: {
+    default: { 
+      name: 'Blockscout', 
+      url: 'https://blockscout.injective.network' 
+    },
+  },
+};
+
+export const INJECTIVE_TESTNET_CHAIN: Chain = {
+  id: 1439,
+  name: 'Injective EVM Testnet',
+  nativeCurrency: {
+    name: 'Injective',
+    symbol: 'INJ',
+    decimals: 18,
+  },
+  rpcUrls: {
+    default: { 
+      http: ['https://k8s.testnet.json-rpc.injective.network/']
+    },
+  },
+  blockExplorers: {
+    default: { 
+      name: 'Blockscout', 
+      url: 'https://testnet.blockscout.injective.network' 
+    },
+  },
+};
+
+// Default chain - USE MAINNET
+export const DEFAULT_CHAIN = INJECTIVE_MAINNET;

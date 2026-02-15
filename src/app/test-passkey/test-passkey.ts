@@ -90,7 +90,7 @@ async function testRegistration() {
       body: JSON.stringify({
         challenge,
         attestation: {
-          id: credential.id,
+          id: arrayBufferToBase64(credential.rawId), // Use rawId, not credential.id
           rawId: arrayBufferToBase64(credential.rawId),
           response: {
             clientDataJSON: arrayBufferToBase64(response.clientDataJSON),
@@ -168,7 +168,7 @@ async function testAuthentication(credentialId: string) {
       body: JSON.stringify({
         challenge,
         attestation: {
-          id: assertion.id,
+          id: arrayBufferToBase64(assertion.rawId), // Use rawId, not assertion.id
           rawId: arrayBufferToBase64(assertion.rawId),
           response: {
             clientDataJSON: arrayBufferToBase64(response.clientDataJSON),

@@ -3,6 +3,7 @@
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useWallet } from '@/contexts/WalletContext';
+import LoadingSpinner from '@/components/LoadingSpinner';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
@@ -24,11 +25,7 @@ export default function ProtectedRoute({ children, loadingComponent }: Protected
   }, [isUnlocked, address, isCheckingSession, router]);
 
   if (isCheckingSession) {
-    return loadingComponent || (
-      <div className="min-h-screen flex items-center justify-center">
-        <p className="text-white">Loading...</p>
-      </div>
-    );
+    return loadingComponent || <LoadingSpinner />;
   }
 
   if (!isUnlocked || !address) {

@@ -2,10 +2,14 @@
 
 import { useRouter } from 'next/navigation';
 import { useWallet } from '@/contexts/WalletContext';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { getTxHistory } from '@/wallet/chain';
+import { INJECTIVE_MAINNET } from '@/types/chain';
+import LoadingSpinner from '@/components/LoadingSpinner';
 
 type TransactionType = 'send' | 'receive' | 'swap';
 type TransactionStatus = 'completed' | 'pending' | 'failed';
+type ChainType = 'EVM' | 'Cosmos';
 
 interface Transaction {
   id: string;
@@ -16,26 +20,67 @@ interface Transaction {
   timestamp: Date;
   status: TransactionStatus;
   txHash?: string;
+  chainType: ChainType; // EVM or Cosmos
 }
 
 export default function HistoryPage() {
   const router = useRouter();
-  const { isUnlocked, isCheckingSession } = useWallet();
+  const { isUnlocked, isCheckingSession, address } = useWallet();
   const [activeFilter, setActiveFilter] = useState<'all' | TransactionType>('all');
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
-  // Mock transaction data - replace with actual data from blockchain/API
-  const transactions: Transaction[] = [
-    // {
-    //   id: '1',
-    //   type: 'send',
-    //   amount: '10.5',
-    //   token: 'INJ',
-    //   address: '0x1234...5678',
-    //   timestamp: new Date('2024-02-03T10:30:00'),
-    //   status: 'completed',
-    //   txHash: '0xabcd...efgh'
-    // },
-  ];
+  // Fetch transaction history from blockchain
+  useEffect(() => {
+    if (!address || !isUnlocked) {
+      setIsLoading(false);
+      return;
+    }
+
+    const fetchTransactions = async () => {
+      try {
+        setIsLoading(true);
+        const txHistory = await getTxHistory(address, 50);
+        
+        // Transform blockchain transactions to our UI format
+        const formattedTransactions: Transaction[] = txHistory.map((tx) => {
+          // Determine transaction type based on address
+          const isSent = tx.from.toLowerCase() === address.toLowerCase();
+          const type: TransactionType = isSent ? 'send' : 'receive';
+          
+          // Convert value from wei to INJ (with 3 decimal places)
+          const amount = (Number(tx.value) / (10 ** 18)).toFixed(3);
+
+          // Format address for display (shortened)
+          const targetAddress = type === 'send' ? (tx.to || 'Contract Creation') : tx.from;
+          const displayAddress = targetAddress.startsWith('0x') && targetAddress.length > 10
+            ? `${targetAddress.slice(0, 6)}...${targetAddress.slice(-4)}`
+            : targetAddress;
+
+          return {
+            id: tx.hash,
+            type,
+            amount,
+            token: 'INJ',
+            address: displayAddress,
+            timestamp: new Date(tx.timestamp * 1000),
+            status: tx.status === 'success' ? 'completed' : tx.status === 'failed' ? 'failed' : 'pending',
+            txHash: tx.hash,
+            chainType: 'EVM', // Blockscout API returns EVM transactions
+          };
+        });
+
+        setTransactions(formattedTransactions);
+      } catch (error) {
+        console.error('Failed to fetch transaction history:', error);
+        setTransactions([]);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchTransactions();
+  }, [address, isUnlocked]);
 
   const filteredTransactions = activeFilter === 'all' 
     ? transactions 
@@ -46,15 +91,15 @@ export default function HistoryPage() {
       case 'send':
         return (
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <line x1="12" y1="5" x2="12" y2="19" strokeWidth={2} strokeLinecap="round" />
-            <polyline points="19 12 12 19 5 12" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+            <line x1="12" y1="19" x2="12" y2="5" strokeWidth={2} strokeLinecap="round" />
+            <polyline points="5 12 12 5 19 12" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
           </svg>
         );
       case 'receive':
         return (
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <line x1="12" y1="19" x2="12" y2="5" strokeWidth={2} strokeLinecap="round" />
-            <polyline points="5 12 12 5 19 12" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+            <line x1="12" y1="5" x2="12" y2="19" strokeWidth={2} strokeLinecap="round" />
+            <polyline points="19 12 12 19 5 12" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
           </svg>
         );
       case 'swap':
@@ -79,25 +124,19 @@ export default function HistoryPage() {
   };
 
   const formatDate = (date: Date) => {
-    const now = new Date();
-    const diff = now.getTime() - date.getTime();
-    const minutes = Math.floor(diff / 60000);
-    const hours = Math.floor(diff / 3600000);
-    const days = Math.floor(diff / 86400000);
-
-    if (minutes < 1) return 'Just now';
-    if (minutes < 60) return `${minutes}m ago`;
-    if (hours < 24) return `${hours}h ago`;
-    if (days < 7) return `${days}d ago`;
-    return date.toLocaleDateString();
+    // Format as fixed date and time: "Feb 8, 2026 14:30"
+    const options: Intl.DateTimeFormatOptions = {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    };
+    return date.toLocaleString('en-US', options);
   };
 
-  if (isCheckingSession) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <p className="text-white">Loading...</p>
-      </div>
-    );
+  if (isCheckingSession || isLoading) {
+    return <LoadingSpinner />;
   }
 
   if (!isUnlocked) {
@@ -106,23 +145,36 @@ export default function HistoryPage() {
   }
 
   return (
-    <div className="min-h-screen bg-black text-white">
-      <div className="max-w-7xl mx-auto px-4 py-6">
-        {/* Header */}
-        <div className="flex items-center gap-4 mb-8">
-          <button
-            onClick={() => router.back()}
-            className="p-3 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 transition-all"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <polyline points="15 18 9 12 15 6" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-          </button>
-          <div>
-            <h1 className="text-3xl font-bold">Transaction History</h1>
-            <p className="text-gray-400 text-sm mt-1">View all your transactions</p>
+    <div className="min-h-screen bg-black text-white pb-24 md:pb-8">
+      {/* Header - OKX Style */}
+      <div className="bg-gradient-to-b from-white/5 to-transparent border-b border-white/5 backdrop-blur-sm">
+        <div className="max-w-7xl mx-auto px-4 py-6">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => router.back()}
+                className="w-10 h-10 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 flex items-center justify-center transition-all"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <polyline points="15 18 9 12 15 6" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </button>
+              <div className="flex items-center gap-3">
+                <div>
+                  <h1 className="text-xl font-bold text-white">Transaction History</h1>
+                  <p className="text-gray-400 text-xs">View all your transactions</p>
+                </div>
+                {/* Mainnet Badge */}
+                <span className="px-3 py-1 rounded-lg text-xs font-bold bg-green-500/20 text-green-300 border border-green-500/30">
+                  MAINNET
+                </span>
+              </div>
+            </div>
           </div>
         </div>
+      </div>
+
+      <div className="max-w-7xl mx-auto px-4 py-6">
 
         {/* Filters */}
         <div className="mb-6">
@@ -194,8 +246,8 @@ export default function HistoryPage() {
                   className="flex items-center gap-4 p-4 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10 transition-all cursor-pointer group"
                   onClick={() => {
                     if (tx.txHash) {
-                      // Open transaction in explorer
-                      window.open(`https://explorer.injective.network/transaction/${tx.txHash}`, '_blank');
+                      // Open transaction in explorer - Mainnet Blockscout
+                      window.open(`${INJECTIVE_MAINNET.explorerUrl}/tx/${tx.txHash}`, '_blank');
                     }
                   }}
                 >
@@ -210,7 +262,17 @@ export default function HistoryPage() {
 
                   {/* Transaction Info */}
                   <div className="flex-1">
-                    <div className="font-bold mb-1 capitalize">{tx.type}</div>
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="font-bold capitalize">{tx.type}</span>
+                      {/* Chain Type Badge */}
+                      <span className={`px-2 py-0.5 rounded-md text-xs font-bold ${
+                        tx.chainType === 'EVM' 
+                          ? 'bg-purple-500/20 text-purple-300' 
+                          : 'bg-blue-500/20 text-blue-300'
+                      }`}>
+                        {tx.chainType}
+                      </span>
+                    </div>
                     <div className="text-sm text-gray-400 font-mono">{tx.address}</div>
                   </div>
 

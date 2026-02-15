@@ -5,6 +5,7 @@ import { useWallet } from '@/contexts/WalletContext';
 import { useState } from 'react';
 import Image from 'next/image';
 import AccountHeader from '../components/AccountHeader';
+import LoadingSpinner from '@/components/LoadingSpinner';
 
 type DAppCategory = 'all' | 'defi' | 'nft' | 'game' | 'social' | 'dao';
 
@@ -114,11 +115,7 @@ export default function DiscoverPage() {
   const featuredDapps = dapps.filter(dapp => dapp.featured);
 
   if (isCheckingSession) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <p className="text-white">Loading...</p>
-      </div>
-    );
+    return <LoadingSpinner />;
   }
 
   if (!isUnlocked) {

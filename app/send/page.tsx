@@ -1,19 +1,25 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useEffect, useCallback, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useWallet } from '@/contexts/WalletContext';
+import { usePin } from '@/contexts/PinContext';
 import { estimateGas, sendTransaction } from '@/wallet/chain';
-import { INJECTIVE_TESTNET, GasEstimate } from '@/types/chain';
+import { INJECTIVE_MAINNET, GasEstimate } from '@/types/chain';
+import { isNFCSupported, readNFCCard } from '@/services/nfc';
+import LoadingSpinner from '@/components/LoadingSpinner';
+import TransactionAuthModal from '@/components/TransactionAuthModal';
 
 interface AddressBookEntry {
   name: string;
   address: string;
 }
 
-export default function SendPage() {
+function SendPageContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { isUnlocked, privateKey, isCheckingSession } = useWallet();
+  const { isPinLocked, autoLockMinutes } = usePin();
   const [recipient, setRecipient] = useState('');
   const [amount, setAmount] = useState('');
   const [gasEstimate, setGasEstimate] = useState<GasEstimate | null>(null);
@@ -29,6 +35,14 @@ export default function SendPage() {
   const [closingAddModal, setClosingAddModal] = useState(false);
   const [newName, setNewName] = useState('');
   const [newAddress, setNewAddress] = useState('');
+  const [showNfcScanner, setShowNfcScanner] = useState(false);
+  const [nfcScanning, setNfcScanning] = useState(false);
+  const [nfcSuccess, setNfcSuccess] = useState(false);
+  const [closingNfcScanner, setClosingNfcScanner] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [nfcError, setNfcError] = useState('');
+  const [showAuthModal, setShowAuthModal] = useState(false);
+  const [nfcSupported, setNfcSupported] = useState(true);
 
   // Load address book from localStorage
   useEffect(() => {
@@ -41,6 +55,15 @@ export default function SendPage() {
       }
     }
   }, []);
+
+  // Check for address in URL params (from QR scanner)
+  useEffect(() => {
+    const addressParam = searchParams.get('address');
+    if (addressParam) {
+      console.log('[Send] Setting address from URL:', addressParam);
+      setRecipient(addressParam);
+    }
+  }, [searchParams]);
 
   // Save address to address book
   const saveToAddressBook = () => {
@@ -89,6 +112,72 @@ export default function SendPage() {
       setNewName('');
       setNewAddress('');
     }, 200);
+  };
+
+  // Check NFC support on mount
+  useEffect(() => {
+    setNfcSupported(isNFCSupported());
+  }, []);
+
+  // Handle NFC Scanner
+  const openNfcScanner = async () => {
+    setShowNfcScanner(true);
+    setNfcScanning(false);
+    setNfcSuccess(false);
+    setNfcError('');
+    setClosingNfcScanner(false);
+    
+    // Check NFC support
+    if (!isNFCSupported()) {
+      setNfcError('NFC is not supported on this device. Please use an Android device with Chrome browser.');
+      return;
+    }
+    
+    // Start scanning
+    setNfcScanning(true);
+    try {
+      const cardData = await readNFCCard();
+      console.log('[Send] NFC card read:', cardData);
+      
+      // Success!
+      setNfcScanning(false);
+      setNfcSuccess(true);
+      
+      // If card has address, use it
+      if (cardData.address) {
+        setTimeout(() => {
+          setRecipient(cardData.address!);
+          setTimeout(() => {
+            closeNfcScanner();
+          }, 1000);
+        }, 500);
+      } else {
+        // Card has no address stored
+        setNfcError('This card has no address stored. Please bind it first in Cards page.');
+        setNfcSuccess(false);
+        setNfcScanning(false);
+      }
+    } catch (error) {
+      console.error('[Send] NFC read error:', error);
+      setNfcScanning(false);
+      setNfcError((error as Error).message || 'Failed to read NFC card. Please try again.');
+    }
+  };
+
+  const closeNfcScanner = () => {
+    setClosingNfcScanner(true);
+    setTimeout(() => {
+      setShowNfcScanner(false);
+      setNfcScanning(false);
+      setNfcSuccess(false);
+      setNfcError('');
+      setClosingNfcScanner(false);
+    }, 350); // Match animation duration
+  };
+
+  const handleNfcTestOk = () => {
+    // Legacy test function - no longer needed
+    closeNfcScanner();
   };
 
   // Check if address is EVM format (0x...)
@@ -234,7 +323,7 @@ export default function SendPage() {
         estimateRecipient,
         estimateAmount,
         undefined,
-        INJECTIVE_TESTNET
+        INJECTIVE_MAINNET
       );
       setGasEstimate(estimate);
     } catch (err) {
@@ -274,6 +363,17 @@ export default function SendPage() {
     return () => clearInterval(interval);
   }, [recipient, amount, privateKey, handleEstimate]);
 
+  const handleSendClick = () => {
+    // Check if authentication is needed
+    if (isPinLocked || autoLockMinutes === 0) {
+      // Need authentication
+      setShowAuthModal(true);
+    } else {
+      // Within PIN-free window, send directly
+      handleSend();
+    }
+  };
+
   const handleSend = async () => {
     if (!recipient || !amount || !privateKey) return;
 
@@ -287,7 +387,7 @@ export default function SendPage() {
         recipient,
         amount,
         undefined,
-        INJECTIVE_TESTNET
+        INJECTIVE_MAINNET
       );
       
       setTxHash(hash);
@@ -298,12 +398,13 @@ export default function SendPage() {
     }
   };
 
+  const handleAuthSuccess = () => {
+    setShowAuthModal(false);
+    handleSend();
+  };
+
   if (isCheckingSession) {
-    return (
-      <div className="min-h-screen pb-24 md:pb-8 bg-black flex items-center justify-center">
-        <p className="text-white">Loading...</p>
-      </div>
-    );
+    return <LoadingSpinner />;
   }
 
   if (!isUnlocked) {
@@ -331,48 +432,129 @@ export default function SendPage() {
   if (txHash) {
     return (
       <div className="min-h-screen pb-24 md:pb-8 bg-black">
-        <div className="max-w-2xl mx-auto px-4 py-12 text-center">
-          <div className="w-20 h-20 rounded-full bg-green-500/20 border border-green-500/50 flex items-center justify-center mx-auto mb-6">
-            <svg className="w-10 h-10 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-            </svg>
-          </div>
-          
-          <h2 className="text-2xl font-bold text-white mb-6">Transaction Sent!</h2>
-          
-          <div className="p-6 rounded-2xl bg-white/5 border border-white/10 mb-6">
-            <div className="text-xs text-gray-400 mb-2 uppercase tracking-wider">Transaction Hash</div>
-            <div className="font-mono text-sm text-white break-all mb-4">
-              {txHash.slice(0, 10)}...{txHash.slice(-8)}
+        {/* Header - Dashboard Style */}
+        <div className="bg-gradient-to-b from-white/5 to-transparent border-b border-white/5 backdrop-blur-sm">
+          <div className="max-w-7xl mx-auto px-4 py-6">
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => router.push('/dashboard')}
+                className="w-10 h-10 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 flex items-center justify-center transition-all"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <polyline points="15 18 9 12 15 6" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </button>
+              <div>
+                <h1 className="text-xl font-bold text-white">Transaction Complete</h1>
+                <p className="text-gray-400 text-xs">Your transaction has been sent</p>
+              </div>
             </div>
-            <button
-              onClick={() => navigator.clipboard.writeText(txHash)}
-              className="px-4 py-2 rounded-xl bg-white text-black font-bold text-sm hover:bg-gray-100 transition-all"
-            >
-              Copy Full Hash
-            </button>
           </div>
-          
-          <a
-            href={`${INJECTIVE_TESTNET.explorerUrl}/tx/${txHash}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-white/5 border border-white/10 text-white font-bold hover:bg-white/10 transition-all mb-4"
+        </div>
+
+        {/* Main Content */}
+        <div className="max-w-2xl mx-auto px-4 py-8">
+          {/* Success Message */}
+          <div className="text-center mb-8">
+            <h2 className="text-2xl font-bold text-white mb-2">Sent Successfully</h2>
+            <p className="text-gray-400 text-sm">Your transaction has been sent to the network</p>
+          </div>
+
+          {/* Transaction Hash Card */}
+          <div className="p-6 rounded-2xl bg-black border border-white/10 mb-4">
+            <div className="flex items-center justify-between mb-4">
+              <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Transaction Hash</span>
+              <div className="flex items-center gap-2">
+                {/* Copy Button */}
+                <button
+                  onClick={() => {
+                    navigator.clipboard.writeText(txHash);
+                    setCopied(true);
+                    setTimeout(() => setCopied(false), 2000);
+                  }}
+                  className="p-2 rounded-lg hover:bg-white/10 transition-all group"
+                  title="Copy Hash"
+                >
+                  {copied ? (
+                    <svg className="w-4 h-4 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                  ) : (
+                    <svg className="w-4 h-4 text-gray-400 group-hover:text-white transition-colors" fill="none" stroke="currentColor" viewBox="0 0 16 16">
+                      <rect width="11" height="11" x="4" y="4" rx="1" ry="1" strokeWidth="1.5" />
+                      <path d="M2 10c-0.8 0-1.5-0.7-1.5-1.5V2c0-0.8 0.7-1.5 1.5-1.5h8.5c0.8 0 1.5 0.7 1.5 1.5" strokeWidth="1.5" />
+                    </svg>
+                  )}
+                </button>
+                
+                {/* View Explorer Button */}
+                <a
+                  href={`${INJECTIVE_MAINNET.explorerUrl}/tx/${txHash}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="p-2 rounded-lg hover:bg-white/10 transition-all group"
+                  title="View on Explorer"
+                >
+                  <svg className="w-4 h-4 text-gray-400 group-hover:text-white transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                  </svg>
+                </a>
+                
+                {/* Share Button */}
+                <button
+                  onClick={() => {
+                    const shareText = `Transaction: ${txHash}`;
+                    if (navigator.share) {
+                      navigator.share({ text: shareText });
+                    } else {
+                      navigator.clipboard.writeText(shareText);
+                    }
+                  }}
+                  className="p-2 rounded-lg hover:bg-white/10 transition-all group"
+                  title="Share"
+                >
+                  <svg className="w-4 h-4 text-gray-400 group-hover:text-white transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+            <div className="font-mono text-sm text-white break-all bg-white/5 p-3 rounded-xl">
+              {txHash}
+            </div>
+          </div>
+
+          {/* Transaction Details Card */}
+          <div className="p-5 rounded-2xl bg-black border border-white/10 mb-6 space-y-3">
+            <div className="flex justify-between items-center py-2">
+              <span className="text-sm text-gray-400">Status</span>
+              <span className="text-sm font-bold text-white">Confirmed</span>
+            </div>
+            <div className="flex justify-between items-center py-2 border-t border-white/5">
+              <span className="text-sm text-gray-400">Amount</span>
+              <span className="text-sm font-mono font-bold text-white">{amount} INJ</span>
+            </div>
+            <div className="flex justify-between items-center py-2 border-t border-white/5">
+              <span className="text-sm text-gray-400">To</span>
+              <span className="text-sm font-mono text-white">{recipient.slice(0,6)}...{recipient.slice(-4)}</span>
+            </div>
+            <div className="flex justify-between items-center py-2 border-t border-white/5">
+              <span className="text-sm text-gray-400">Network</span>
+              <span className="text-sm font-bold text-white">Injective EVM</span>
+            </div>
+            <div className="flex justify-between items-center py-2 border-t border-white/5">
+              <span className="text-sm text-gray-400">Timestamp</span>
+              <span className="text-sm font-mono text-white">{new Date().toLocaleString()}</span>
+            </div>
+          </div>
+
+          {/* Back to Dashboard - Main Button */}
+          <button 
+            onClick={() => router.push('/dashboard')}
+            className="w-full py-4 rounded-2xl bg-white text-black font-bold hover:bg-gray-100 transition-all shadow-lg"
           >
-            View on Explorer
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-            </svg>
-          </a>
-          
-          <div>
-            <button 
-              onClick={() => router.push('/dashboard')}
-              className="px-8 py-3 rounded-xl bg-white text-black font-bold hover:bg-gray-100 transition-all"
-            >
-              Back to Dashboard
-            </button>
-          </div>
+            Back to Dashboard
+          </button>
         </div>
       </div>
     );
@@ -428,14 +610,14 @@ export default function SendPage() {
                 value={recipient}
                 onChange={(e) => setRecipient(e.target.value)}
                 placeholder="0x... or inj1..."
-                className="w-full py-4 px-4 pr-24 rounded-2xl bg-white/5 border border-white/10 text-white placeholder-gray-500 focus:outline-none focus:border-white/30 transition-all font-mono text-sm"
+                className="w-full py-4 px-4 pr-32 rounded-2xl bg-white/5 border border-white/10 text-white placeholder-gray-500 focus:outline-none focus:border-white/30 transition-all font-mono text-sm"
               />
               
               {/* Convert Address Button */}
               <button
                 onClick={convertAddress}
                 disabled={!isEvmAddress(recipient) && !isCosmosAddress(recipient)}
-                className={`absolute right-16 top-1/2 -translate-y-1/2 p-2 rounded-lg transition-all ${
+                className={`absolute right-24 top-1/2 -translate-y-1/2 p-2 rounded-lg transition-all ${
                   isEvmAddress(recipient) || isCosmosAddress(recipient)
                     ? 'hover:bg-white/10 text-gray-400 hover:text-white cursor-pointer'
                     : 'text-gray-600 cursor-not-allowed opacity-30'
@@ -444,6 +626,17 @@ export default function SendPage() {
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+                </svg>
+              </button>
+
+              {/* NFC Scan Button (Hand/Touch Icon) */}
+              <button
+                onClick={openNfcScanner}
+                className="absolute right-12 top-1/2 -translate-y-1/2 p-2 rounded-lg hover:bg-white/10 transition-all"
+                title="Scan Card (Experimental)"
+              >
+                <svg className="w-5 h-5 text-gray-400 -rotate-45" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 11.5V14m0-2.5v-6a1.5 1.5 0 113 0m-3 6a1.5 1.5 0 00-3 0v2a7.5 7.5 0 0015 0v-5a1.5 1.5 0 00-3 0m-6-3V11m0-5.5v-1a1.5 1.5 0 013 0v1m0 0V11m0-5.5a1.5 1.5 0 013 0v3m0 0V11" />
                 </svg>
               </button>
 
@@ -572,7 +765,7 @@ export default function SendPage() {
 
           {/* Send Button */}
           <button
-            onClick={handleSend}
+            onClick={handleSendClick}
             disabled={!recipient || !amount || loading || !gasEstimate}
             className="w-full py-4 rounded-2xl bg-white text-black font-bold hover:bg-gray-100 transition-all disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center gap-2"
           >
@@ -674,6 +867,156 @@ export default function SendPage() {
           </div>
         </div>
       )}
+
+      {/* NFC Scanner Modal - OKX Style */}
+      {showNfcScanner && (
+        <div 
+          className={`fixed inset-0 bg-black/80 backdrop-blur-sm flex items-end justify-center z-50 transition-opacity duration-200 ${closingNfcScanner ? 'opacity-0' : 'opacity-100'}`}
+          onClick={closeNfcScanner}
+        >
+          <div 
+            className={`nfc-scanner-modal bg-black border-t border-white/10 rounded-t-3xl w-full max-w-2xl shadow-2xl ${
+              closingNfcScanner ? 'slide-down' : 'slide-up'
+            }`}
+            onClick={(e) => e.stopPropagation()}
+            style={{ maxHeight: '75vh' }}
+          >
+            {/* Header - Clean and Simple */}
+            <div className="p-5 border-b border-white/5">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-lg font-bold text-white mb-1">Scan Card (Experimental)</h3>
+                  <p className="text-gray-400 text-xs">Hold your device near the card</p>
+                </div>
+                <button
+                  onClick={closeNfcScanner}
+                  className="p-2 rounded-xl hover:bg-white/10 transition-all"
+                >
+                  <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+            
+            {/* Scanner Body */}
+            <div className="p-8 flex flex-col items-center justify-center min-h-[350px]">
+              {!nfcSuccess ? (
+                <>
+                  {/* Scanning Animation - Card on left + 3 breathing circles on right */}
+                  <div className="flex items-center justify-center gap-8 mb-6">
+                    {/* Horizontal Card on the left */}
+                    <div className="relative">
+                      <div className="w-52 h-36 rounded-2xl bg-gradient-to-br from-white/10 to-white/5 border-[3px] border-white/20 flex items-center justify-between p-5 shadow-2xl">
+                        {/* Left side - Card chip and details */}
+                        <div className="flex flex-col justify-between h-full">
+                          {/* Card chip */}
+                          <div className="w-12 h-10 rounded bg-gradient-to-br from-yellow-400/30 to-yellow-600/30"></div>
+                          
+                          {/* Card text/logo */}
+                          <div>
+                            <div className="text-xs text-white/60 font-bold mb-2">CARD</div>
+                            <div className="w-28 h-4 rounded bg-white/5 mb-1"></div>
+                            <div className="w-20 h-3 rounded bg-white/5"></div>
+                          </div>
+                        </div>
+
+                        {/* Right side - NFC symbol */}
+                        <div className="flex items-center justify-center">
+                          <svg className="w-8 h-8 text-white/40" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M8.111 16.404a5.5 5.5 0 017.778 0M12 20h.01m-7.08-7.071c3.904-3.905 10.236-3.905 14.141 0" />
+                          </svg>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Three breathing circles on the right - White color */}
+                    {nfcScanning && (
+                      <div className="flex flex-col gap-4">
+                        <div className="breathing-circle w-3 h-3 rounded-full bg-white" style={{ animationDelay: '0s' }}></div>
+                        <div className="breathing-circle w-3 h-3 rounded-full bg-white" style={{ animationDelay: '0.2s' }}></div>
+                        <div className="breathing-circle w-3 h-3 rounded-full bg-white" style={{ animationDelay: '0.4s' }}></div>
+                      </div>
+                    )}
+                  </div>
+                  
+                  <h4 className="text-base font-bold text-white mb-1">
+                    {nfcScanning ? 'Scanning...' : 'Ready to Scan'}
+                  </h4>
+                  <p className="text-gray-400 text-sm text-center mb-8">
+                    {nfcError ? (
+                      <span className="text-red-400">{nfcError}</span>
+                    ) : nfcScanning ? (
+                      <>
+                        Please hold your device steady, <button onClick={() => router.push('/cards')} className="text-white underline hover:text-gray-200 transition-colors">need help?</button>
+                      </>
+                    ) : (
+                      'Tap the card to your device'
+                    )}
+                  </p>
+                  
+                  {/* Close or Retry Button */}
+                  {nfcError && (
+                    <button
+                      onClick={nfcError.includes('not supported') ? closeNfcScanner : openNfcScanner}
+                      className="px-8 py-3 rounded-xl bg-white text-black font-bold hover:bg-gray-100 transition-all shadow-lg"
+                    >
+                      {nfcError.includes('not supported') ? 'Close' : 'Retry'}
+                    </button>
+                  )}
+                </>
+              ) : (
+                <>
+                  {/* Success Animation - Circular Design with White Rings (85% size) */}
+                  <div className="relative mb-6 flex items-center justify-center w-40 h-40">
+                    {/* Three white glow rings - 85% size */}
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <div className="w-40 h-40 rounded-full border-2 border-white/30 animate-ping"></div>
+                    </div>
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <div className="w-32 h-32 rounded-full border-2 border-white/40 animate-ping" style={{ animationDelay: '0.15s' }}></div>
+                    </div>
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <div className="w-28 h-28 rounded-full border-2 border-white/50 animate-ping" style={{ animationDelay: '0.3s' }}></div>
+                    </div>
+                    
+                    {/* Main success circle - 85% size */}
+                    <div className="relative w-24 h-24 rounded-full bg-white flex items-center justify-center success-bounce shadow-2xl">
+                      {/* Check mark */}
+                      <svg className="w-12 h-12 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                      </svg>
+                    </div>
+                  </div>
+                  
+                  <h4 className="text-base font-bold text-white mb-1">Scan Complete!</h4>
+                  <p className="text-gray-400 text-sm text-center">Address has been filled in</p>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Transaction Authentication Modal */}
+      <TransactionAuthModal
+        isOpen={showAuthModal}
+        onClose={() => setShowAuthModal(false)}
+        onSuccess={handleAuthSuccess}
+        transactionType="send"
+      />
     </div>
+  );
+}
+
+export default function SendPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen pb-24 md:pb-8 bg-black flex items-center justify-center">
+        <p className="text-white">Loading...</p>
+      </div>
+    }>
+      <SendPageContent />
+    </Suspense>
   );
 }
