@@ -1,0 +1,120 @@
+/**
+ * Token configuration for Injective EVM
+ */
+
+export interface TokenInfo {
+  symbol: string;
+  name: string;
+  address: string;
+  decimals: number;
+  icon: string;
+  isNative?: boolean;
+}
+
+// Injective EVM Mainnet Token Addresses
+export const TOKENS_MAINNET: Record<string, TokenInfo> = {
+  INJ: {
+    symbol: 'INJ',
+    name: 'Injective',
+    address: '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE', // Special address for native token
+    decimals: 18,
+    icon: '/injswap.png',
+    isNative: true,
+  },
+  WINJ: {
+    symbol: 'WINJ',
+    name: 'Wrapped INJ',
+    address: '0x0000000088827d2d103ee2d9A6b781773AE03FfB',
+    decimals: 18,
+    icon: '/injswap.png',
+  },
+  USDT: {
+    symbol: 'USDT',
+    name: 'Tether USD',
+    address: '0x88f7F2b685F9692caf8c478f5BADF09eE9B1Cc13',
+    decimals: 6,
+    icon: '/USDT_Logo.png',
+  },
+  USDC: {
+    symbol: 'USDC',
+    name: 'USD Coin',
+    address: '0x2a25fbD67b3aE485e461fe55d9DbeF302B7D3989',
+    decimals: 6,
+    icon: '/USDC_Logo.png',
+  },
+};
+
+// Injective EVM Testnet Token Addresses
+export const TOKENS_TESTNET: Record<string, TokenInfo> = {
+  INJ: {
+    symbol: 'INJ',
+    name: 'Injective',
+    address: '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE',
+    decimals: 18,
+    icon: '/injswap.png',
+    isNative: true,
+  },
+  WINJ: {
+    symbol: 'WINJ',
+    name: 'Wrapped INJ',
+    address: '0x0000000088827d2d103ee2d9A6b781773AE03FfB',
+    decimals: 18,
+    icon: '/injswap.png',
+  },
+  USDT: {
+    symbol: 'USDT',
+    name: 'Tether USD',
+    address: '0xaDC7bcB5d8fe053Ef19b4E0C861c262Af6e0db60',
+    decimals: 6,
+    icon: '/USDT_Logo.png',
+  },
+};
+
+// Use mainnet by default (can be configured)
+export const TOKENS = TOKENS_MAINNET;
+
+/**
+ * Get token info by symbol
+ */
+export function getTokenInfo(symbol: string): TokenInfo | undefined {
+  return TOKENS[symbol.toUpperCase()];
+}
+
+/**
+ * Get token info by address
+ */
+export function getTokenInfoByAddress(address: string): TokenInfo | undefined {
+  const normalizedAddress = address.toLowerCase();
+  return Object.values(TOKENS).find(
+    token => token.address.toLowerCase() === normalizedAddress
+  );
+}
+
+/**
+ * Get token address by symbol
+ */
+export function getTokenAddress(symbol: string): string {
+  const token = getTokenInfo(symbol);
+  if (!token) {
+    throw new Error(`Token ${symbol} not found`);
+  }
+  return token.address;
+}
+
+/**
+ * Check if a token is native (INJ)
+ */
+export function isNativeToken(symbol: string): boolean {
+  const token = getTokenInfo(symbol);
+  return token?.isNative || false;
+}
+
+/**
+ * Get the wrapped version of native token
+ */
+export function getWrappedToken(symbol: string): TokenInfo {
+  if (symbol === 'INJ') {
+    return TOKENS.WINJ;
+  }
+  return getTokenInfo(symbol)!;
+}

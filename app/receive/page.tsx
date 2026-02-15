@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation';
 import { useWallet } from '@/contexts/WalletContext';
 import { QRCodeSVG } from 'qrcode.react';
 import { useState } from 'react';
+import LoadingSpinner from '@/components/LoadingSpinner';
 
 type AddressType = 'evm' | 'cosmos';
 
@@ -33,7 +34,7 @@ export default function ReceivePage() {
   };
 
   if (isCheckingSession) {
-    return <div className="min-h-screen flex items-center justify-center"><p className="text-white">Loading...</p></div>;
+    return <LoadingSpinner />;
   }
 
   if (!isUnlocked || !address) {
@@ -57,21 +58,31 @@ export default function ReceivePage() {
   }
 
   return (
-    <div className="max-w-2xl mx-auto px-4 py-8 relative z-10">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-12">
-        <button 
-          onClick={() => router.back()}
-          className="p-3 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 transition-all text-gray-400 hover:text-white"
-        >
-          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-          </svg>
-        </button>
-        <h1 className="text-2xl font-bold tracking-tight">Receive Assets</h1>
-        <div className="w-12 h-12"></div>
+    <div className="min-h-screen pb-24 md:pb-8 bg-black">
+      {/* Header - OKX Style */}
+      <div className="bg-gradient-to-b from-white/5 to-transparent border-b border-white/5 backdrop-blur-sm">
+        <div className="max-w-7xl mx-auto px-4 py-6">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => router.back()}
+                className="w-10 h-10 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 flex items-center justify-center transition-all"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <polyline points="15 18 9 12 15 6" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </button>
+              <div>
+                <h1 className="text-xl font-bold text-white">Receive</h1>
+                <p className="text-gray-400 text-xs">Get your wallet address</p>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
 
+      {/* Main Content */}
+      <div className="max-w-2xl mx-auto px-4 py-8 relative z-10">
       <div className="flex flex-col items-center gap-8">
         {/* QR Code Section */}
         <div className="relative group">
@@ -212,6 +223,7 @@ export default function ReceivePage() {
             </div>
           </div>
         </div>
+      </div>
       </div>
     </div>
   );

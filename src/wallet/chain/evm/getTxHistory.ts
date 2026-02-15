@@ -1,43 +1,93 @@
 /**
- * Get transaction history for an address
- * 
- * Note: Basic implementation using RPC calls
- * For production, consider using block explorer API (e.g., Etherscan-like API)
+ * Get transaction history for an address using Blockscout API
  */
 
-import { createPublicClient, http, type Address, type Block } from 'viem';
+import { createPublicClient, http } from 'viem';
 import { TransactionHistory, ChainConfig, DEFAULT_CHAIN } from '@/types/chain';
 
+// Blockscout API Response Types
+interface BlockscoutAddressInfo {
+  hash: string;
+  name?: string;
+  is_contract?: boolean;
+}
+
+interface BlockscoutTransaction {
+  hash: string;
+  from: BlockscoutAddressInfo;
+  to: BlockscoutAddressInfo | null;
+  value: string;
+  timestamp: string;
+  block_number: number;
+  status: 'ok' | 'error';
+  gas_used?: string;
+  gas_price?: string;
+  method?: string;
+}
+
+interface BlockscoutResponse {
+  items: BlockscoutTransaction[];
+  next_page_params?: {
+    block_number: number;
+    index: number;
+    items_count: number;
+  };
+}
+
 /**
- * Get recent transactions for an address
+ * Get recent transactions for an address using Blockscout API
  * 
- * @param address - Address to query
- * @param limit - Maximum number of transactions to return
+ * @param address - Address to query (0x... format)
+ * @param limit - Maximum number of transactions to return (not directly supported, fetches pages of 50)
  * @param chain - Chain configuration
  */
 export async function getTxHistory(
   address: string,
-  limit: number = 10,
+  limit: number = 50,
   chain: ChainConfig = DEFAULT_CHAIN
 ): Promise<TransactionHistory[]> {
   try {
-    const client = createPublicClient({
-      transport: http(chain.rpcUrl),
+    // Use our Next.js API route to avoid CORS issues
+    const apiUrl = `/api/transactions?address=${address}`;
+    
+    const response = await fetch(apiUrl, {
+      headers: {
+        'Accept': 'application/json',
+      },
     });
 
-    // OPTIMIZATION: For testnet/development, return empty array to avoid excessive RPC calls
-    // In production, use a block explorer API like Etherscan/Blockscout instead of scanning blocks
-    // Scanning blocks one-by-one is inefficient and causes 20+ RPC requests per page load
-    
-    // TODO: Integrate with Injective Explorer API or indexer service
-    // Example: https://testnet.explorer.injective.network/api/...
-    
-    console.warn('getTxHistory: Block scanning disabled. Use explorer API for transaction history.');
-    return [];
+    if (!response.ok) {
+      // If the API fails, return empty array instead of throwing
+      console.warn(`getTxHistory: API request failed with status ${response.status}`);
+      return [];
+    }
+
+    const data: BlockscoutResponse = await response.json();
+
+    // Transform Blockscout response to our TransactionHistory format
+    const transactions: TransactionHistory[] = data.items.map((tx) => {
+      // Parse timestamp to Unix timestamp (seconds)
+      const timestamp = Math.floor(new Date(tx.timestamp).getTime() / 1000);
+
+      return {
+        hash: tx.hash,
+        from: tx.from.hash,
+        to: tx.to?.hash || null,
+        value: tx.value,
+        timestamp,
+        blockNumber: tx.block_number,
+        status: tx.status === 'ok' ? 'success' : 'failed',
+        gasUsed: tx.gas_used,
+        gasPrice: tx.gas_price,
+      };
+    });
+
+    // Limit to requested amount
+    return transactions.slice(0, limit);
   } catch (error) {
-    throw new Error(
-      `Failed to get transaction history: ${error instanceof Error ? error.message : 'Unknown error'}`
-    );
+    console.error('getTxHistory error:', error);
+    // Return empty array instead of throwing to prevent UI breakage
+    return [];
   }
 }
 

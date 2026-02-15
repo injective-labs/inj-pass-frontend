@@ -9,6 +9,7 @@ import { encryptKey } from '@/wallet/keystore';
 import { saveWallet, hasWallet } from '@/wallet/keystore';
 import { useWallet } from '@/contexts/WalletContext';
 import { sha256 } from '@noble/hashes/sha2.js';
+import TunnelBackground from '@/components/TunnelBackground';
 
 export default function WelcomePage() {
   const router = useRouter();
@@ -105,9 +106,14 @@ const handleImport = async () => {
   };
 
   return (
-    <div className="relative min-h-screen flex flex-col bg-black">
+    <div className="relative min-h-screen flex flex-col overflow-hidden">
+      {/* Tunnel Background Animation */}
+      <TunnelBackground />
+      
+      {/* Content Layer */}
+      <div className="relative z-10">
       {/* Top Banner - Purple Background */}
-      <div className="fixed top-0 left-0 right-0 bg-[#4c3af9] z-50 px-4 py-1.5 flex items-center justify-between gap-2 animate-fade-in overflow-hidden">
+      <div className="fixed top-0 left-0 right-0 bg-[#4c3af9]/90 backdrop-blur-sm z-50 px-4 py-1.5 flex items-center justify-between gap-2 animate-fade-in overflow-hidden">
         <div className="flex items-center gap-2 flex-shrink-0">
           <span className="text-white text-[0.7rem] md:text-xs font-semibold tracking-wide">
             INJ Pass
@@ -135,7 +141,7 @@ const handleImport = async () => {
       {/* Hero Section */}
       <div className="flex flex-col items-center justify-center flex-1 w-full px-4 md:px-8 pt-16 md:pt-24 pb-16 md:pb-24 min-h-screen">
         <div className="text-center w-full max-w-2xl mx-auto">
-          <h1 className="text-4xl md:text-6xl lg:text-7xl text-white mb-4 leading-tight font-bold tracking-tight break-words animate-fade-in title-3d">
+          <h1 className="text-4xl md:text-6xl lg:text-7xl text-white mb-4 leading-tight font-bold tracking-tight break-words animate-fade-in title-3d tunnel-title">
             <span className="lambda-gradient">λ</span> to Injective
           </h1>
           
@@ -178,6 +184,7 @@ const handleImport = async () => {
           height={20}
           className="w-4 h-4 md:w-5 md:h-5 -ml-1.5"
         />
+      </div>
       </div>
     </div>
   );

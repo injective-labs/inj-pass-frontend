@@ -1,5 +1,52 @@
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
+## NFC Card Features
+
+This project includes real NFC card integration using the Web NFC API.
+
+### Requirements
+
+- **Android device** with NFC capability
+- **Chrome browser** (version 89 or later)
+- NFC enabled in device settings
+
+### How to Use NFC Cards
+
+1. **Scanning a Card (Send Page)**
+   - Go to the Send page
+   - Click the hand/wave icon next to the recipient address field
+   - Tap your NFC card to the back of your Android phone
+   - The wallet address will be automatically filled in
+
+2. **Binding a Card (Cards Page)**
+   - Go to the Cards page
+   - Click "Add New Card"
+   - Tap your NFC card to bind it
+   - Verify with your Passkey
+   - Your wallet address and card info will be written to the NFC card
+
+3. **Managing Cards**
+   - View all bound cards on the Cards page
+   - Flip cards to see management options
+   - Freeze/Unfreeze cards to disable/enable them
+   - View QR code of your wallet address
+   - Unbind cards (requires Passkey verification)
+
+### NFC Limitations
+
+- Web NFC API only works on Android Chrome (not iOS, not other browsers)
+- HTTPS is required in production (or localhost for development)
+- User must grant NFC permission when first scanning
+
+### Testing on Device
+
+To test NFC features on your Android phone:
+
+1. Deploy the app to Vercel (provides HTTPS)
+2. Open the deployed URL on your Android Chrome browser
+3. Enable NFC in your phone settings
+4. Tap an NFC card when prompted
+
 ## Getting Started
 
 First, run the development server:
@@ -8,7 +55,7 @@ First, run the development server:
 npm run dev
 # or
 yarn dev
-# or
+# or(recommend)
 pnpm dev
 # or
 bun dev

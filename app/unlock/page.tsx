@@ -8,6 +8,7 @@ import { unlockByPasskey } from '@/wallet/key-management/createByPasskey';
 import { unlockByNFC, readNFCTag } from '@/wallet/key-management/createByNFC';
 import { decryptKey } from '@/wallet/keystore';
 import type { LocalKeystore } from '@/types/wallet';
+import LoadingSpinner from '@/components/LoadingSpinner';
 import Image from 'next/image';
 
 export default function UnlockPage() {
@@ -184,11 +185,7 @@ export default function UnlockPage() {
   }
 
   if (!keystore) {
-    return (
-      <div style={styles.container}>
-        <div style={styles.loading}>Loading...</div>
-      </div>
-    );
+    return <LoadingSpinner />;
   }
 
   return (

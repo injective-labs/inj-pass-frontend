@@ -6,12 +6,14 @@ interface PinContextType {
   hasPin: boolean;
   isPinLocked: boolean;
   autoLockMinutes: number; // PIN-free time window (in minutes)
+  defaultAuthMethod: 'passkey' | 'pin'; // Default authentication method
   setPin: (pin: string) => Promise<void>;
   verifyPin: (pin: string) => Promise<boolean>;
   changePin: (oldPin: string, newPin: string) => Promise<boolean>;
   lockWallet: () => void;
   unlockWallet: (pin: string) => Promise<boolean>;
   setAutoLockMinutes: (minutes: number) => void; // Sets PIN-free time window
+  setDefaultAuthMethod: (method: 'passkey' | 'pin') => void;
   resetActivity: () => void;
 }
 
@@ -20,6 +22,7 @@ const PinContext = createContext<PinContextType | undefined>(undefined);
 const PIN_STORAGE_KEY = 'wallet_pin_hash';
 const AUTO_LOCK_KEY = 'auto_lock_minutes';
 const LAST_ACTIVITY_KEY = 'last_activity';
+const DEFAULT_AUTH_METHOD_KEY = 'default_auth_method';
 
 // Simple hash function for PIN (in production, use bcrypt or similar)
 async function hashPin(pin: string): Promise<string> {
@@ -34,6 +37,7 @@ export function PinProvider({ children }: { children: ReactNode }) {
   const [hasPin, setHasPin] = useState(false);
   const [isPinLocked, setIsPinLocked] = useState(false);
   const [autoLockMinutes, setAutoLockMinutesState] = useState(5); // Default: 5 minutes PIN-free window
+  const [defaultAuthMethod, setDefaultAuthMethodState] = useState<'passkey' | 'pin'>('passkey');
   const [lastActivity, setLastActivity] = useState<number>(Date.now());
 
   // Initialize from localStorage
@@ -41,6 +45,7 @@ export function PinProvider({ children }: { children: ReactNode }) {
     const storedPin = localStorage.getItem(PIN_STORAGE_KEY);
     const storedAutoLock = localStorage.getItem(AUTO_LOCK_KEY);
     const storedLastActivity = localStorage.getItem(LAST_ACTIVITY_KEY);
+    const storedAuthMethod = localStorage.getItem(DEFAULT_AUTH_METHOD_KEY);
 
     if (storedPin) {
       setHasPin(true);
@@ -62,6 +67,10 @@ export function PinProvider({ children }: { children: ReactNode }) {
 
     if (storedAutoLock) {
       setAutoLockMinutesState(parseInt(storedAutoLock, 10));
+    }
+    
+    if (storedAuthMethod) {
+      setDefaultAuthMethodState(storedAuthMethod as 'passkey' | 'pin');
     }
   }, []);
 
@@ -156,18 +165,25 @@ export function PinProvider({ children }: { children: ReactNode }) {
     resetActivity();
   };
 
+  const setDefaultAuthMethod = (method: 'passkey' | 'pin') => {
+    setDefaultAuthMethodState(method);
+    localStorage.setItem(DEFAULT_AUTH_METHOD_KEY, method);
+  };
+
   return (
     <PinContext.Provider
       value={{
         hasPin,
         isPinLocked,
         autoLockMinutes,
+        defaultAuthMethod,
         setPin,
         verifyPin,
         changePin,
         lockWallet,
         unlockWallet,
         setAutoLockMinutes,
+        setDefaultAuthMethod,
         resetActivity,
       }}
     >
