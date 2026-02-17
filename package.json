@@ -13,6 +13,7 @@
     "test-solidly": "tsx scripts/test-solidly-router.ts"
   },
   "dependencies": {
+    "@injectivelabs/sdk-ts": "^1.17.8",
     "@noble/curves": "^2.0.1",
     "@noble/hashes": "^2.0.1",
     "@noble/secp256k1": "^3.0.0",
