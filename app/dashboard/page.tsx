@@ -8,10 +8,12 @@ import { Balance, INJECTIVE_MAINNET } from '@/types/chain';
 import { getInjPrice, getTokenPrice } from '@/services/price';
 import { getTokenBalances } from '@/services/dex-swap';
 import { startQRScanner, stopQRScanner, clearQRScanner, isCameraSupported, isValidAddress } from '@/services/qr-scanner';
+import { getN1NJ4NFTs, type NFT } from '@/services/nft';
 import { QRCodeSVG } from 'qrcode.react';
 import type { Address } from 'viem';
 import Image from 'next/image';
 import LoadingSpinner from '@/components/LoadingSpinner';
+import NFTDetailModal from '@/components/NFTDetailModal';
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -41,6 +43,11 @@ export default function DashboardPage() {
   const [scannedAddress, setScannedAddress] = useState('');
   const [closingQRScanner, setClosingQRScanner] = useState(false);
   const [showMyQR, setShowMyQR] = useState(false);
+  
+  // NFT states
+  const [nfts, setNfts] = useState<NFT[]>([]);
+  const [nftsLoading, setNftsLoading] = useState(false);
+  const [selectedNFT, setSelectedNFT] = useState<NFT | null>(null);
 
   useEffect(() => {
     // Wait for session check to complete
@@ -91,6 +98,31 @@ export default function DashboardPage() {
       setRefreshing(false);
     }
   };
+
+  // Load NFTs when switching to NFTs tab
+  const loadNFTs = async () => {
+    if (!address || nftsLoading) return;
+
+    try {
+      setNftsLoading(true);
+      console.log('[Dashboard] Loading NFTs for address:', address);
+      const userNFTs = await getN1NJ4NFTs(address as Address);
+      console.log('[Dashboard] Loaded NFTs:', userNFTs);
+      setNfts(userNFTs);
+    } catch (error) {
+      console.error('Failed to load NFTs:', error);
+    } finally {
+      setNftsLoading(false);
+    }
+  };
+
+  // Load NFTs when NFT tab is selected
+  useEffect(() => {
+    if (assetTab === 'nfts' && address && nfts.length === 0) {
+      loadNFTs();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [assetTab, address]);
 
   const handleRefresh = () => {
     setRefreshing(true);
@@ -530,24 +562,58 @@ export default function DashboardPage() {
 
           {assetTab === 'nfts' && (
             <>
-              <div className="flex items-center gap-4 p-4 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10 transition-all cursor-pointer">
-                <div className="w-12 h-12 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center overflow-hidden shadow-lg">
-                  <Image 
-                    src="/N1NJ4.png" 
-                    alt="N1NJ4" 
-                    width={48} 
-                    height={48}
-                    className="w-full h-full object-cover"
-                  />
+              {nftsLoading ? (
+                <div className="flex items-center justify-center py-16">
+                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white"></div>
                 </div>
-                <div className="flex-1">
-                  <div className="font-bold mb-1">N1NJ4</div>
-                  <div className="text-sm text-gray-400">#0001</div>
+              ) : nfts.length === 0 ? (
+                <div className="text-center py-16 text-gray-500">
+                  <div className="w-16 h-16 bg-white/5 rounded-full flex items-center justify-center mx-auto mb-4 border border-white/10">
+                    <svg className="w-8 h-8 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <rect width="18" height="18" x="3" y="3" rx="2" ry="2" strokeWidth={2} />
+                      <path d="M9 3v18M3 9h18" strokeWidth={2} strokeLinecap="round" />
+                    </svg>
+                  </div>
+                  <p className="text-lg font-bold mb-1">No NFTs found</p>
+                  <p className="text-xs text-gray-500">You don&apos;t own any N1NJ4 NFTs yet</p>
                 </div>
-                <div className="text-right">
-                  <div className="font-bold">--</div>
-                </div>
-              </div>
+              ) : (
+                <>
+                  {nfts.map((nft) => (
+                    <div 
+                      key={`${nft.contractAddress}-${nft.tokenId}`}
+                      onClick={() => setSelectedNFT(nft)}
+                      className="flex items-center gap-4 p-4 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10 transition-all cursor-pointer"
+                    >
+                      <div className="w-12 h-12 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center overflow-hidden shadow-lg">
+                        {nft.image ? (
+                          <Image 
+                            src={nft.image} 
+                            alt={nft.name} 
+                            width={48} 
+                            height={48}
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <svg className="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <rect width="18" height="18" x="3" y="3" rx="2" ry="2" strokeWidth={2} />
+                            <path d="M9 3v18M3 9h18" strokeWidth={2} strokeLinecap="round" />
+                          </svg>
+                        )}
+                      </div>
+                      <div className="flex-1">
+                        <div className="font-bold mb-1">{nft.name}</div>
+                        <div className="text-sm text-gray-400">#{nft.tokenId}</div>
+                      </div>
+                      <div className="text-right">
+                        <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                        </svg>
+                      </div>
+                    </div>
+                  ))}
+                </>
+              )}
             </>
           )}
 
@@ -584,6 +650,14 @@ export default function DashboardPage() {
           )}
         </div>
       </div>
+
+      {/* NFT Detail Modal */}
+      {selectedNFT && (
+        <NFTDetailModal 
+          nft={selectedNFT} 
+          onClose={() => setSelectedNFT(null)} 
+        />
+      )}
 
       {/* QR Scanner Modal */}
       {showQRScanner && (

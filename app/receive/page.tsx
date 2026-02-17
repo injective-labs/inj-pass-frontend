@@ -5,6 +5,7 @@ import { useWallet } from '@/contexts/WalletContext';
 import { QRCodeSVG } from 'qrcode.react';
 import { useState } from 'react';
 import LoadingSpinner from '@/components/LoadingSpinner';
+import { getInjectiveAddress } from '@injectivelabs/sdk-ts';
 
 type AddressType = 'evm' | 'cosmos';
 
@@ -15,12 +16,16 @@ export default function ReceivePage() {
   const [addressType, setAddressType] = useState<AddressType>('evm');
 
   // Convert EVM address to Cosmos (Bech32) format for Injective
+  // Uses official Injective SDK for proper address conversion
   const getCosmosAddress = (evmAddr: string): string => {
-    // For demo purposes, showing a placeholder Cosmos address
-    // In production, you'd use proper address conversion library
     if (!evmAddr) return '';
-    // Injective Cosmos addresses start with 'inj1'
-    return `inj1${evmAddr.slice(2, 42).toLowerCase()}`;
+    try {
+      // getInjectiveAddress converts 0x... to inj1... format
+      return getInjectiveAddress(evmAddr);
+    } catch (error) {
+      console.error('Failed to convert address:', error);
+      return '';
+    }
   };
 
   const displayAddress = addressType === 'evm' ? (address || '') : getCosmosAddress(address || '');
@@ -188,7 +193,7 @@ export default function ReceivePage() {
               </div>
               <p className="text-gray-300 text-sm leading-relaxed flex-1">
                 {addressType === 'evm' 
-                  ? 'All kinds of inEVM Activities'
+                  ? 'All kinds of Injective EVM Activities'
                   : 'Withdraw from Binance and OKX'
                 }
               </p>
@@ -203,7 +208,7 @@ export default function ReceivePage() {
               </div>
               <p className="text-gray-300 text-sm leading-relaxed flex-1">
                 {addressType === 'evm' 
-                  ? 'Receive inEVM Assets only'
+                  ? 'Receive Injective EVM Assets only'
                   : 'Swap Assets through Injective Bridge'
                 }
               </p>
