@@ -527,10 +527,10 @@ export default function SwapPage() {
                 <span className="text-xs text-gray-500">Balance: {fromToken.balance}</span>
               </div>
               
-              <div className="flex items-center gap-4">
+              <div className="flex items-center gap-4 overflow-hidden">
                 <button
                   onClick={() => setShowFromTokens(!showFromTokens)}
-                  className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 transition-all relative"
+                  className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 transition-all relative flex-shrink-0"
                 >
                   <div className="w-6 h-6 rounded-full overflow-hidden bg-white flex items-center justify-center">
                     <Image src={fromToken.icon} alt={fromToken.symbol} width={24} height={24} className="w-full h-full object-contain" />
@@ -576,14 +576,15 @@ export default function SwapPage() {
                   onChange={(e) => setFromAmount(e.target.value)}
                   placeholder="0.0"
                   disabled={loading}
-                  className="flex-1 bg-transparent text-2xl font-bold text-white placeholder-gray-600 focus:outline-none font-mono text-right disabled:opacity-50 pr-1"
+                  className="flex-1 bg-transparent text-2xl font-bold text-white placeholder-gray-600 focus:outline-none font-mono text-right disabled:opacity-50 pr-3"
                   style={{ 
                     WebkitUserSelect: 'text', 
                     userSelect: 'text',
                     WebkitTapHighlightColor: 'transparent',
                     pointerEvents: 'auto',
                     touchAction: 'manipulation',
-                    maxWidth: '100%',
+                    minWidth: 0,
+                    width: '100%',
                     overflow: 'hidden',
                     textOverflow: 'clip'
                   }}
@@ -610,10 +611,10 @@ export default function SwapPage() {
                 <span className="text-xs text-gray-500">Balance: {toToken.balance}</span>
               </div>
               
-              <div className="flex items-center gap-4">
+              <div className="flex items-center gap-4 overflow-hidden">
                 <button
                   onClick={() => setShowToTokens(!showToTokens)}
-                  className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 transition-all relative"
+                  className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 transition-all relative flex-shrink-0"
                 >
                   <div className="w-6 h-6 rounded-full overflow-hidden bg-white flex items-center justify-center">
                     <Image src={toToken.icon} alt={toToken.symbol} width={24} height={24} className="w-full h-full object-contain" />
@@ -660,14 +661,15 @@ export default function SwapPage() {
                   placeholder="0.0"
                   disabled={loading || quoteLoading}
                   readOnly
-                  className="flex-1 bg-transparent text-2xl font-bold text-white placeholder-gray-600 focus:outline-none font-mono text-right disabled:opacity-50 pr-1"
+                  className="flex-1 bg-transparent text-2xl font-bold text-white placeholder-gray-600 focus:outline-none font-mono text-right disabled:opacity-50 pr-3"
                   style={{ 
                     WebkitUserSelect: 'text', 
                     userSelect: 'text',
                     WebkitTapHighlightColor: 'transparent',
                     pointerEvents: 'auto',
                     touchAction: 'manipulation',
-                    maxWidth: '100%',
+                    minWidth: 0,
+                    width: '100%',
                     overflow: 'hidden',
                     textOverflow: 'clip'
                   }}
