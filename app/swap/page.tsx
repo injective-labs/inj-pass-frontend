@@ -576,13 +576,16 @@ export default function SwapPage() {
                   onChange={(e) => setFromAmount(e.target.value)}
                   placeholder="0.0"
                   disabled={loading}
-                  className="flex-1 bg-transparent text-2xl font-bold text-white placeholder-gray-600 focus:outline-none font-mono text-right disabled:opacity-50"
+                  className="flex-1 bg-transparent text-2xl font-bold text-white placeholder-gray-600 focus:outline-none font-mono text-right disabled:opacity-50 pr-1"
                   style={{ 
                     WebkitUserSelect: 'text', 
                     userSelect: 'text',
                     WebkitTapHighlightColor: 'transparent',
                     pointerEvents: 'auto',
-                    touchAction: 'manipulation'
+                    touchAction: 'manipulation',
+                    maxWidth: '100%',
+                    overflow: 'hidden',
+                    textOverflow: 'clip'
                   }}
                 />
               </div>
@@ -657,13 +660,16 @@ export default function SwapPage() {
                   placeholder="0.0"
                   disabled={loading || quoteLoading}
                   readOnly
-                  className="flex-1 bg-transparent text-2xl font-bold text-white placeholder-gray-600 focus:outline-none font-mono text-right disabled:opacity-50"
+                  className="flex-1 bg-transparent text-2xl font-bold text-white placeholder-gray-600 focus:outline-none font-mono text-right disabled:opacity-50 pr-1"
                   style={{ 
                     WebkitUserSelect: 'text', 
                     userSelect: 'text',
                     WebkitTapHighlightColor: 'transparent',
                     pointerEvents: 'auto',
-                    touchAction: 'manipulation'
+                    touchAction: 'manipulation',
+                    maxWidth: '100%',
+                    overflow: 'hidden',
+                    textOverflow: 'clip'
                   }}
                 />
               </div>
