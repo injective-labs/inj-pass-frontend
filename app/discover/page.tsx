@@ -2,10 +2,12 @@
 
 import { useRouter } from 'next/navigation';
 import { useWallet } from '@/contexts/WalletContext';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Image from 'next/image';
 import AccountHeader from '../components/AccountHeader';
 import LoadingSpinner from '@/components/LoadingSpinner';
+import DAppBrowser from '@/components/DAppBrowser';
+import { getDAppIconUrl } from '@/services/dapp-icons';
 
 type DAppCategory = 'all' | 'defi' | 'nft' | 'game' | 'social' | 'dao';
 
@@ -25,14 +27,16 @@ export default function DiscoverPage() {
   const [activeCategory, setActiveCategory] = useState<DAppCategory>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState<'settings' | 'wallet' | 'discover'>('discover');
+  const [selectedDApp, setSelectedDApp] = useState<DApp | null>(null);
+  const [dappIconUrls, setDappIconUrls] = useState<Map<string, string>>(new Map());
 
-  // Mock dApp data - replace with actual data
+  // DApp data with real icons
   const dapps: DApp[] = [
     {
       id: '1',
       name: 'Helix',
       description: 'Decentralized Derivatives Trading',
-      icon: '🌀',
+      icon: 'https://helixapp.com/favicon.ico',
       category: 'defi',
       url: 'https://helixapp.com',
       featured: true
@@ -41,7 +45,7 @@ export default function DiscoverPage() {
       id: '2',
       name: 'INJ Ecosystem',
       description: 'Explore the Injective Ecosystem',
-      icon: '💎',
+      icon: 'https://injective.com/favicon.ico',
       category: 'defi',
       url: 'https://injective.com',
       featured: true
@@ -50,7 +54,7 @@ export default function DiscoverPage() {
       id: '3',
       name: 'Astroport',
       description: 'AMM & DEX Protocol',
-      icon: '🚀',
+      icon: 'https://astroport.fi/favicon.ico',
       category: 'defi',
       url: 'https://astroport.fi'
     },
@@ -58,44 +62,38 @@ export default function DiscoverPage() {
       id: '4',
       name: 'Talis',
       description: 'NFT Marketplace',
-      icon: '🎨',
+      icon: 'https://talis.art/favicon.ico',
       category: 'nft',
       url: 'https://talis.art',
       featured: true
     },
     {
       id: '5',
-      name: 'Injective DAO',
-      description: 'Governance Platform',
-      icon: '🏛️',
+      name: 'Injective Hub',
+      description: 'Governance & Staking',
+      icon: 'https://hub.injective.network/favicon.ico',
       category: 'dao',
       url: 'https://hub.injective.network'
     },
     {
       id: '6',
-      name: 'Neptune Finance',
-      description: 'Money Market Protocol',
-      icon: '🔱',
-      category: 'defi',
-      url: 'https://neptune.finance'
-    },
-    {
-      id: '7',
       name: 'DojoSwap',
       description: 'Swap & Earn Rewards',
-      icon: '⚔️',
+      icon: 'https://dojoswap.xyz/favicon.ico',
       category: 'defi',
       url: 'https://dojoswap.xyz'
-    },
-    {
-      id: '8',
-      name: 'Galactic Punks',
-      description: 'NFT Collection',
-      icon: '👾',
-      category: 'nft',
-      url: 'https://galacticpunks.io'
     }
   ];
+
+  // Load DApp icons on mount
+  useEffect(() => {
+    const iconUrls = new Map<string, string>();
+    dapps.forEach((dapp) => {
+      iconUrls.set(dapp.id, getDAppIconUrl(dapp.url));
+    });
+    setDappIconUrls(iconUrls);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const categories = [
     { id: 'all', name: 'New', icon: '🌐' },
@@ -113,6 +111,11 @@ export default function DiscoverPage() {
   });
 
   const featuredDapps = dapps.filter(dapp => dapp.featured);
+
+  const handleDAppClick = (dapp: DApp) => {
+    console.log('[Discover] Opening DApp:', dapp.name, dapp.url);
+    setSelectedDApp(dapp);
+  };
 
   if (isCheckingSession) {
     return <LoadingSpinner />;
@@ -179,11 +182,23 @@ export default function DiscoverPage() {
                 {featuredDapps.map((dapp) => (
                   <div
                     key={dapp.id}
-                    onClick={() => window.open(dapp.url, '_blank')}
+                    onClick={() => handleDAppClick(dapp)}
                     className="flex flex-col items-center gap-2 cursor-pointer group"
                   >
-                    <div className="w-16 h-16 rounded-full bg-white hover:bg-gray-100 flex items-center justify-center shadow-lg transition-all group-hover:scale-110">
-                      <span className="text-xl">{dapp.icon}</span>
+                    <div className="w-16 h-16 rounded-full bg-white hover:bg-gray-100 flex items-center justify-center shadow-lg transition-all group-hover:scale-110 overflow-hidden">
+                      <Image
+                        src={dapp.icon}
+                        alt={dapp.name}
+                        width={48}
+                        height={48}
+                        className="w-12 h-12 object-contain"
+                        onError={(e) => {
+                          // Fallback to Google favicon service
+                          const img = e.target as HTMLImageElement;
+                          const domain = new URL(dapp.url).hostname;
+                          img.src = `https://www.google.com/s2/favicons?domain=${domain}&sz=128`;
+                        }}
+                      />
                     </div>
                     <div className="text-center w-full">
                       <h3 className="font-bold text-sm text-white truncate">{dapp.name}</h3>
@@ -250,11 +265,23 @@ export default function DiscoverPage() {
                 {filteredDapps.map((dapp) => (
                   <div
                     key={dapp.id}
-                    onClick={() => window.open(dapp.url, '_blank')}
+                    onClick={() => handleDAppClick(dapp)}
                     className="flex flex-col items-center gap-2 cursor-pointer group"
                   >
-                    <div className="w-16 h-16 rounded-full bg-white hover:bg-gray-100 flex items-center justify-center shadow-lg transition-all group-hover:scale-110">
-                      <span className="text-xl">{dapp.icon}</span>
+                    <div className="w-16 h-16 rounded-full bg-white hover:bg-gray-100 flex items-center justify-center shadow-lg transition-all group-hover:scale-110 overflow-hidden">
+                      <Image
+                        src={dapp.icon}
+                        alt={dapp.name}
+                        width={48}
+                        height={48}
+                        className="w-12 h-12 object-contain"
+                        onError={(e) => {
+                          // Fallback to Google favicon service
+                          const img = e.target as HTMLImageElement;
+                          const domain = new URL(dapp.url).hostname;
+                          img.src = `https://www.google.com/s2/favicons?domain=${domain}&sz=128`;
+                        }}
+                      />
                     </div>
                     <div className="text-center w-full">
                       <h3 className="font-bold text-sm text-white truncate">{dapp.name}</h3>
@@ -266,6 +293,15 @@ export default function DiscoverPage() {
           </div>
         </div>
       </div>
+
+      {/* DApp Browser Modal */}
+      {selectedDApp && (
+        <DAppBrowser
+          url={selectedDApp.url}
+          name={selectedDApp.name}
+          onClose={() => setSelectedDApp(null)}
+        />
+      )}
 
       {/* Bottom Navigation - Same as Dashboard */}
       <div className="fixed bottom-0 left-0 right-0 bg-black/95 border-t border-white/10 backdrop-blur-lg">
