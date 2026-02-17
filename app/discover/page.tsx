@@ -89,16 +89,6 @@ export default function DiscoverPage() {
     }
   ];
 
-  // Load DApp icons on mount
-  useEffect(() => {
-    const iconUrls = new Map<string, string>();
-    dapps.forEach((dapp) => {
-      iconUrls.set(dapp.id, getDAppIconUrl(dapp.url));
-    });
-    setDappIconUrls(iconUrls);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
   const categories = [
     { id: 'all', name: 'New', icon: '🌐' },
     { id: 'defi', name: 'DeFi', icon: '💰' },
