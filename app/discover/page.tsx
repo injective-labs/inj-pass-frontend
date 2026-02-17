@@ -69,6 +69,15 @@ export default function DiscoverPage() {
     },
     {
       id: '5',
+      name: 'Rarible',
+      description: 'Multichain NFT Marketplace',
+      icon: 'https://rarible.com/favicon.ico',
+      category: 'nft',
+      url: 'https://rarible.com',
+      featured: true
+    },
+    {
+      id: '6',
       name: 'Injective Hub',
       description: 'Governance & Staking',
       icon: 'https://hub.injective.network/favicon.ico',
@@ -76,7 +85,7 @@ export default function DiscoverPage() {
       url: 'https://hub.injective.network'
     },
     {
-      id: '6',
+      id: '7',
       name: 'DojoSwap',
       description: 'Swap & Earn Rewards',
       icon: 'https://dojoswap.xyz/favicon.ico',
