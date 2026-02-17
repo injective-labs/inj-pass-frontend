@@ -8,7 +8,7 @@ import { getInjectiveAddress } from '@injectivelabs/sdk-ts';
 
 // Injective API endpoints
 const INJECTIVE_API = 'https://lcd.injective.network';
-const COINGECKO_API = 'https://api.coingecko.com/api/v3';
+const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001';
 
 export interface StakingInfo {
   totalStaked: string; // Total INJ staked
@@ -218,8 +218,9 @@ async function fetchStakingApr(): Promise<string> {
  */
 async function fetchInjPrice(): Promise<number> {
   try {
+    // Use backend proxy to avoid CORS issues
     const response = await fetch(
-      `${COINGECKO_API}/simple/price?ids=injective-protocol&vs_currencies=usd`
+      `${BACKEND_URL}/api/proxy/coingecko?ids=injective-protocol&vs_currencies=usd`
     );
 
     if (!response.ok) {
