@@ -304,21 +304,39 @@ function SendPageContent() {
   }, []);
 
   const handleEstimate = useCallback(async (useDefaults = false) => {
+    console.log('[Send] handleEstimate called:', { useDefaults, recipient, amount, address, hasPrivateKey: !!privateKey });
+    
     // Use default values if requested or use actual values
     let estimateRecipient = useDefaults ? '0x0000000000000000000000000000000000000000' : recipient;
     const estimateAmount = useDefaults ? '0.001' : amount;
     
-    if (!estimateRecipient || !estimateAmount || !privateKey || !address) return;
+    if (!estimateRecipient || !estimateAmount || !address) {
+      console.log('[Send] Skipping estimate - missing required fields:', { 
+        hasRecipient: !!estimateRecipient, 
+        hasAmount: !!estimateAmount, 
+        hasAddress: !!address 
+      });
+      return;
+    }
 
     // Convert cosmos address to EVM for estimation
+    const originalRecipient = estimateRecipient;
     estimateRecipient = getEvmAddress(estimateRecipient);
+    console.log('[Send] Address conversion:', { original: originalRecipient, converted: estimateRecipient });
 
     setEstimating(true);
     setError('');
     setCostFlashing(true);
     
     try {
-      console.log('[Send] Estimating gas:', { from: address, to: estimateRecipient, amount: estimateAmount });
+      console.log('[Send] Calling estimateGas with:', { 
+        from: address, 
+        to: estimateRecipient, 
+        amount: estimateAmount,
+        chain: INJECTIVE_MAINNET.name,
+        rpcUrl: INJECTIVE_MAINNET.rpcUrl
+      });
+      
       const estimate = await estimateGas(
         address, // Use actual user address
         estimateRecipient,
@@ -326,10 +344,21 @@ function SendPageContent() {
         undefined,
         INJECTIVE_MAINNET
       );
-      console.log('[Send] Gas estimate successful:', estimate);
+      
+      console.log('[Send] Gas estimate successful:', {
+        gasLimit: estimate.gasLimit.toString(),
+        maxFeePerGas: estimate.maxFeePerGas.toString(),
+        totalCost: estimate.totalCost.toString()
+      });
+      
       setGasEstimate(estimate);
     } catch (err) {
       console.error('[Send] Gas estimation error:', err);
+      console.error('[Send] Error details:', {
+        message: err instanceof Error ? err.message : 'Unknown error',
+        stack: err instanceof Error ? err.stack : undefined
+      });
+      
       // Only show error if not using defaults
       if (!useDefaults) {
         setError(err instanceof Error ? err.message : 'Failed to estimate gas');
@@ -338,7 +367,7 @@ function SendPageContent() {
       setEstimating(false);
       setTimeout(() => setCostFlashing(false), 300);
     }
-  }, [recipient, amount, privateKey, address, getEvmAddress]);
+  }, [recipient, amount, address, privateKey, getEvmAddress]);
 
   // Initial gas estimate on page load with default values
   useEffect(() => {
