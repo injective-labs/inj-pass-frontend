@@ -18,7 +18,7 @@ interface AddressBookEntry {
 function SendPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { isUnlocked, privateKey, isCheckingSession } = useWallet();
+  const { isUnlocked, privateKey, address, isCheckingSession } = useWallet();
   const { isPinLocked, autoLockMinutes } = usePin();
   const [recipient, setRecipient] = useState('');
   const [amount, setAmount] = useState('');
@@ -308,7 +308,7 @@ function SendPageContent() {
     let estimateRecipient = useDefaults ? '0x0000000000000000000000000000000000000000' : recipient;
     const estimateAmount = useDefaults ? '0.001' : amount;
     
-    if (!estimateRecipient || !estimateAmount || !privateKey) return;
+    if (!estimateRecipient || !estimateAmount || !privateKey || !address) return;
 
     // Convert cosmos address to EVM for estimation
     estimateRecipient = getEvmAddress(estimateRecipient);
@@ -318,15 +318,18 @@ function SendPageContent() {
     setCostFlashing(true);
     
     try {
+      console.log('[Send] Estimating gas:', { from: address, to: estimateRecipient, amount: estimateAmount });
       const estimate = await estimateGas(
-        '', // from address not needed for estimate
+        address, // Use actual user address
         estimateRecipient,
         estimateAmount,
         undefined,
         INJECTIVE_MAINNET
       );
+      console.log('[Send] Gas estimate successful:', estimate);
       setGasEstimate(estimate);
     } catch (err) {
+      console.error('[Send] Gas estimation error:', err);
       // Only show error if not using defaults
       if (!useDefaults) {
         setError(err instanceof Error ? err.message : 'Failed to estimate gas');
@@ -335,33 +338,33 @@ function SendPageContent() {
       setEstimating(false);
       setTimeout(() => setCostFlashing(false), 300);
     }
-  }, [recipient, amount, privateKey, getEvmAddress]);
+  }, [recipient, amount, privateKey, address, getEvmAddress]);
 
   // Initial gas estimate on page load with default values
   useEffect(() => {
-    if (privateKey && !recipient && !amount) {
+    if (address && !recipient && !amount) {
       handleEstimate(true);
     }
-  }, [privateKey, recipient, amount, handleEstimate]);
+  }, [address, recipient, amount, handleEstimate]);
 
   // Auto-estimate gas when recipient and amount are filled
   useEffect(() => {
-    if (recipient && amount && privateKey) {
+    if (recipient && amount && address) {
       handleEstimate(false);
     }
-  }, [recipient, amount, privateKey, handleEstimate]);
+  }, [recipient, amount, address, handleEstimate]);
 
   // Auto-refresh every 3 seconds
   useEffect(() => {
     const shouldEstimate = (recipient && amount) || (!recipient && !amount);
-    if (!privateKey || !shouldEstimate) return;
+    if (!address || !shouldEstimate) return;
 
     const interval = setInterval(() => {
       handleEstimate(!recipient || !amount);
     }, 3000);
 
     return () => clearInterval(interval);
-  }, [recipient, amount, privateKey, handleEstimate]);
+  }, [recipient, amount, address, handleEstimate]);
 
   const handleSendClick = () => {
     // Check if authentication is needed
