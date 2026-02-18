@@ -121,7 +121,7 @@ const handleImport = async () => {
         </div>
         <div className="flex-1 flex items-center justify-center min-w-0">
           <a href="https://x.com/INJ_Pass" target="_blank" rel="noopener noreferrer" className="text-white text-[0.75rem] md:text-[0.805rem] font-semibold text-center truncate underline underline-offset-2 hover:text-white/80 transition-colors">
-            N1NJ4 HumanID is Supported
+            Unaudited Release, DYOR
           </a>
         </div>
         <div className="flex gap-2 items-center flex-shrink-0">

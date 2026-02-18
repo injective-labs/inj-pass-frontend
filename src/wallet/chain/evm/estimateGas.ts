@@ -15,14 +15,20 @@ export async function estimateGas(
   data?: `0x${string}`,
   chain: ChainConfig = DEFAULT_CHAIN
 ): Promise<GasEstimate> {
+  console.log('[estimateGas] Starting with params:', { from, to, value, hasData: !!data, chainId: chain.id, rpcUrl: chain.rpcUrl });
+  
   try {
+    console.log('[estimateGas] Creating public client...');
     const client = createPublicClient({
       transport: http(chain.rpcUrl),
     });
 
+    console.log('[estimateGas] Fetching gas price...');
     // Get current gas prices
     const gasPrice = await client.getGasPrice();
+    console.log('[estimateGas] Gas price:', gasPrice.toString());
     
+    console.log('[estimateGas] Estimating gas limit...');
     // Estimate gas limit
     const gasLimit = await client.estimateGas({
       account: from as Address,
@@ -30,6 +36,7 @@ export async function estimateGas(
       value: value ? parseEther(value) : undefined,
       data: data,
     });
+    console.log('[estimateGas] Gas limit:', gasLimit.toString());
 
     // Add 20% buffer to gas limit
     const bufferedGasLimit = (gasLimit * 120n) / 100n;
@@ -40,6 +47,13 @@ export async function estimateGas(
 
     const totalCost = bufferedGasLimit * maxFeePerGas;
 
+    console.log('[estimateGas] Calculation complete:', {
+      gasLimit: bufferedGasLimit.toString(),
+      maxFeePerGas: maxFeePerGas.toString(),
+      maxPriorityFeePerGas: maxPriorityFeePerGas.toString(),
+      totalCost: totalCost.toString()
+    });
+
     return {
       gasLimit: bufferedGasLimit,
       maxFeePerGas,
@@ -47,6 +61,12 @@ export async function estimateGas(
       totalCost,
     };
   } catch (error) {
+    console.error('[estimateGas] Error occurred:', error);
+    console.error('[estimateGas] Error details:', {
+      message: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack : undefined,
+      raw: error
+    });
     throw new Error(
       `Failed to estimate gas: ${error instanceof Error ? error.message : 'Unknown error'}`
     );
