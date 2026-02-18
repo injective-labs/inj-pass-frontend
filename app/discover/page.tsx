@@ -72,6 +72,14 @@ export default function DiscoverPage() {
       featured: true
     },
     {
+      id: '8',
+      name: 'n1nj4',
+      description: 'NFT Marketplace',
+      icon: 'https://www.google.com/s2/favicons?domain=n1nj4.fun&sz=128',
+      category: 'nft',
+      url: 'https://www.n1nj4.fun/'
+    },
+    {
       id: '6',
       name: 'Injective Hub',
       description: 'Governance & Staking',

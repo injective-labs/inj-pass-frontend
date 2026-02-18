@@ -11,12 +11,34 @@ interface DAppBrowserProps {
 }
 
 export default function DAppBrowser({ url, name, onClose }: DAppBrowserProps) {
-  const { address } = useWallet();
+  const { address, privateKey } = useWallet();
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const [loading, setLoading] = useState(true);
   const [currentUrl, setCurrentUrl] = useState(url);
   const [showTransactionModal, setShowTransactionModal] = useState(false);
   const [pendingTransaction, setPendingTransaction] = useState<any>(null);
+  const [proxyUrl, setProxyUrl] = useState('');
+  const [signing, setSigning] = useState(false);
+
+  // Get proxy URL for iframe-safe loading
+  useEffect(() => {
+    const fetchProxyUrl = async () => {
+      try {
+        const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001';
+        const response = await fetch(
+          `${backendUrl}/api/proxy/iframe-url?url=${encodeURIComponent(url)}`
+        );
+        const data = await response.json();
+        setProxyUrl(data.proxyUrl);
+      } catch (error) {
+        console.error('[DAppBrowser] Failed to get proxy URL:', error);
+        // Fallback to direct URL
+        setProxyUrl(url);
+      }
+    };
+    
+    fetchProxyUrl();
+  }, [url]);
 
   useEffect(() => {
     if (!iframeRef.current || !address) return;
@@ -34,15 +56,39 @@ export default function DAppBrowser({ url, name, onClose }: DAppBrowserProps) {
         
         // Wait for user approval
         return new Promise((resolve, reject) => {
-          // TODO: Implement actual transaction signing
-          // For now, reject
-          reject(new Error('Transaction signing not yet implemented'));
+          // Store resolve/reject for later use
+          (window as any).__pendingTxResolve = resolve;
+          (window as any).__pendingTxReject = reject;
         });
       },
       onSignMessage: async (message) => {
         console.log('[DAppBrowser] Sign message request:', message);
-        // TODO: Implement message signing
-        throw new Error('Message signing not yet implemented');
+        
+        if (!privateKey) {
+          throw new Error('Private key not available');
+        }
+
+        try {
+          const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001';
+          const response = await fetch(`${backendUrl}/api/web3/sign-message`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              privateKey: Array.from(privateKey).map(b => b.toString(16).padStart(2, '0')).join(''),
+              message,
+            }),
+          });
+
+          const data = await response.json();
+          if (!data.success) {
+            throw new Error(data.error || 'Failed to sign message');
+          }
+
+          return data.signature;
+        } catch (error) {
+          console.error('[DAppBrowser] Message signing error:', error);
+          throw error;
+        }
       },
       onSwitchChain: async (chainId) => {
         console.log('[DAppBrowser] Switch chain request:', chainId);
@@ -55,7 +101,56 @@ export default function DAppBrowser({ url, name, onClose }: DAppBrowserProps) {
 
     // Inject provider into iframe
     injectWeb3Provider(iframeRef.current, provider);
-  }, [address]);
+  }, [address, privateKey]);
+
+  const handleApproveTransaction = async () => {
+    if (!pendingTransaction || !privateKey) return;
+
+    setSigning(true);
+    try {
+      const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001';
+      const response = await fetch(`${backendUrl}/api/web3/sign-transaction`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          privateKey: Array.from(privateKey).map(b => b.toString(16).padStart(2, '0')).join(''),
+          transaction: pendingTransaction,
+        }),
+      });
+
+      const data = await response.json();
+      if (!data.success) {
+        throw new Error(data.error || 'Failed to sign transaction');
+      }
+
+      // Resolve the promise
+      if ((window as any).__pendingTxResolve) {
+        (window as any).__pendingTxResolve(data.txHash);
+      }
+
+      setShowTransactionModal(false);
+      setPendingTransaction(null);
+    } catch (error) {
+      console.error('[DAppBrowser] Transaction approval error:', error);
+      
+      // Reject the promise
+      if ((window as any).__pendingTxReject) {
+        (window as any).__pendingTxReject(error);
+      }
+    } finally {
+      setSigning(false);
+    }
+  };
+
+  const handleRejectTransaction = () => {
+    // Reject the promise
+    if ((window as any).__pendingTxReject) {
+      (window as any).__pendingTxReject(new Error('User rejected transaction'));
+    }
+
+    setShowTransactionModal(false);
+    setPendingTransaction(null);
+  };
 
   const handleIframeLoad = () => {
     setLoading(false);
@@ -142,14 +237,20 @@ export default function DAppBrowser({ url, name, onClose }: DAppBrowserProps) {
 
       {/* iframe container */}
       <div className="flex-1 relative">
-        <iframe
-          ref={iframeRef}
-          src={url}
-          onLoad={handleIframeLoad}
-          className="w-full h-full border-0"
-          sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-modals"
-          allow="clipboard-read; clipboard-write"
-        />
+        {proxyUrl ? (
+          <iframe
+            ref={iframeRef}
+            src={proxyUrl}
+            onLoad={handleIframeLoad}
+            className="w-full h-full border-0"
+            sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-modals"
+            allow="clipboard-read; clipboard-write"
+          />
+        ) : (
+          <div className="flex items-center justify-center h-full">
+            <div className="w-12 h-12 border-4 border-white/20 border-t-white rounded-full animate-spin"></div>
+          </div>
+        )}
       </div>
 
       {/* Transaction Approval Modal */}
@@ -179,23 +280,27 @@ export default function DAppBrowser({ url, name, onClose }: DAppBrowserProps) {
 
             <div className="flex gap-3">
               <button
-                onClick={() => {
-                  setShowTransactionModal(false);
-                  setPendingTransaction(null);
-                }}
-                className="flex-1 py-3 rounded-xl bg-white/5 border border-white/10 text-white font-bold hover:bg-white/10 transition-all"
+                onClick={handleRejectTransaction}
+                disabled={signing}
+                className="flex-1 py-3 rounded-xl bg-white/5 border border-white/10 text-white font-bold hover:bg-white/10 transition-all disabled:opacity-50"
               >
                 Reject
               </button>
               <button
-                onClick={() => {
-                  // TODO: Implement transaction approval
-                  setShowTransactionModal(false);
-                  setPendingTransaction(null);
-                }}
-                className="flex-1 py-3 rounded-xl bg-white text-black font-bold hover:bg-gray-100 transition-all"
+                onClick={handleApproveTransaction}
+                disabled={signing}
+                className="flex-1 py-3 rounded-xl bg-white text-black font-bold hover:bg-gray-100 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
               >
-                Approve
+                {signing ? (
+                  <>
+                    <svg className="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                    Signing...
+                  </>
+                ) : (
+                  'Approve'
+                )}
               </button>
             </div>
           </div>
