@@ -8,10 +8,13 @@ import { Balance, INJECTIVE_MAINNET } from '@/types/chain';
 import { getInjPrice, getTokenPrice } from '@/services/price';
 import { getTokenBalances } from '@/services/dex-swap';
 import { startQRScanner, stopQRScanner, clearQRScanner, isCameraSupported, isValidAddress } from '@/services/qr-scanner';
+import { getN1NJ4NFTs, type NFT } from '@/services/nft';
+import { getUserStakingInfo, type StakingInfo } from '@/services/staking';
 import { QRCodeSVG } from 'qrcode.react';
 import type { Address } from 'viem';
 import Image from 'next/image';
 import LoadingSpinner from '@/components/LoadingSpinner';
+import NFTDetailModal from '@/components/NFTDetailModal';
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -41,6 +44,15 @@ export default function DashboardPage() {
   const [scannedAddress, setScannedAddress] = useState('');
   const [closingQRScanner, setClosingQRScanner] = useState(false);
   const [showMyQR, setShowMyQR] = useState(false);
+  
+  // NFT states
+  const [nfts, setNfts] = useState<NFT[]>([]);
+  const [nftsLoading, setNftsLoading] = useState(false);
+  const [selectedNFT, setSelectedNFT] = useState<NFT | null>(null);
+  
+  // Staking states
+  const [stakingInfo, setStakingInfo] = useState<StakingInfo | null>(null);
+  const [stakingLoading, setStakingLoading] = useState(false);
 
   useEffect(() => {
     // Wait for session check to complete
@@ -92,9 +104,69 @@ export default function DashboardPage() {
     }
   };
 
+  // Load NFTs when switching to NFTs tab
+  const loadNFTs = async () => {
+    if (!address || nftsLoading) return;
+
+    try {
+      setNftsLoading(true);
+      console.log('[Dashboard] Loading NFTs for address:', address);
+      const userNFTs = await getN1NJ4NFTs(address as Address);
+      console.log('[Dashboard] Loaded NFTs:', userNFTs);
+      setNfts(userNFTs);
+    } catch (error) {
+      console.error('Failed to load NFTs:', error);
+    } finally {
+      setNftsLoading(false);
+    }
+  };
+
+  // Load staking info when switching to DeFi tab
+  const loadStakingInfo = async () => {
+    if (!address || stakingLoading) return;
+
+    try {
+      setStakingLoading(true);
+      console.log('[Dashboard] Loading staking info for address:', address);
+      const info = await getUserStakingInfo(address as Address);
+      console.log('[Dashboard] Loaded staking info:', info);
+      setStakingInfo(info);
+    } catch (error) {
+      console.error('Failed to load staking info:', error);
+    } finally {
+      setStakingLoading(false);
+    }
+  };
+
+  // Load NFTs when NFT tab is selected
+  useEffect(() => {
+    if (assetTab === 'nfts' && address && nfts.length === 0) {
+      loadNFTs();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [assetTab, address]);
+
+  // Load staking info when DeFi tab is selected
+  useEffect(() => {
+    if (assetTab === 'defi' && address && !stakingInfo) {
+      loadStakingInfo();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [assetTab, address]);
+
   const handleRefresh = () => {
     setRefreshing(true);
     loadData();
+    
+    // Also refresh staking info if on DeFi tab
+    if (assetTab === 'defi') {
+      loadStakingInfo();
+    }
+    
+    // Also refresh NFTs if on NFTs tab
+    if (assetTab === 'nfts') {
+      loadNFTs();
+    }
   };
 
   const handleCopyAddress = () => {
@@ -530,60 +602,129 @@ export default function DashboardPage() {
 
           {assetTab === 'nfts' && (
             <>
-              <div className="flex items-center gap-4 p-4 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10 transition-all cursor-pointer">
-                <div className="w-12 h-12 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center overflow-hidden shadow-lg">
-                  <Image 
-                    src="/N1NJ4.png" 
-                    alt="N1NJ4" 
-                    width={48} 
-                    height={48}
-                    className="w-full h-full object-cover"
-                  />
+              {nftsLoading ? (
+                <div className="flex items-center justify-center py-16">
+                  <div className="w-12 h-12 border-4 border-white/20 border-t-white rounded-full animate-spin"></div>
                 </div>
-                <div className="flex-1">
-                  <div className="font-bold mb-1">N1NJ4</div>
-                  <div className="text-sm text-gray-400">#0001</div>
+              ) : nfts.length === 0 ? (
+                <div className="text-center py-16 text-gray-500">
+                  <div className="w-16 h-16 bg-white/5 rounded-full flex items-center justify-center mx-auto mb-4 border border-white/10">
+                    <svg className="w-8 h-8 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <rect width="18" height="18" x="3" y="3" rx="2" ry="2" strokeWidth={2} />
+                      <path d="M9 3v18M3 9h18" strokeWidth={2} strokeLinecap="round" />
+                    </svg>
+                  </div>
+                  <p className="text-lg font-bold mb-1">No NFTs found</p>
+                  <p className="text-xs text-gray-500">You don&apos;t own any N1NJ4 NFTs yet</p>
                 </div>
-                <div className="text-right">
-                  <div className="font-bold">--</div>
-                </div>
-              </div>
+              ) : (
+                <>
+                  {nfts.map((nft) => (
+                    <div 
+                      key={`${nft.contractAddress}-${nft.tokenId}`}
+                      onClick={() => setSelectedNFT(nft)}
+                      className="flex items-center gap-4 p-4 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10 transition-all cursor-pointer"
+                    >
+                      <div className="w-12 h-12 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center overflow-hidden shadow-lg">
+                        {nft.image ? (
+                          <Image 
+                            src={nft.image} 
+                            alt={nft.name} 
+                            width={48} 
+                            height={48}
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <svg className="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <rect width="18" height="18" x="3" y="3" rx="2" ry="2" strokeWidth={2} />
+                            <path d="M9 3v18M3 9h18" strokeWidth={2} strokeLinecap="round" />
+                          </svg>
+                        )}
+                      </div>
+                      <div className="flex-1">
+                        <div className="font-bold mb-1">{nft.name}</div>
+                        <div className="text-sm text-gray-400">#{nft.tokenId}</div>
+                      </div>
+                      <div className="text-right">
+                        <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                        </svg>
+                      </div>
+                    </div>
+                  ))}
+                </>
+              )}
             </>
           )}
 
           {assetTab === 'defi' && (
             <>
-              <div className="flex items-center gap-4 p-4 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10 transition-all cursor-pointer">
-                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-purple-500 to-indigo-600 flex items-center justify-center font-bold text-sm shadow-lg">
-                  LP
+              {stakingLoading ? (
+                <div className="flex items-center justify-center py-16">
+                  <div className="w-12 h-12 border-4 border-white/20 border-t-white rounded-full animate-spin"></div>
                 </div>
-                <div className="flex-1">
-                  <div className="font-bold mb-1">INJ/USDT Pool</div>
-                  <div className="text-sm text-gray-400">0.00 LP</div>
-                </div>
-                <div className="text-right">
-                  <div className="font-bold font-mono">$0.00</div>
-                  <div className="text-sm text-gray-500">0.00%</div>
-                </div>
-              </div>
+              ) : stakingInfo && parseFloat(stakingInfo.totalStaked) > 0 ? (
+                <>
+                  {/* Staking Position */}
+                  <div className="flex items-center gap-4 p-4 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10 transition-all cursor-pointer">
+                    <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shadow-lg">
+                      <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                      </svg>
+                    </div>
+                    <div className="flex-1">
+                      <div className="font-bold mb-1">Staking</div>
+                      <div className="text-sm text-gray-400">{stakingInfo.totalStaked} INJ</div>
+                      <div className="text-xs text-gray-500 mt-1">APR: {stakingInfo.stakingApr}%</div>
+                    </div>
+                    <div className="text-right">
+                      <div className="font-bold font-mono">${stakingInfo.totalStakedUsd}</div>
+                      <div className={`text-sm ${injPriceChange24h >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                        {injPriceChange24h >= 0 ? '+' : ''}{injPriceChange24h.toFixed(2)}%
+                      </div>
+                    </div>
+                  </div>
 
-              <div className="flex items-center gap-4 p-4 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10 transition-all cursor-pointer">
-                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-amber-500 to-yellow-600 flex items-center justify-center text-2xl shadow-lg">
-                  💰
+                  {/* Staking Rewards */}
+                  {parseFloat(stakingInfo.rewards) > 0 && (
+                    <div className="flex items-center gap-4 p-4 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10 transition-all cursor-pointer">
+                      <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-amber-500 to-yellow-600 flex items-center justify-center text-2xl shadow-lg">
+                        💰
+                      </div>
+                      <div className="flex-1">
+                        <div className="font-bold mb-1">Staking Rewards</div>
+                        <div className="text-sm text-gray-400">{stakingInfo.rewards} INJ</div>
+                      </div>
+                      <div className="text-right">
+                        <div className="font-bold font-mono">${stakingInfo.rewardsUsd}</div>
+                        <div className="text-sm text-green-400">Claimable</div>
+                      </div>
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div className="text-center py-16 text-gray-500">
+                  <div className="w-16 h-16 bg-white/5 rounded-full flex items-center justify-center mx-auto mb-4 border border-white/10">
+                    <svg className="w-8 h-8 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
+                    </svg>
+                  </div>
+                  <p className="text-lg font-bold mb-1">No DeFi Positions</p>
+                  <p className="text-xs text-gray-500">Your DeFi positions and activities will appear here</p>
                 </div>
-                <div className="flex-1">
-                  <div className="font-bold mb-1">Staking Rewards</div>
-                  <div className="text-sm text-gray-400">0.00 INJ</div>
-                </div>
-                <div className="text-right">
-                  <div className="font-bold font-mono">$0.00</div>
-                  <div className="text-sm text-green-400">+0.00%</div>
-                </div>
-              </div>
+              )}
             </>
           )}
         </div>
       </div>
+
+      {/* NFT Detail Modal */}
+      {selectedNFT && (
+        <NFTDetailModal 
+          nft={selectedNFT} 
+          onClose={() => setSelectedNFT(null)} 
+        />
+      )}
 
       {/* QR Scanner Modal */}
       {showQRScanner && (

@@ -2,8 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 import { useWallet } from '@/contexts/WalletContext';
-import { useState } from 'react';
-import Image from 'next/image';
+import { useState, useEffect } from 'react';
 import AccountHeader from '../components/AccountHeader';
 import LoadingSpinner from '@/components/LoadingSpinner';
 
@@ -26,13 +25,13 @@ export default function DiscoverPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState<'settings' | 'wallet' | 'discover'>('discover');
 
-  // Mock dApp data - replace with actual data
+  // DApp data with Google Favicon Service (more reliable)
   const dapps: DApp[] = [
     {
       id: '1',
       name: 'Helix',
       description: 'Decentralized Derivatives Trading',
-      icon: '🌀',
+      icon: 'https://www.google.com/s2/favicons?domain=helixapp.com&sz=128',
       category: 'defi',
       url: 'https://helixapp.com',
       featured: true
@@ -41,7 +40,7 @@ export default function DiscoverPage() {
       id: '2',
       name: 'INJ Ecosystem',
       description: 'Explore the Injective Ecosystem',
-      icon: '💎',
+      icon: 'https://www.google.com/s2/favicons?domain=injective.com&sz=128',
       category: 'defi',
       url: 'https://injective.com',
       featured: true
@@ -50,7 +49,7 @@ export default function DiscoverPage() {
       id: '3',
       name: 'Astroport',
       description: 'AMM & DEX Protocol',
-      icon: '🚀',
+      icon: 'https://www.google.com/s2/favicons?domain=astroport.fi&sz=128',
       category: 'defi',
       url: 'https://astroport.fi'
     },
@@ -58,42 +57,35 @@ export default function DiscoverPage() {
       id: '4',
       name: 'Talis',
       description: 'NFT Marketplace',
-      icon: '🎨',
+      icon: 'https://www.google.com/s2/favicons?domain=talis.art&sz=128',
       category: 'nft',
       url: 'https://talis.art',
       featured: true
     },
     {
       id: '5',
-      name: 'Injective DAO',
-      description: 'Governance Platform',
-      icon: '🏛️',
-      category: 'dao',
-      url: 'https://hub.injective.network'
+      name: 'Rarible',
+      description: 'Multichain NFT Marketplace',
+      icon: 'https://www.google.com/s2/favicons?domain=rarible.com&sz=128',
+      category: 'nft',
+      url: 'https://rarible.com',
+      featured: true
     },
     {
       id: '6',
-      name: 'Neptune Finance',
-      description: 'Money Market Protocol',
-      icon: '🔱',
-      category: 'defi',
-      url: 'https://neptune.finance'
+      name: 'Injective Hub',
+      description: 'Governance & Staking',
+      icon: 'https://www.google.com/s2/favicons?domain=hub.injective.network&sz=128',
+      category: 'dao',
+      url: 'https://hub.injective.network'
     },
     {
       id: '7',
       name: 'DojoSwap',
       description: 'Swap & Earn Rewards',
-      icon: '⚔️',
+      icon: 'https://www.google.com/s2/favicons?domain=dojoswap.xyz&sz=128',
       category: 'defi',
       url: 'https://dojoswap.xyz'
-    },
-    {
-      id: '8',
-      name: 'Galactic Punks',
-      description: 'NFT Collection',
-      icon: '👾',
-      category: 'nft',
-      url: 'https://galacticpunks.io'
     }
   ];
 
@@ -113,6 +105,12 @@ export default function DiscoverPage() {
   });
 
   const featuredDapps = dapps.filter(dapp => dapp.featured);
+
+  const handleDAppClick = (dapp: DApp) => {
+    console.log('[Discover] Opening DApp:', dapp.name, dapp.url);
+    // Open in new tab instead of iframe (due to CSP restrictions)
+    window.open(dapp.url, '_blank', 'noopener,noreferrer');
+  };
 
   if (isCheckingSession) {
     return <LoadingSpinner />;
@@ -179,11 +177,16 @@ export default function DiscoverPage() {
                 {featuredDapps.map((dapp) => (
                   <div
                     key={dapp.id}
-                    onClick={() => window.open(dapp.url, '_blank')}
+                    onClick={() => handleDAppClick(dapp)}
                     className="flex flex-col items-center gap-2 cursor-pointer group"
                   >
-                    <div className="w-16 h-16 rounded-full bg-white hover:bg-gray-100 flex items-center justify-center shadow-lg transition-all group-hover:scale-110">
-                      <span className="text-xl">{dapp.icon}</span>
+                    <div className="w-16 h-16 rounded-full bg-white hover:bg-gray-100 flex items-center justify-center shadow-lg transition-all group-hover:scale-110 overflow-hidden p-2">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={dapp.icon}
+                        alt={dapp.name}
+                        className="w-full h-full object-contain"
+                      />
                     </div>
                     <div className="text-center w-full">
                       <h3 className="font-bold text-sm text-white truncate">{dapp.name}</h3>
@@ -250,11 +253,16 @@ export default function DiscoverPage() {
                 {filteredDapps.map((dapp) => (
                   <div
                     key={dapp.id}
-                    onClick={() => window.open(dapp.url, '_blank')}
+                    onClick={() => handleDAppClick(dapp)}
                     className="flex flex-col items-center gap-2 cursor-pointer group"
                   >
-                    <div className="w-16 h-16 rounded-full bg-white hover:bg-gray-100 flex items-center justify-center shadow-lg transition-all group-hover:scale-110">
-                      <span className="text-xl">{dapp.icon}</span>
+                    <div className="w-16 h-16 rounded-full bg-white hover:bg-gray-100 flex items-center justify-center shadow-lg transition-all group-hover:scale-110 overflow-hidden p-2">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={dapp.icon}
+                        alt={dapp.name}
+                        className="w-full h-full object-contain"
+                      />
                     </div>
                     <div className="text-center w-full">
                       <h3 className="font-bold text-sm text-white truncate">{dapp.name}</h3>
