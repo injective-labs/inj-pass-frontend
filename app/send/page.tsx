@@ -333,9 +333,10 @@ function SendPageContent() {
     setTxHash('');
     
     try {
+      const evmRecipient = getEvmAddress(recipient);
       const hash = await sendTransaction(
         privateKey,
-        recipient,
+        evmRecipient,
         amount,
         undefined,
         INJECTIVE_MAINNET
