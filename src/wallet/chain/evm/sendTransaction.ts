@@ -12,8 +12,20 @@ import {
   type TransactionReceipt as ViemReceipt,
 } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
+import { getEthereumAddress } from '@injectivelabs/sdk-ts';
 import { TransactionRequest, TransactionReceipt, ChainConfig, DEFAULT_CHAIN } from '@/types/chain';
 import { estimateGas } from './estimateGas';
+
+function normalizeToEvmAddress(address: string): string {
+  if (address.startsWith('inj1')) {
+    try {
+      return getEthereumAddress(address);
+    } catch {
+      // fall through and return original
+    }
+  }
+  return address;
+}
 
 /**
  * Send a transaction
@@ -32,6 +44,8 @@ export async function sendTransaction(
   chain: ChainConfig = DEFAULT_CHAIN
 ): Promise<string> {
   try {
+    const evmTo = normalizeToEvmAddress(to);
+
     // Convert private key to account
     const privateKeyHex = `0x${Array.from(privateKey)
       .map((b) => b.toString(16).padStart(2, '0'))
@@ -61,7 +75,7 @@ export async function sendTransaction(
     // Estimate gas
     const gasEstimate = await estimateGas(
       account.address,
-      to,
+      evmTo,
       value,
       data,
       chain
@@ -69,7 +83,7 @@ export async function sendTransaction(
 
     // Send transaction
     const hash = await walletClient.sendTransaction({
-      to: to as Address,
+      to: evmTo as Address,
       value: parseEther(value),
       data: data,
       gas: gasEstimate.gasLimit,
