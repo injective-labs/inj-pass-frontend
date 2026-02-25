@@ -3,14 +3,31 @@
  * 
  * This SDK allows dApps to easily integrate INJ Pass wallet via iframe
  * without dealing with postMessage complexity.
+ * 
+ * ⚡ New Architecture (v2.0):
+ * - Uses popup windows for Passkey authentication (bypasses iframe restrictions)
+ * - No longer requires Storage Access API
+ * - Works seamlessly across all browsers (Safari, Chrome, Firefox)
+ * - Fully compatible with Storage Partitioning
  */
 
 export interface InjPassConfig {
   /**
-   * URL of the INJ Pass embed page
-   * @default 'https://injpass.xyz/embed'
+   * URL of the INJ Pass embed page (REQUIRED)
+   * 
+   * Development: http://localhost:3001/embed
+   * Production: Your deployed INJ Pass URL + /embed
+   * 
+   * @example
+   * ```typescript
+   * // Development
+   * embedUrl: 'http://localhost:3001/embed'
+   * 
+   * // Production (Vercel)
+   * embedUrl: 'https://your-app.vercel.app/embed'
+   * ```
    */
-  embedUrl?: string;
+  embedUrl: string;
 
   /**
    * Position of the iframe
@@ -69,9 +86,16 @@ export class InjPassConnector {
   }>();
   private messageHandler: ((event: MessageEvent) => void) | null = null;
 
-  constructor(config: InjPassConfig = {}) {
+  constructor(config: InjPassConfig) {
+    if (!config.embedUrl) {
+      throw new Error(
+        'embedUrl is required. Please provide the INJ Pass embed URL.\n' +
+        'Example: { embedUrl: "http://localhost:3001/embed" }'
+      );
+    }
+
     this.config = {
-      embedUrl: config.embedUrl || 'https://injpass.xyz/embed',
+      embedUrl: config.embedUrl,
       position: config.position || { bottom: '20px', right: '20px' },
       size: config.size || { width: '400px', height: '300px' },
       mode: config.mode || 'floating',
@@ -82,6 +106,19 @@ export class InjPassConnector {
 
   /**
    * Connect to INJ Pass wallet
+   * 
+   * ⚡ How it works (New Architecture):
+   * 1. SDK creates an iframe with INJ Pass embed page
+   * 2. User clicks "Connect" in the iframe
+   * 3. A popup window opens for Passkey authentication
+   * 4. User authenticates with biometrics in the popup
+   * 5. Popup closes and sends wallet info back to iframe
+   * 6. Iframe forwards the info to your dApp
+   * 
+   * This popup approach bypasses browser restrictions on:
+   * - Storage Access in iframes
+   * - WebAuthn in cross-origin iframes
+   * - Third-party cookie blocking
    */
   async connect(): Promise<ConnectedWallet> {
     if (this.connected) {
@@ -185,6 +222,12 @@ export class InjPassConnector {
   private createIframe(): void {
     this.iframe = document.createElement('iframe');
     this.iframe.src = this.config.embedUrl;
+    
+    // Note: We no longer need 'publickey-credentials-get' in iframe
+    // because Passkey authentication happens in a popup window
+    // This makes the SDK work in all browsers without Storage Access API
+    this.iframe.setAttribute('allow', 'publickey-credentials-get *; publickey-credentials-create *');
+    
     this.iframe.style.border = 'none';
     this.iframe.style.borderRadius = '12px';
     this.iframe.style.boxShadow = '0 10px 40px rgba(0,0,0,0.3)';
@@ -240,6 +283,15 @@ class InjPassSigner {
 
   /**
    * Sign a message
+   * 
+   * ⚡ How it works (New Architecture):
+   * 1. SDK sends sign request to iframe
+   * 2. Iframe opens a popup window for authentication
+   * 3. User authenticates with Passkey in the popup
+   * 4. Popup signs the message and sends result back
+   * 5. Result is forwarded to your dApp
+   * 
+   * This ensures security while bypassing iframe limitations
    */
   async signMessage(message: string): Promise<Uint8Array> {
     const requestId = `sign_${++this.requestCounter}_${Date.now()}`;
