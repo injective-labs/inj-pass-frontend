@@ -21,6 +21,100 @@ export default function WelcomePage() {
   const [walletExists, setWalletExists] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
+  // Private key import state
+  const [showImportModal, setShowImportModal] = useState(false);
+  const [importStep, setImportStep] = useState<'key' | 'password'>('key');
+  const [privateKeyInput, setPrivateKeyInput] = useState('');
+  const [showPrivateKey, setShowPrivateKey] = useState(false);
+  const [importPassword, setImportPassword] = useState('');
+  const [importPasswordConfirm, setImportPasswordConfirm] = useState('');
+  const [importError, setImportError] = useState('');
+  const [importLoading, setImportLoading] = useState(false);
+  const privateKeyRef = useRef<HTMLInputElement>(null);
+  const importPasswordRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (showImportModal && importStep === 'key') {
+      const t = setTimeout(() => privateKeyRef.current?.focus(), 60);
+      return () => clearTimeout(t);
+    }
+  }, [showImportModal, importStep]);
+
+  useEffect(() => {
+    if (importStep === 'password') {
+      const t = setTimeout(() => importPasswordRef.current?.focus(), 60);
+      return () => clearTimeout(t);
+    }
+  }, [importStep]);
+
+  const handleImportNextStep = () => {
+    setImportError('');
+    if (!privateKeyInput.trim()) {
+      setImportError('Please enter your private key');
+      return;
+    }
+    try {
+      importPrivateKey(privateKeyInput.trim());
+      setImportStep('password');
+    } catch (err) {
+      setImportError(err instanceof Error ? err.message : 'Invalid private key');
+    }
+  };
+
+  const handleImportWallet = async () => {
+    setImportError('');
+    if (!importPassword) {
+      setImportError('Please enter a password');
+      return;
+    }
+    if (importPassword.length < 8) {
+      setImportError('Password must be at least 8 characters');
+      return;
+    }
+    if (importPassword !== importPasswordConfirm) {
+      setImportError('Passwords do not match');
+      return;
+    }
+
+    setImportLoading(true);
+    try {
+      const { privateKey, address } = importPrivateKey(privateKeyInput.trim());
+
+      const encoder = new TextEncoder();
+      const rawEntropy = encoder.encode(importPassword);
+      const entropy = new Uint8Array(Math.max(rawEntropy.length, 32));
+      entropy.set(rawEntropy);
+
+      const encryptedPrivateKey = await encryptKey(privateKey, entropy);
+
+      const keystore = {
+        address,
+        encryptedPrivateKey,
+        source: 'import' as const,
+        createdAt: Date.now(),
+        walletName: 'Imported Wallet',
+      };
+
+      saveWallet(keystore);
+      unlock(privateKey, keystore);
+      router.push('/dashboard');
+    } catch (err) {
+      setImportError(err instanceof Error ? err.message : 'Failed to import wallet');
+    } finally {
+      setImportLoading(false);
+    }
+  };
+
+  const handleCloseImport = () => {
+    setShowImportModal(false);
+    setImportStep('key');
+    setPrivateKeyInput('');
+    setImportPassword('');
+    setImportPasswordConfirm('');
+    setImportError('');
+    setShowPrivateKey(false);
+  };
+
   useEffect(() => {
     setWalletExists(hasWallet());
   }, []);
@@ -242,6 +336,15 @@ export default function WelcomePage() {
               <span>{loading ? 'RECOVERING...' : 'RECOVER WALLET'}</span>
             </button>
 
+            {/* Import Private Key link */}
+            <button
+              onClick={() => setShowImportModal(true)}
+              disabled={loading}
+              className="text-gray-400 text-sm underline underline-offset-2 hover:text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Import Private Key
+            </button>
+
             {/*
               Back — always rendered (same height reserved) so RECOVER WALLET
               never shifts. Fades in/out with pointer-events toggled.
@@ -268,6 +371,111 @@ export default function WelcomePage() {
           </div>
         </div>
       </div>
+
+      {/* Import Private Key Modal */}
+      {showImportModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="bg-[#1a1a2e] border border-white/10 rounded-3xl w-full max-w-md p-6 md:p-8 shadow-2xl">
+            {importStep === 'key' ? (
+              <>
+                <h2 className="text-white text-xl font-bold mb-1">Import Private Key</h2>
+                <p className="text-gray-400 text-sm mb-6">Enter your Web3 private key to access INJ Pass.</p>
+
+                <div className="relative mb-4">
+                  <input
+                    ref={privateKeyRef}
+                    type={showPrivateKey ? 'text' : 'password'}
+                    value={privateKeyInput}
+                    onChange={(e) => setPrivateKeyInput(e.target.value)}
+                    placeholder="Private key (hex)"
+                    className="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-3.5 pr-12 text-white text-sm placeholder-gray-500 focus:outline-none focus:border-white/30 transition-colors font-mono"
+                    onKeyDown={(e) => { if (e.key === 'Enter') handleImportNextStep(); }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPrivateKey(!showPrivateKey)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300 transition-colors p-1"
+                  >
+                    {showPrivateKey ? (
+                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
+                        <path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19m-6.72-1.07a3 3 0 11-4.24-4.24" />
+                        <line x1="1" y1="1" x2="23" y2="23" />
+                      </svg>
+                    ) : (
+                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
+                        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                        <circle cx="12" cy="12" r="3" />
+                      </svg>
+                    )}
+                  </button>
+                </div>
+
+                {importError && (
+                  <p className="text-red-400 text-sm mb-4">{importError}</p>
+                )}
+
+                <div className="flex gap-3">
+                  <button
+                    onClick={handleCloseImport}
+                    className="flex-1 py-3 rounded-2xl border border-white/10 text-gray-400 text-sm font-semibold hover:bg-white/5 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleImportNextStep}
+                    className="flex-1 py-3 rounded-2xl bg-white text-black text-sm font-bold hover:bg-gray-100 transition-colors"
+                  >
+                    Next
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <h2 className="text-white text-xl font-bold mb-1">Set a Password</h2>
+                <p className="text-gray-400 text-sm mb-6">Your private key will be encrypted with this password.</p>
+
+                <input
+                  ref={importPasswordRef}
+                  type="password"
+                  value={importPassword}
+                  onChange={(e) => setImportPassword(e.target.value)}
+                  placeholder="Password (min 8 characters)"
+                  className="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-3.5 text-white text-sm placeholder-gray-500 focus:outline-none focus:border-white/30 transition-colors mb-3"
+                  onKeyDown={(e) => { if (e.key === 'Enter') handleImportWallet(); }}
+                />
+                <input
+                  type="password"
+                  value={importPasswordConfirm}
+                  onChange={(e) => setImportPasswordConfirm(e.target.value)}
+                  placeholder="Confirm password"
+                  className="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-3.5 text-white text-sm placeholder-gray-500 focus:outline-none focus:border-white/30 transition-colors mb-4"
+                  onKeyDown={(e) => { if (e.key === 'Enter') handleImportWallet(); }}
+                />
+
+                {importError && (
+                  <p className="text-red-400 text-sm mb-4">{importError}</p>
+                )}
+
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => { setImportStep('key'); setImportError(''); }}
+                    className="flex-1 py-3 rounded-2xl border border-white/10 text-gray-400 text-sm font-semibold hover:bg-white/5 transition-colors"
+                  >
+                    Back
+                  </button>
+                  <button
+                    onClick={handleImportWallet}
+                    disabled={importLoading}
+                    className="flex-1 py-3 rounded-2xl bg-white text-black text-sm font-bold hover:bg-gray-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {importLoading ? 'Importing…' : 'Import Wallet'}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Powered by Injective */}
       <div className="fixed bottom-3 md:bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-2 z-10 text-xs md:text-sm animate-fade-in">
