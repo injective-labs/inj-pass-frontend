@@ -543,11 +543,11 @@ export default function SwapPage() {
           /* Manual Swap Mode */
           <div className="space-y-4">
             {/* From Token */}
-            <div className={`p-5 rounded-2xl bg-black border ${
+            <div className={`p-5 rounded-2xl bg-black border transition-all ${
               isAmountExceedsBalance() 
                 ? 'border-red-500/50 shadow-red-500/20 shadow-lg' 
                 : 'border-white/10'
-            }`}>
+            } ${showFromTokens ? 'relative z-[200]' : 'relative z-[1]'}`}>
               <div className="flex items-center justify-between mb-3">
                 <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">From</span>
                 <div className="flex items-center gap-2">
@@ -562,24 +562,27 @@ export default function SwapPage() {
                 </div>
               </div>
               
-              <div className="flex items-center gap-4 overflow-hidden">
-                <button
-                  onClick={() => setShowFromTokens(!showFromTokens)}
-                  className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 transition-all relative flex-shrink-0"
-                >
-                  <div className="w-6 h-6 rounded-full overflow-hidden bg-white flex items-center justify-center">
-                    <Image src={fromToken.icon} alt={fromToken.symbol} width={24} height={24} className="w-full h-full object-contain" />
-                  </div>
-                  <span className="font-bold text-sm">{fromToken.symbol}</span>
-                  <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <polyline points="6 9 12 15 18 9" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
+              <div className="flex items-center gap-4">
+                <div className="relative flex-shrink-0">
+                  <button
+                    onClick={() => setShowFromTokens(!showFromTokens)}
+                    className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 transition-all"
+                    style={{ pointerEvents: 'auto', touchAction: 'manipulation' }}
+                  >
+                    <div className="w-6 h-6 rounded-full overflow-hidden bg-white flex items-center justify-center">
+                      <Image src={fromToken.icon} alt={fromToken.symbol} width={24} height={24} className="w-full h-full object-contain" />
+                    </div>
+                    <span className="font-bold text-sm">{fromToken.symbol}</span>
+                    <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <polyline points="6 9 12 15 18 9" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </button>
 
                   {/* Token Dropdown */}
                   {showFromTokens && (
                     <>
-                      <div className="fixed inset-0 z-40" onClick={closeFromTokensDropdown} />
-                      <div className={`dropdown-menu absolute top-full left-0 mt-2 w-64 bg-black border border-white/10 rounded-xl shadow-2xl z-50 p-2 ${closingFromTokens ? 'closing' : ''}`}>
+                      <div className="fixed inset-0 z-[100]" onClick={closeFromTokensDropdown} />
+                      <div className={`dropdown-menu absolute top-full left-0 mt-2 w-64 bg-black border border-white/10 rounded-xl shadow-2xl z-[101] p-2 ${closingFromTokens ? 'closing' : ''}`}>
                         {tokens.map((token) => (
                           <button
                             key={token.symbol}
@@ -602,7 +605,7 @@ export default function SwapPage() {
                       </div>
                     </>
                   )}
-                </button>
+                </div>
 
                 <input
                   type="text"
@@ -622,17 +625,14 @@ export default function SwapPage() {
                     WebkitTapHighlightColor: 'transparent',
                     pointerEvents: 'auto',
                     touchAction: 'manipulation',
-                    minWidth: 0,
-                    width: '100%',
-                    overflow: 'hidden',
-                    textOverflow: 'clip'
+                    minWidth: 0
                   }}
                 />
               </div>
             </div>
 
             {/* Switch Button */}
-            <div className="flex justify-center -my-2 relative z-10">
+            <div className="flex justify-center -my-2 relative pb-4">
               <button
                 onClick={switchTokens}
                 className="w-10 h-10 rounded-full bg-white hover:bg-gray-100 flex items-center justify-center shadow-lg transition-all hover:scale-110"
@@ -644,30 +644,35 @@ export default function SwapPage() {
             </div>
 
             {/* To Token */}
-            <div className="p-5 rounded-2xl bg-black border border-white/10">
+            <div className={`p-5 rounded-2xl bg-black border border-white/10 transition-all ${
+              showToTokens ? 'relative z-[200]' : 'relative z-[1]'
+            }`}>
               <div className="flex items-center justify-between mb-3">
                 <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">To</span>
                 <span className="text-xs text-gray-500">Balance: {toToken.balance}</span>
               </div>
               
-              <div className="flex items-center gap-4 overflow-hidden">
-                <button
-                  onClick={() => setShowToTokens(!showToTokens)}
-                  className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 transition-all relative flex-shrink-0"
-                >
-                  <div className="w-6 h-6 rounded-full overflow-hidden bg-white flex items-center justify-center">
-                    <Image src={toToken.icon} alt={toToken.symbol} width={24} height={24} className="w-full h-full object-contain" />
-                  </div>
-                  <span className="font-bold text-sm">{toToken.symbol}</span>
-                  <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <polyline points="6 9 12 15 18 9" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
+              <div className="flex items-center gap-4">
+                <div className="relative flex-shrink-0">
+                  <button
+                    onClick={() => setShowToTokens(!showToTokens)}
+                    className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 transition-all"
+                    style={{ pointerEvents: 'auto', touchAction: 'manipulation' }}
+                  >
+                    <div className="w-6 h-6 rounded-full overflow-hidden bg-white flex items-center justify-center">
+                      <Image src={toToken.icon} alt={toToken.symbol} width={24} height={24} className="w-full h-full object-contain" />
+                    </div>
+                    <span className="font-bold text-sm">{toToken.symbol}</span>
+                    <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <polyline points="6 9 12 15 18 9" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </button>
 
                   {/* Token Dropdown */}
                   {showToTokens && (
                     <>
-                      <div className="fixed inset-0 z-40" onClick={closeToTokensDropdown} />
-                      <div className={`dropdown-menu absolute top-full left-0 mt-2 w-64 bg-black border border-white/10 rounded-xl shadow-2xl z-50 p-2 ${closingToTokens ? 'closing' : ''}`}>
+                      <div className="fixed inset-0 z-[100]" onClick={closeToTokensDropdown} />
+                      <div className={`dropdown-menu absolute top-full left-0 mt-2 w-64 bg-black border border-white/10 rounded-xl shadow-2xl z-[101] p-2 ${closingToTokens ? 'closing' : ''}`}>
                         {tokens.map((token) => (
                           <button
                             key={token.symbol}
@@ -690,7 +695,7 @@ export default function SwapPage() {
                       </div>
                     </>
                   )}
-                </button>
+                </div>
 
                 <input
                   type="text"
@@ -707,10 +712,7 @@ export default function SwapPage() {
                     WebkitTapHighlightColor: 'transparent',
                     pointerEvents: 'auto',
                     touchAction: 'manipulation',
-                    minWidth: 0,
-                    width: '100%',
-                    overflow: 'hidden',
-                    textOverflow: 'clip'
+                    minWidth: 0
                   }}
                 />
               </div>
