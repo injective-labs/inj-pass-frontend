@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>INJ Pass Iframe Test</title>
+  <meta http-equiv="Content-Security-Policy" content="frame-src http://localhost:3001">
+  <style>
+    body {
+      font-family: system-ui;
+      max-width: 800px;
+      margin: 50px auto;
+      padding: 20px;
+    }
+    button {
+      background: #7c3aed;
+      color: white;
+      border: none;
+      padding: 12px 24px;
+      border-radius: 8px;
+      font-size: 16px;
+      cursor: pointer;
+      margin: 10px 5px;
+    }
+    button:hover { background: #6d28d9; }
+    button:disabled { background: #ccc; cursor: not-allowed; }
+    #status {
+      margin-top: 20px;
+      padding: 20px;
+      background: #f3f4f6;
+      border-radius: 8px;
+      font-family: monospace;
+    }
+    .success { color: #10b981; font-weight: bold; }
+    .error { color: #ef4444; font-weight: bold; }
+  </style>
+</head>
+<body>
+  <h1>🧪 INJ Pass Iframe Integration Test</h1>
+  
+  <div>
+    <button id="connect">1. Connect Wallet</button>
+    <button id="sign" disabled>2. Sign Message</button>
+    <button id="disconnect" disabled>3. Disconnect</button>
+    <br>
+    <button id="show">Show Wallet</button>
+    <button id="hide">Hide Wallet</button>
+  </div>
+
+  <div id="status">
+    <p>Status: Waiting...</p>
+  </div>
+
+  <script type="module">
+    // 从 public 目录导入（已复制构建文件）
+    import { InjPassConnector } from '/injpass-connector/index.mjs';
+
+    const statusDiv = document.getElementById('status');
+    const connectBtn = document.getElementById('connect');
+    const signBtn = document.getElementById('sign');
+    const disconnectBtn = document.getElementById('disconnect');
+    
+    let wallet = null;
+
+    function log(message, type = 'info') {
+      const color = type === 'error' ? 'error' : type === 'success' ? 'success' : '';
+      const timestamp = new Date().toLocaleTimeString();
+      statusDiv.innerHTML += `<p class="${color}">[${timestamp}] ${message}</p>`;
+      console.log(`[${type}]`, message);
+    }
+
+    // 创建 connector
+    const connector = new InjPassConnector({
+      embedUrl: 'http://localhost:3001/embed',
+      mode: 'floating',
+      position: { bottom: '20px', right: '20px' },
+      size: { width: '400px', height: '300px' },
+      autoHide: false
+    });
+
+    log('✅ Connector created');
+
+    // Connect
+    connectBtn.onclick = async () => {
+      connectBtn.disabled = true;
+      log('🔌 Connecting...');
+
+      try {
+        wallet = await connector.connect();
+        log(`✅ Connected! Address: ${wallet.address}`, 'success');
+        log(`   Wallet Name: ${wallet.walletName || 'N/A'}`);
+        
+        connectBtn.disabled = true;
+        signBtn.disabled = false;
+        disconnectBtn.disabled = false;
+      } catch (error) {
+        log(`❌ Connection failed: ${error.message}`, 'error');
+        connectBtn.disabled = false;
+      }
+    };
+
+    // Sign
+    signBtn.onclick = async () => {
+      if (!wallet) return;
+
+      const message = prompt('Enter message to sign:', 'Hello INJ Pass!');
+      if (!message) return;
+
+      signBtn.disabled = true;
+      log(`✍️ Signing message: "${message}"...`);
+
+      try {
+        const signature = await wallet.signer.signMessage(message);
+        log(`✅ Signature received (${signature.length} bytes)`, 'success');
+        log(`   First 10 bytes: ${Array.from(signature).slice(0, 10).join(', ')}...`);
+        signBtn.disabled = false;
+      } catch (error) {
+        log(`❌ Signing failed: ${error.message}`, 'error');
+        signBtn.disabled = false;
+      }
+    };
+
+    // Disconnect
+    disconnectBtn.onclick = () => {
+      connector.disconnect();
+      wallet = null;
+      log('🔌 Disconnected', 'success');
+      
+      connectBtn.disabled = false;
+      signBtn.disabled = true;
+      disconnectBtn.disabled = true;
+    };
+
+    // Show/Hide
+    document.getElementById('show').onclick = () => {
+      connector.show();
+      log('👁️ Wallet shown');
+    };
+    document.getElementById('hide').onclick = () => {
+      connector.hide();
+      log('🙈 Wallet hidden');
+    };
+
+    log('Ready to test! Click "Connect Wallet"');
+  </script>
+</body>
+</html>

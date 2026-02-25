@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useWallet } from '@/contexts/WalletContext';
 import { createWeb3Provider, injectWeb3Provider } from '@/services/web3-provider';
+import { NETWORK_CONFIG } from '@/config/network';
 
 interface DAppBrowserProps {
   url: string;
@@ -24,7 +25,7 @@ export default function DAppBrowser({ url, name, onClose }: DAppBrowserProps) {
   useEffect(() => {
     const fetchProxyUrl = async () => {
       try {
-        const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001';
+        const backendUrl = NETWORK_CONFIG.backendUrl;
         const response = await fetch(
           `${backendUrl}/api/proxy/iframe-url?url=${encodeURIComponent(url)}`
         );
@@ -69,7 +70,7 @@ export default function DAppBrowser({ url, name, onClose }: DAppBrowserProps) {
         }
 
         try {
-          const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001';
+          const backendUrl = NETWORK_CONFIG.backendUrl;
           const response = await fetch(`${backendUrl}/api/web3/sign-message`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -108,7 +109,7 @@ export default function DAppBrowser({ url, name, onClose }: DAppBrowserProps) {
 
     setSigning(true);
     try {
-      const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001';
+      const backendUrl = NETWORK_CONFIG.backendUrl;
       const response = await fetch(`${backendUrl}/api/web3/sign-transaction`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

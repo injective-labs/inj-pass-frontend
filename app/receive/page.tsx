@@ -3,6 +3,7 @@
 import { useRouter } from 'next/navigation';
 import { useWallet } from '@/contexts/WalletContext';
 import { QRCodeSVG } from 'qrcode.react';
+import { ACTIVE_NETWORK } from '@/config/network';
 import { useState } from 'react';
 import LoadingSpinner from '@/components/LoadingSpinner';
 import { getInjectiveAddress } from '@injectivelabs/sdk-ts';
@@ -214,7 +215,7 @@ export default function ReceivePage() {
               </p>
               {addressType === 'cosmos' && (
                 <a
-                  href="https://bridge.injective.network/"
+                  href={ACTIVE_NETWORK.bridgeUrl}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="flex-shrink-0 text-yellow-400 hover:text-yellow-300 transition-colors"

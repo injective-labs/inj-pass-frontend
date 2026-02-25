@@ -19,6 +19,7 @@ import { sha256 } from '@noble/hashes/sha2.js';
 export interface CreateByPasskeyResult {
   address: string;
   credentialId: string;
+  walletName?: string;
 }
 
 /**
@@ -33,16 +34,15 @@ export interface CreateByPasskeyResult {
  * 6. Encrypt and save wallet
  */
 export async function createByPasskey(
-  username: string = 'user@injective-pass'
+  walletName?: string
 ): Promise<CreateByPasskeyResult> {
   try {
     // 1. Request challenge
     const { challenge, rpId, rpName } = await requestChallenge('register');
 
-    // 2. Create WebAuthn credential with deterministic userId
-    // Use SHA256 of username as userId to ensure same user → same credential
-    const userIdHash = sha256(new TextEncoder().encode(username));
-    const userId = new Uint8Array(userIdHash.buffer.slice(0)) as BufferSource;
+    // 2. Create WebAuthn credential with random userId
+    // Use random userId to prevent Passkey replacement when multiple wallets with same username
+    const userId = crypto.getRandomValues(new Uint8Array(32));
     
     const credential = await navigator.credentials.create({
       publicKey: {
@@ -50,8 +50,8 @@ export async function createByPasskey(
         rp: { id: rpId, name: rpName },
         user: {
           id: userId,
-          name: username,
-          displayName: username,
+          name: walletName || 'INJ Pass Wallet',
+          displayName: walletName || 'INJ Pass Wallet',
         },
         pubKeyCredParams: [
           { type: 'public-key', alg: -7 }, // ES256
@@ -73,16 +73,23 @@ export async function createByPasskey(
 
     const response = credential.response as AuthenticatorAttestationResponse;
 
-    // 3. Verify with backend
+    // 3. Derive wallet address from credential ID first (before verification)
+    // Use base64-encoded rawId as the credential identifier
+    const credentialIdBase64 = arrayBufferToBase64(credential.rawId);
+    const credentialIdBytes = new TextEncoder().encode(credentialIdBase64);
+    const walletEntropy = sha256(credentialIdBytes);
+    const { privateKey, address } = deriveSecp256k1(walletEntropy);
+
+    // 4. Verify with backend and send wallet address and wallet name
     const verifyResult = await verifyPasskey(challenge, {
-      id: arrayBufferToBase64(credential.rawId), // Use rawId, not credential.id
-      rawId: arrayBufferToBase64(credential.rawId),
+      id: credentialIdBase64,
+      rawId: credentialIdBase64,
       response: {
         clientDataJSON: arrayBufferToBase64(response.clientDataJSON),
         attestationObject: arrayBufferToBase64(response.attestationObject),
       },
       type: credential.type,
-    });
+    }, address, walletName); // Send wallet address and wallet name to backend
 
     if (!verifyResult.success || !verifyResult.credentialId) {
       throw new Error('Passkey verification failed');
@@ -92,12 +99,6 @@ export async function createByPasskey(
     if (verifyResult.token) {
       setAuthToken(verifyResult.token);
     }
-
-    // 4. Derive deterministic wallet private key from credential ID
-    // Same Passkey → Same credentialId → Same private key → Same address
-    const credentialIdBytes = new TextEncoder().encode(verifyResult.credentialId);
-    const walletEntropy = sha256(credentialIdBytes);
-    const { privateKey, address } = deriveSecp256k1(walletEntropy);
 
     // 5. Derive encryption key from credential ID (same as wallet entropy for simplicity)
     const encryptionEntropy = walletEntropy;
@@ -111,6 +112,7 @@ export async function createByPasskey(
       source: 'passkey',
       credentialId: verifyResult.credentialId,
       createdAt: Date.now(),
+      walletName: verifyResult.walletName,
     };
 
     saveWallet(keystore);
@@ -118,6 +120,7 @@ export async function createByPasskey(
     return {
       address,
       credentialId: verifyResult.credentialId,
+      walletName: verifyResult.walletName,
     };
   } catch (error) {
     throw new Error(
@@ -183,6 +186,13 @@ export async function unlockByPasskey(credentialId: string): Promise<Uint8Array>
     // Save auth token for session management
     if (verifyResult.token) {
       setAuthToken(verifyResult.token);
+    }
+
+    // If wallet address is returned from backend, you can use it here
+    // This allows recovering the wallet address even if localStorage is cleared
+    if (verifyResult.walletAddress) {
+      // Store or return the wallet address for recovery purposes
+      console.log('Recovered wallet address from backend:', verifyResult.walletAddress);
     }
 
     // 4. Derive decryption key

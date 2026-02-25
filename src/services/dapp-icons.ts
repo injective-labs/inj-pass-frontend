@@ -3,6 +3,8 @@
  * Fetches and caches DApp icons/logos
  */
 
+import { NETWORK_CONFIG } from '@/config/network';
+
 // Cache for DApp icons
 const iconCache = new Map<string, string>();
 
@@ -26,7 +28,7 @@ export function getDAppIconUrl(url: string): string {
       `${urlObj.origin}/apple-touch-icon.png`,
       `${urlObj.origin}/logo.png`,
       // Google's favicon service as fallback
-      `https://www.google.com/s2/favicons?domain=${domain}&sz=128`,
+      `${NETWORK_CONFIG.faviconService}${domain}&sz=128`,
     ];
 
     // Return the first URL (we'll use onError in Image component to try next)
@@ -36,7 +38,7 @@ export function getDAppIconUrl(url: string): string {
   } catch (error) {
     console.error('[DAppIcons] Failed to get icon URL:', error);
     // Return Google favicon service as ultimate fallback
-    return `https://www.google.com/s2/favicons?domain=${url}&sz=128`;
+    return `${NETWORK_CONFIG.faviconService}${url}&sz=128`;
   }
 }
 

@@ -2,6 +2,8 @@ export { deriveSecp256k1, fromHex, toHex, isValidAddress, isValidPrivateKeyHex }
 export { createByPasskey, unlockByPasskey } from './createByPasskey';
 export { createByNFC, unlockByNFC, readNFCTag, isNFCSupported } from './createByNFC';
 export { importPrivateKey, validatePrivateKey } from './importPrivateKey';
+export { recoverWalletAddress, recoverFullWallet } from './recoverByPasskey';
 export type { CreateByPasskeyResult } from './createByPasskey';
 export type { CreateByNFCResult } from './createByNFC';
 export type { ImportResult } from './importPrivateKey';
+export type { RecoverByPasskeyResult } from './recoverByPasskey';

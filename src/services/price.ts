@@ -2,6 +2,8 @@
  * Price service for fetching real-time cryptocurrency prices
  */
 
+import { NETWORK_CONFIG } from '@/config/network';
+
 export interface TokenPrice {
   usd: number;
   usd24hChange?: number;
@@ -27,7 +29,7 @@ export async function getInjPrice(): Promise<number> {
   try {
     // Using CoinGecko public API (no API key required)
     const response = await fetch(
-      'https://api.coingecko.com/api/v3/simple/price?ids=injective-protocol&vs_currencies=usd&include_24hr_change=true',
+      `${NETWORK_CONFIG.coingeckoApi}/simple/price?ids=injective-protocol&vs_currencies=usd&include_24hr_change=true`,
       {
         headers: {
           'Accept': 'application/json',
@@ -85,7 +87,7 @@ export async function getTokenPrice(tokenId: string = 'injective-protocol'): Pro
 
   try {
     const response = await fetch(
-      `https://api.coingecko.com/api/v3/simple/price?ids=${tokenId}&vs_currencies=usd&include_24hr_change=true`,
+      `${NETWORK_CONFIG.coingeckoApi}/simple/price?ids=${tokenId}&vs_currencies=usd&include_24hr_change=true`,
       {
         headers: {
           'Accept': 'application/json',

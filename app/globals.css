@@ -806,9 +806,8 @@ body.sidebar-mode .sidebar-overlay {
   animation: lambdaGradientShift 20s ease-in-out infinite;
   display: inline-block;
   font-weight: 700;
-  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3)) 
-          drop-shadow(0 4px 8px rgba(0, 0, 0, 0.2))
-          drop-shadow(0 8px 16px rgba(0, 0, 0, 0.15));
+  filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.2)) 
+          drop-shadow(0 3px 6px rgba(0, 0, 0, 0.12));
 }
 
 /* 3D Text Effect for Hero Title */
@@ -1052,23 +1051,21 @@ body.sidebar-mode .sidebar-overlay {
   animation: slideDown 0.3s ease-in forwards;
 }
 
-/* Tunnel title glow effect */
+/* Tunnel title glow effect — softened */
 @keyframes tunnelTitleGlow {
   0%, 100% {
     text-shadow: 
-      0 0 10px rgba(255, 255, 255, 0.3),
-      0 0 20px rgba(124, 58, 237, 0.3),
-      0 0 30px rgba(124, 58, 237, 0.2),
-      0 0 40px rgba(124, 58, 237, 0.1),
-      0 5px 10px rgba(0, 0, 0, 0.5);
+      0 0 6px rgba(255, 255, 255, 0.12),
+      0 0 12px rgba(124, 58, 237, 0.12),
+      0 0 20px rgba(124, 58, 237, 0.08),
+      0 4px 8px rgba(0, 0, 0, 0.4);
   }
   50% {
     text-shadow: 
-      0 0 15px rgba(255, 255, 255, 0.5),
-      0 0 30px rgba(124, 58, 237, 0.5),
-      0 0 45px rgba(124, 58, 237, 0.3),
-      0 0 60px rgba(124, 58, 237, 0.2),
-      0 5px 15px rgba(0, 0, 0, 0.6);
+      0 0 8px rgba(255, 255, 255, 0.18),
+      0 0 18px rgba(124, 58, 237, 0.18),
+      0 0 28px rgba(124, 58, 237, 0.12),
+      0 4px 10px rgba(0, 0, 0, 0.5);
   }
 }
 

@@ -1,0 +1,34 @@
+{
+  "name": "@injpass/connector",
+  "version": "2.0.0",
+  "description": "Lightweight SDK for embedding INJ Pass wallet in dApps - Now with popup-based authentication",
+  "main": "dist/index.js",
+  "module": "dist/index.mjs",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup src/index.ts --format cjs,esm --dts",
+    "dev": "tsup src/index.ts --format cjs,esm --dts --watch",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "injective",
+    "wallet",
+    "passkey",
+    "webauthn",
+    "connector",
+    "iframe"
+  ],
+  "author": "INJ Pass Team",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/injective/inj-pass"
+  },
+  "devDependencies": {
+    "tsup": "^8.0.1",
+    "typescript": "^5.3.3"
+  }
+}

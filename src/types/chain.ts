@@ -4,6 +4,8 @@
 
 import type { Chain } from 'viem';
 
+import { NETWORK_CONFIG } from '@/config/network';
+
 export interface ChainConfig {
   id: number;
   name: string;
@@ -67,11 +69,11 @@ export interface GasEstimate {
 
 // Injective EVM Testnet
 export const INJECTIVE_TESTNET: ChainConfig = {
-  id: 1439,
-  name: 'Injective EVM Testnet',
-  rpcUrl: 'https://k8s.testnet.json-rpc.injective.network/',
-  explorerUrl: 'https://testnet.blockscout.injective.network',
-  explorerApiUrl: 'https://testnet.blockscout-api.injective.network',
+  id: NETWORK_CONFIG.testnet.chainId,
+  name: NETWORK_CONFIG.testnet.name,
+  rpcUrl: NETWORK_CONFIG.testnet.rpcUrl,
+  explorerUrl: NETWORK_CONFIG.testnet.explorerUrl,
+  explorerApiUrl: NETWORK_CONFIG.testnet.explorerApiUrl,
   nativeCurrency: {
     name: 'Injective',
     symbol: 'INJ',
@@ -81,11 +83,11 @@ export const INJECTIVE_TESTNET: ChainConfig = {
 
 // Injective EVM Mainnet - CORRECT Configuration
 export const INJECTIVE_MAINNET: ChainConfig = {
-  id: 1776,  // Correct Chain ID for Injective EVM Mainnet
-  name: 'Injective EVM',
-  rpcUrl: 'https://sentry.evm-rpc.injective.network/',
-  explorerUrl: 'https://blockscout.injective.network',
-  explorerApiUrl: 'https://blockscout-api.injective.network',
+  id: NETWORK_CONFIG.mainnet.chainId,
+  name: NETWORK_CONFIG.mainnet.name,
+  rpcUrl: NETWORK_CONFIG.mainnet.rpcUrl,
+  explorerUrl: NETWORK_CONFIG.mainnet.explorerUrl,
+  explorerApiUrl: NETWORK_CONFIG.mainnet.explorerApiUrl,
   nativeCurrency: {
     name: 'Injective',
     symbol: 'INJ',
@@ -95,8 +97,8 @@ export const INJECTIVE_MAINNET: ChainConfig = {
 
 // Viem-compatible Chain configs for DEX swap - MAINNET (CORRECT)
 export const INJECTIVE_MAINNET_CHAIN: Chain = {
-  id: 1776,  // Correct Chain ID
-  name: 'Injective EVM',
+  id: NETWORK_CONFIG.mainnet.chainId,
+  name: NETWORK_CONFIG.mainnet.name,
   nativeCurrency: {
     name: 'Injective',
     symbol: 'INJ',
@@ -104,20 +106,20 @@ export const INJECTIVE_MAINNET_CHAIN: Chain = {
   },
   rpcUrls: {
     default: { 
-      http: ['https://sentry.evm-rpc.injective.network/']
+      http: [NETWORK_CONFIG.mainnet.rpcUrl]
     },
   },
   blockExplorers: {
     default: { 
       name: 'Blockscout', 
-      url: 'https://blockscout.injective.network' 
+      url: NETWORK_CONFIG.mainnet.explorerUrl 
     },
   },
 };
 
 export const INJECTIVE_TESTNET_CHAIN: Chain = {
-  id: 1439,
-  name: 'Injective EVM Testnet',
+  id: NETWORK_CONFIG.testnet.chainId,
+  name: NETWORK_CONFIG.testnet.name,
   nativeCurrency: {
     name: 'Injective',
     symbol: 'INJ',
@@ -125,13 +127,13 @@ export const INJECTIVE_TESTNET_CHAIN: Chain = {
   },
   rpcUrls: {
     default: { 
-      http: ['https://k8s.testnet.json-rpc.injective.network/']
+      http: [NETWORK_CONFIG.testnet.rpcUrl]
     },
   },
   blockExplorers: {
     default: { 
       name: 'Blockscout', 
-      url: 'https://testnet.blockscout.injective.network' 
+      url: NETWORK_CONFIG.testnet.explorerUrl 
     },
   },
 };

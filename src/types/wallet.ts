@@ -7,6 +7,7 @@ export interface LocalKeystore {
   credentialId?: string; // Passkey only
   nfcUID?: string; // NFC only
   createdAt: number; // Unix timestamp
+  walletName?: string; // Display name for the wallet
 }
 
 export interface Wallet {

@@ -41,3 +41,8 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# temp sdk
+/packages
+/packages/injpass-connector
+/public/injpass-connector
