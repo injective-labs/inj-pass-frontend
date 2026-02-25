@@ -21,11 +21,11 @@ export const metadata: Metadata = {
   description: "Passkey-powered wallet for Injective",
   icons: {
     icon: [
-      { url: "/lambdalogo.png" },
-      { url: "/lambdalogo.png", sizes: "32x32", type: "image/png" },
-      { url: "/lambdalogo.png", sizes: "16x16", type: "image/png" },
+      { url: "/lambda.png" },
+      { url: "/lambda.png", sizes: "32x32", type: "image/png" },
+      { url: "/lambda.png", sizes: "16x16", type: "image/png" },
     ],
-    apple: "/lambdalogo.png",
+    apple: "/lambda.png",
   },
   appleWebApp: {
     capable: true,
