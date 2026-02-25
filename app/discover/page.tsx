@@ -38,20 +38,20 @@ export default function DiscoverPage() {
     },
     {
       id: '2',
-      name: 'INJ Ecosystem',
-      description: 'Explore the Injective Ecosystem',
-      icon: 'https://www.google.com/s2/favicons?domain=injective.com&sz=128',
+      name: 'Name Service',
+      description: '.inj Domain Names',
+      icon: 'https://www.google.com/s2/favicons?domain=inj.space.id&sz=128',
       category: 'defi',
-      url: 'https://injective.com',
+      url: 'https://www.inj.space.id/',
       featured: true
     },
     {
       id: '3',
-      name: 'Astroport',
-      description: 'AMM & DEX Protocol',
-      icon: 'https://www.google.com/s2/favicons?domain=astroport.fi&sz=128',
+      name: 'Paradyze',
+      description: 'Yield & Structured Products',
+      icon: 'https://www.google.com/s2/favicons?domain=paradyze.io&sz=128',
       category: 'defi',
-      url: 'https://astroport.fi'
+      url: 'https://www.paradyze.io/'
     },
     {
       id: '4',
@@ -89,11 +89,11 @@ export default function DiscoverPage() {
     },
     {
       id: '7',
-      name: 'DojoSwap',
-      description: 'Swap & Earn Rewards',
-      icon: 'https://www.google.com/s2/favicons?domain=dojoswap.xyz&sz=128',
+      name: 'Choice',
+      description: 'DEX Aggregator & Vaults',
+      icon: 'https://www.google.com/s2/favicons?domain=choice.exchange&sz=128',
       category: 'defi',
-      url: 'https://dojoswap.xyz'
+      url: 'https://choice.exchange'
     }
   ];
 

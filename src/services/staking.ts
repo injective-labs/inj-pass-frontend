@@ -181,35 +181,38 @@ async function fetchRewards(injAddress: string): Promise<string> {
 
 /**
  * Fetch current staking APR
+ * Uses annual_provisions / bonded_tokens (both in base units) for accuracy.
+ * Injective uses near-zero on-chain inflation; rewards come from fee distribution,
+ * so annual_provisions is the correct numerator.
  */
 async function fetchStakingApr(): Promise<string> {
   try {
-    // Fetch staking pool and inflation data
-    const [poolResponse, inflationResponse] = await Promise.all([
+    const [poolResponse, annualProvisionsResponse] = await Promise.all([
       fetch(`${INJECTIVE_API}/cosmos/staking/v1beta1/pool`),
-      fetch(`${INJECTIVE_API}/cosmos/mint/v1beta1/inflation`),
+      fetch(`${INJECTIVE_API}/cosmos/mint/v1beta1/annual_provisions`),
     ]);
 
-    if (!poolResponse.ok || !inflationResponse.ok) {
+    if (!poolResponse.ok || !annualProvisionsResponse.ok) {
       throw new Error('Failed to fetch staking parameters');
     }
 
     const poolData = await poolResponse.json();
-    const inflationData = await inflationResponse.json();
+    const provisionsData = await annualProvisionsResponse.json();
 
+    // Both values are in base units (inj = 1e-18 INJ), so the ratio is unit-free
     const bondedTokens = parseFloat(poolData.pool.bonded_tokens);
-    const totalSupply = 100000000; // INJ total supply (100M)
-    const inflation = parseFloat(inflationData.inflation);
+    const annualProvisions = parseFloat(provisionsData.annual_provisions);
 
-    // Calculate APR: (inflation * total_supply) / bonded_tokens * 100
-    const apr = (inflation * totalSupply) / bondedTokens * 100;
+    if (bondedTokens > 0 && annualProvisions > 0) {
+      const apr = (annualProvisions / bondedTokens) * 100;
+      return apr.toFixed(2);
+    }
 
-    return apr.toFixed(2);
+    throw new Error('Invalid staking data');
   } catch (error) {
     console.error('[Staking] Failed to fetch APR:', error);
-    
-    // Return approximate average APR if fetch fails
-    return '12.50';
+    // Return approximate APR if calculation fails
+    return '8.87';
   }
 }
 

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { createByPasskey } from '@/wallet/key-management';
@@ -19,10 +19,19 @@ export default function WelcomePage() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [walletNameInput, setWalletNameInput] = useState('');
   const [walletExists, setWalletExists] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     setWalletExists(hasWallet());
   }, []);
+
+  // Focus the input shortly after it fades in
+  useEffect(() => {
+    if (showCreateModal) {
+      const t = setTimeout(() => inputRef.current?.focus(), 60);
+      return () => clearTimeout(t);
+    }
+  }, [showCreateModal]);
 
   const handleCreateWallet = async () => {
     if (!walletNameInput.trim()) {
@@ -142,22 +151,86 @@ export default function WelcomePage() {
           )}
 
           <div className="flex flex-col gap-4 w-full max-w-md mx-auto animate-fade-in">
-            <button
-              onClick={() => setShowCreateModal(true)}
-              disabled={loading}
-              className="flex items-center justify-center gap-2 md:gap-3 bg-white text-black rounded-2xl px-6 md:px-8 py-4 text-sm md:text-base font-bold cursor-pointer transition-all shadow-lg hover:bg-gray-100 hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 whitespace-nowrap tracking-wide"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4 md:w-5 md:h-5 flex-shrink-0">
-                <line x1="12" y1="5" x2="12" y2="19" />
-                <line x1="5" y1="12" x2="19" y2="12" />
-              </svg>
-              <span>CREATE NEW WALLET</span>
-            </button>
 
+            {/*
+              Slot 1: CREATE NEW WALLET button swaps with wallet-name input.
+              Both share the same grid cell so RECOVER WALLET never shifts.
+            */}
+            <div className="grid">
+              {/* CREATE NEW WALLET button */}
+              <div
+                style={{ gridArea: '1 / 1' }}
+                className={`transition-all duration-300 ease-in-out ${
+                  showCreateModal
+                    ? 'opacity-0 -translate-y-1 scale-95 pointer-events-none'
+                    : 'opacity-100 translate-y-0 scale-100'
+                }`}
+              >
+                <button
+                  onClick={() => setShowCreateModal(true)}
+                  disabled={loading}
+                  className="w-full flex items-center justify-center gap-2 md:gap-3 bg-white text-black rounded-2xl px-6 md:px-8 py-4 text-sm md:text-base font-bold cursor-pointer transition-colors shadow-lg hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap tracking-wide"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4 md:w-5 md:h-5 flex-shrink-0">
+                    <line x1="12" y1="5" x2="12" y2="19" />
+                    <line x1="5" y1="12" x2="19" y2="12" />
+                  </svg>
+                  <span>CREATE NEW WALLET</span>
+                </button>
+              </div>
+
+              {/* Wallet-name input (fades in when showCreateModal = true) */}
+              <div
+                style={{ gridArea: '1 / 1' }}
+                className={`transition-all duration-300 ease-in-out ${
+                  showCreateModal
+                    ? 'opacity-100 translate-y-0 scale-100'
+                    : 'opacity-0 translate-y-1 scale-95 pointer-events-none'
+                }`}
+              >
+                <div className="relative bg-white rounded-2xl shadow-lg">
+                  <input
+                    ref={inputRef}
+                    type="text"
+                    value={walletNameInput}
+                    onChange={(e) => setWalletNameInput(e.target.value)}
+                    placeholder="Wallet name…"
+                    className="w-full bg-transparent pl-5 pr-14 py-4 text-black text-sm md:text-base font-bold placeholder-black/40 focus:outline-none rounded-2xl"
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && walletNameInput.trim()) handleCreateWallet();
+                      if (e.key === 'Escape') {
+                        setShowCreateModal(false);
+                        setWalletNameInput('');
+                        setError('');
+                      }
+                    }}
+                  />
+                  {/* Submit arrow button */}
+                  <button
+                    onClick={handleCreateWallet}
+                    disabled={loading || !walletNameInput.trim()}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 p-2 rounded-xl hover:bg-black/8 transition-colors disabled:opacity-25 disabled:cursor-not-allowed"
+                    title="Continue"
+                  >
+                    {loading ? (
+                      <svg className="w-5 h-5 text-black animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                      </svg>
+                    ) : (
+                      <svg className="w-5 h-5 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
+                      </svg>
+                    )}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* RECOVER WALLET */}
             <button
               onClick={handleRecoverWallet}
               disabled={loading}
-              className="flex items-center justify-center gap-2 md:gap-3 bg-white/10 backdrop-blur-sm text-white border border-white/20 rounded-2xl px-6 md:px-8 py-4 text-sm md:text-base font-bold cursor-pointer transition-all hover:bg-white/20 hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 whitespace-nowrap tracking-wide"
+              className="flex items-center justify-center gap-2 md:gap-3 bg-white/8 backdrop-blur-sm text-white border border-white/15 rounded-2xl px-6 md:px-8 py-4 text-sm md:text-base font-bold cursor-pointer transition-all hover:bg-white/15 hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 whitespace-nowrap tracking-wide"
             >
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4 md:w-5 md:h-5 flex-shrink-0">
                 <path d="M21 2v6h-6" />
@@ -167,52 +240,28 @@ export default function WelcomePage() {
               </svg>
               <span>{loading ? 'RECOVERING...' : 'RECOVER WALLET'}</span>
             </button>
-          </div>
 
-          {/* Create Wallet Modal */}
-          {showCreateModal && (
-            <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-              <div className="bg-gradient-to-br from-gray-900 to-black border border-white/10 rounded-3xl p-6 md:p-8 max-w-md w-full shadow-2xl">
-                <h2 className="text-2xl md:text-3xl font-bold text-white mb-2">Create Wallet</h2>
-                <p className="text-gray-400 text-sm mb-6">Choose a name for your new wallet</p>
-                
-                <input
-                  type="text"
-                  value={walletNameInput}
-                  onChange={(e) => setWalletNameInput(e.target.value)}
-                  placeholder="e.g., My Main Wallet"
-                  className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-white/30 transition-colors mb-6"
-                  autoFocus
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && walletNameInput.trim()) {
-                      handleCreateWallet();
-                    }
-                  }}
-                />
-                
-                <div className="flex gap-3">
-                  <button
-                    onClick={() => {
-                      setShowCreateModal(false);
-                      setWalletNameInput('');
-                      setError('');
-                    }}
-                    disabled={loading}
-                    className="flex-1 bg-white/5 border border-white/10 text-white rounded-xl px-4 py-3 font-semibold hover:bg-white/10 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={handleCreateWallet}
-                    disabled={loading || !walletNameInput.trim()}
-                    className="flex-1 bg-white text-black rounded-xl px-4 py-3 font-bold hover:bg-gray-100 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {loading ? 'Creating...' : 'Create'}
-                  </button>
-                </div>
-              </div>
+            {/* Back link — fades in when wallet name input is shown */}
+            <div
+              className={`transition-all duration-300 ease-in-out ${
+                showCreateModal
+                  ? 'opacity-100'
+                  : 'opacity-0 pointer-events-none'
+              }`}
+            >
+              <button
+                onClick={() => {
+                  setShowCreateModal(false);
+                  setWalletNameInput('');
+                  setError('');
+                }}
+                className="w-full text-gray-400 text-sm hover:text-white transition-colors text-center py-1"
+              >
+                ← Back
+              </button>
             </div>
-          )}
+
+          </div>
         </div>
       </div>
 

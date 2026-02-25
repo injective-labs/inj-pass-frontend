@@ -9,6 +9,7 @@ import { INJECTIVE_MAINNET, GasEstimate } from '@/types/chain';
 import { isNFCSupported, readNFCCard } from '@/services/nfc';
 import LoadingSpinner from '@/components/LoadingSpinner';
 import TransactionAuthModal from '@/components/TransactionAuthModal';
+import { getInjectiveAddress, getEthereumAddress } from '@injectivelabs/sdk-ts';
 
 interface AddressBookEntry {
   name: string;
@@ -190,97 +191,17 @@ function SendPageContent() {
     return address.startsWith('inj1') && address.length >= 40;
   };
 
-  // Bech32 decoding
-  const bech32Decode = (address: string): Uint8Array | null => {
-    try {
-      const charset = 'qpzry9x8gf2tvdw0s3jn54khce6mua7l';
-      const separator = address.lastIndexOf('1');
-      if (separator === -1) return null;
-      
-      const data = address.slice(separator + 1);
-      const decoded = data.split('').map(c => charset.indexOf(c));
-      if (decoded.some(d => d === -1)) return null;
-      
-      // Convert 5-bit groups to 8-bit bytes
-      const bytes: number[] = [];
-      let accumulator = 0;
-      let bits = 0;
-      
-      for (let i = 0; i < decoded.length - 6; i++) {
-        accumulator = (accumulator << 5) | decoded[i];
-        bits += 5;
-        if (bits >= 8) {
-          bits -= 8;
-          bytes.push((accumulator >> bits) & 255);
-        }
-      }
-      
-      return new Uint8Array(bytes);
-    } catch {
-      return null;
-    }
-  };
-
-  // Bech32 encoding
-  const bech32Encode = (prefix: string, data: Uint8Array): string => {
-    const charset = 'qpzry9x8gf2tvdw0s3jn54khce6mua7l';
-    const generator = [0x3b6a57b2, 0x26508e6d, 0x1ea119fa, 0x3d4233dd, 0x2a1462b3];
-    
-    // Convert 8-bit bytes to 5-bit groups
-    const converted: number[] = [];
-    let accumulator = 0;
-    let bits = 0;
-    
-    for (const value of data) {
-      accumulator = (accumulator << 8) | value;
-      bits += 8;
-      while (bits >= 5) {
-        bits -= 5;
-        converted.push((accumulator >> bits) & 31);
-      }
-    }
-    
-    if (bits > 0) {
-      converted.push((accumulator << (5 - bits)) & 31);
-    }
-    
-    // Calculate checksum
-    const polymod = (values: number[]): number => {
-      let chk = 1;
-      for (const value of values) {
-        const top = chk >> 25;
-        chk = ((chk & 0x1ffffff) << 5) ^ value;
-        for (let i = 0; i < 5; i++) {
-          if ((top >> i) & 1) {
-            chk ^= generator[i];
-          }
-        }
-      }
-      return chk;
-    };
-    
-    const prefixData = prefix.split('').map(c => c.charCodeAt(0) & 31);
-    const checksum = polymod([...prefixData, 0, ...converted, ...Array(6).fill(0)]) ^ 1;
-    const checksumData = Array(6).fill(0).map((_, i) => (checksum >> (5 * (5 - i))) & 31);
-    
-    return prefix + '1' + [...converted, ...checksumData].map(d => charset[d]).join('');
-  };
-
-  // Convert between EVM and Cosmos addresses
+  // Convert between EVM and Cosmos addresses using official Injective SDK
   const convertAddress = () => {
     try {
       if (isEvmAddress(recipient)) {
-        // EVM to Cosmos
-        const hexAddress = recipient.slice(2).toLowerCase();
-        const bytes = new Uint8Array(hexAddress.match(/.{1,2}/g)!.map(byte => parseInt(byte, 16)));
-        const cosmosAddress = bech32Encode('inj', bytes);
+        // EVM to Cosmos using official SDK (same as receive page)
+        const cosmosAddress = getInjectiveAddress(recipient);
         setRecipient(cosmosAddress);
       } else if (isCosmosAddress(recipient)) {
-        // Cosmos to EVM
-        const bytes = bech32Decode(recipient);
-        if (!bytes) throw new Error('Invalid bech32 address');
-        const hexAddress = '0x' + Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('');
-        setRecipient(hexAddress);
+        // Cosmos to EVM using official SDK
+        const evmAddress = getEthereumAddress(recipient);
+        setRecipient(evmAddress);
       }
     } catch (err) {
       setError('Failed to convert address');
@@ -288,14 +209,12 @@ function SendPageContent() {
     }
   };
 
-  // Convert cosmos address to EVM for gas estimation
+  // Convert cosmos address to EVM for gas estimation using official SDK
   const getEvmAddress = useCallback((address: string): string => {
     if (isEvmAddress(address)) return address;
     if (isCosmosAddress(address)) {
       try {
-        const bytes = bech32Decode(address);
-        if (!bytes) return address;
-        return '0x' + Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('');
+        return getEthereumAddress(address);
       } catch {
         return address;
       }
