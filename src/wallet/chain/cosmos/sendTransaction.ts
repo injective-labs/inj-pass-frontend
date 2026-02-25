@@ -11,8 +11,10 @@ import {
   BaseAccount,
   PrivateKey,
 } from '@injectivelabs/sdk-ts';
-const COSMOS_LCD = 'https://lcd.injective.network';
-const COSMOS_CHAIN_ID = 'injective-1';
+import { ACTIVE_NETWORK } from '@/config/network';
+
+const COSMOS_LCD = ACTIVE_NETWORK.lcdUrl;
+const COSMOS_CHAIN_ID = ACTIVE_NETWORK.cosmosChainId;
 
 const DEFAULT_FEE = {
   amount: [{ denom: 'inj', amount: '5000000000000000' }],

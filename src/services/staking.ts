@@ -6,9 +6,11 @@
 import { Address } from 'viem';
 import { getInjectiveAddress } from '@injectivelabs/sdk-ts';
 
+import { ACTIVE_NETWORK, NETWORK_CONFIG } from '@/config/network';
+
 // Injective API endpoints
-const INJECTIVE_API = 'https://lcd.injective.network';
-const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001';
+const INJECTIVE_API = ACTIVE_NETWORK.lcdUrl;
+const BACKEND_URL = NETWORK_CONFIG.backendUrl;
 
 export interface StakingInfo {
   totalStaked: string; // Total INJ staked

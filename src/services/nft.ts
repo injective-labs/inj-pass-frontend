@@ -9,6 +9,7 @@ import {
   http,
   type Address,
 } from 'viem';
+import { NETWORK_CONFIG } from '@/config/network';
 import { INJECTIVE_MAINNET_CHAIN } from '@/types/chain';
 
 // N1NJ4 NFT Contract Address on Injective EVM
@@ -106,7 +107,7 @@ async function fetchMetadata(tokenURI: string): Promise<NFTMetadata | null> {
     // Handle IPFS URIs
     let url = tokenURI;
     if (tokenURI.startsWith('ipfs://')) {
-      url = tokenURI.replace('ipfs://', 'https://ipfs.io/ipfs/');
+      url = tokenURI.replace('ipfs://', NETWORK_CONFIG.ipfsGateway);
     }
 
     const response = await fetch(url);
@@ -119,7 +120,7 @@ async function fetchMetadata(tokenURI: string): Promise<NFTMetadata | null> {
     
     // Handle IPFS image URLs in metadata
     if (metadata.image?.startsWith('ipfs://')) {
-      metadata.image = metadata.image.replace('ipfs://', 'https://ipfs.io/ipfs/');
+      metadata.image = metadata.image.replace('ipfs://', NETWORK_CONFIG.ipfsGateway);
     }
 
     return metadata;

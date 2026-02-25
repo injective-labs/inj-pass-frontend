@@ -9,6 +9,7 @@
 import { NFT } from '@/services/nft';
 import Image from 'next/image';
 import { useState } from 'react';
+import { ACTIVE_NETWORK } from '@/config/network';
 
 interface NFTDetailModalProps {
   nft: NFT;
@@ -154,7 +155,7 @@ export default function NFTDetailModal({ nft, onClose }: NFTDetailModalProps) {
 
             {/* View on Explorer */}
             <a
-              href={`https://blockscout.injective.network/token/${nft.contractAddress}/instance/${nft.tokenId}`}
+              href={`${ACTIVE_NETWORK.explorerUrl}/token/${nft.contractAddress}/instance/${nft.tokenId}`}
               target="_blank"
               rel="noopener noreferrer"
               className="flex items-center justify-center gap-2 w-full py-3 px-4 rounded-xl bg-white/5 border border-white/10 text-white font-bold hover:bg-white/10 transition-all"

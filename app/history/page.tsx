@@ -6,6 +6,7 @@ import { useState, useEffect } from 'react';
 import { getTxHistory } from '@/wallet/chain';
 import { getCosmosTxHistory } from '@/wallet/chain/cosmos';
 import { INJECTIVE_MAINNET } from '@/types/chain';
+import { ACTIVE_NETWORK } from '@/config/network';
 import LoadingSpinner from '@/components/LoadingSpinner';
 import { getInjectiveAddress } from '@injectivelabs/sdk-ts';
 
@@ -323,10 +324,10 @@ export default function HistoryPage() {
                       // Open transaction in explorer based on chain type
                       if (tx.chainType === 'EVM') {
                         // EVM transactions use Blockscout
-                        window.open(`${INJECTIVE_MAINNET.explorerUrl}/tx/${tx.txHash}`, '_blank');
+                        window.open(`${ACTIVE_NETWORK.explorerUrl}/tx/${tx.txHash}`, '_blank');
                       } else {
                         // Cosmos transactions use Injective Explorer
-                        window.open(`https://explorer.injective.network/transaction/${tx.txHash}`, '_blank');
+                        window.open(`${ACTIVE_NETWORK.cosmosExplorerUrl}/transaction/${tx.txHash}`, '_blank');
                       }
                     }
                   }}

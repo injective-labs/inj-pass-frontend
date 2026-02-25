@@ -5,18 +5,8 @@ import { useWallet } from '@/contexts/WalletContext';
 import { useState, useEffect } from 'react';
 import AccountHeader from '../components/AccountHeader';
 import LoadingSpinner from '@/components/LoadingSpinner';
-
-type DAppCategory = 'all' | 'defi' | 'nft' | 'game' | 'social' | 'dao';
-
-interface DApp {
-  id: string;
-  name: string;
-  description: string;
-  icon: string;
-  category: DAppCategory;
-  url: string;
-  featured?: boolean;
-}
+import { DAPPS, DApp, DAppCategory } from '@/config/dapps';
+import { NETWORK_CONFIG } from '@/config/network';
 
 export default function DiscoverPage() {
   const router = useRouter();
@@ -25,77 +15,13 @@ export default function DiscoverPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState<'settings' | 'wallet' | 'discover'>('discover');
 
-  // DApp data with Google Favicon Service (more reliable)
-  const dapps: DApp[] = [
-    {
-      id: '1',
-      name: 'Helix',
-      description: 'Decentralized Derivatives Trading',
-      icon: 'https://www.google.com/s2/favicons?domain=helixapp.com&sz=128',
-      category: 'defi',
-      url: 'https://helixapp.com',
-      featured: true
-    },
-    {
-      id: '2',
-      name: 'Name Service',
-      description: '.inj Domain Names',
-      icon: 'https://www.google.com/s2/favicons?domain=inj.space.id&sz=128',
-      category: 'defi',
-      url: 'https://www.inj.space.id/',
-      featured: true
-    },
-    {
-      id: '3',
-      name: 'Paradyze',
-      description: 'Yield & Structured Products',
-      icon: 'https://www.google.com/s2/favicons?domain=paradyze.io&sz=128',
-      category: 'defi',
-      url: 'https://www.paradyze.io/'
-    },
-    {
-      id: '4',
-      name: 'Talis',
-      description: 'NFT Marketplace',
-      icon: 'https://www.google.com/s2/favicons?domain=talis.art&sz=128',
-      category: 'nft',
-      url: 'https://talis.art',
-      featured: true
-    },
-    {
-      id: '5',
-      name: 'Rarible',
-      description: 'Multichain NFT Marketplace',
-      icon: 'https://www.google.com/s2/favicons?domain=rarible.com&sz=128',
-      category: 'nft',
-      url: 'https://rarible.com',
-      featured: true
-    },
-    {
-      id: '8',
-      name: 'n1nj4',
-      description: 'NFT Marketplace',
-      icon: 'https://www.google.com/s2/favicons?domain=n1nj4.fun&sz=128',
-      category: 'nft',
-      url: 'https://www.n1nj4.fun/'
-    },
-    {
-      id: '6',
-      name: 'Injective Hub',
-      description: 'Governance & Staking',
-      icon: 'https://www.google.com/s2/favicons?domain=hub.injective.network&sz=128',
-      category: 'dao',
-      url: 'https://hub.injective.network'
-    },
-    {
-      id: '7',
-      name: 'Choice',
-      description: 'DEX Aggregator & Vaults',
-      icon: 'https://www.google.com/s2/favicons?domain=choice.exchange&sz=128',
-      category: 'defi',
-      url: 'https://choice.exchange'
-    }
-  ];
+  // Process dApps to include full icon URL
+  const dapps: DApp[] = DAPPS.map(dapp => ({
+    ...dapp,
+    icon: dapp.icon.startsWith('http') 
+      ? dapp.icon 
+      : `${NETWORK_CONFIG.faviconService}${dapp.icon}&sz=128`
+  }));
 
   const categories = [
     { id: 'all', name: 'New', icon: '🌐' },
