@@ -38,13 +38,27 @@ export default function SwapPage() {
   const [quoteLoading, setQuoteLoading] = useState(false);
   const [priceImpact, setPriceImpact] = useState('0.00');
   const [gasEstimate, setGasEstimate] = useState('0.00025');
-  const [error, setError] = useState<string | null>(null);
   const [txHash, setTxHash] = useState('');
   const [swapSuccess, setSwapSuccess] = useState(false);
   const [copied, setCopied] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
+  const [swapButtonError, setSwapButtonError] = useState<string | null>(null);
 
   const GAS_RESERVE_INJ = 0.0008;
+
+  // Check if from and to tokens are the same
+  const isSameTokenPair = (): boolean => {
+    return fromToken.symbol === toToken.symbol;
+  };
+
+  // Check if amount is a valid number format
+  const isInvalidAmountFormat = (): boolean => {
+    if (!fromAmount || fromAmount === '') return false;
+    const num = parseFloat(fromAmount);
+    if (isNaN(num) || num <= 0) return true;
+    if (/^0\d+/.test(fromAmount) && !fromAmount.startsWith('0.')) return true;
+    return false;
+  };
 
   // Check if amount exceeds balance
   const isAmountExceedsBalance = () => {
@@ -62,7 +76,6 @@ export default function SwapPage() {
       const balance = parseFloat(fromToken.balance);
       return !isNaN(amount) && (amount + GAS_RESERVE_INJ) > balance;
     }
-    // For USDT/USDC swaps, need INJ for gas
     const injToken = tokens.find(t => t.symbol === 'INJ');
     const injBalance = injToken ? parseFloat(injToken.balance) : 0;
     return injBalance < GAS_RESERVE_INJ;
@@ -86,11 +99,20 @@ export default function SwapPage() {
   // Get swap button state
   const getSwapButtonState = (): { label: string; isError: boolean; disabled: boolean } => {
     if (loading) return { label: 'Swapping...', isError: false, disabled: true };
+    if (swapButtonError) {
+      return { label: swapButtonError, isError: true, disabled: true };
+    }
+    if (fromAmount && isInvalidAmountFormat()) {
+      return { label: 'Wrong Amount', isError: true, disabled: true };
+    }
     if (isAmountExceedsBalance()) {
       return { label: `Insufficient ${fromToken.symbol} Balance`, isError: true, disabled: true };
     }
     if (fromAmount && parseFloat(fromAmount) > 0 && isInsufficientINJForGas()) {
       return { label: 'Insufficient INJ Balance', isError: true, disabled: true };
+    }
+    if (isSameTokenPair()) {
+      return { label: 'Swap Tokens', isError: false, disabled: true };
     }
     if (!fromAmount || !toAmount || quoteLoading) {
       return { label: 'Swap Tokens', isError: false, disabled: true };
@@ -145,8 +167,18 @@ export default function SwapPage() {
       return;
     }
 
+    // Skip quote for same token pair or invalid format
+    if (fromToken.symbol === toToken.symbol) {
+      setToAmount('');
+      return;
+    }
+
+    if (/^0\d+/.test(amount) && !amount.startsWith('0.')) {
+      setToAmount('');
+      return;
+    }
+
     setQuoteLoading(true);
-    setError(null);
 
     try {
       const quote = await getSwapQuote(
@@ -160,12 +192,16 @@ export default function SwapPage() {
       setPriceImpact(quote.priceImpact);
     } catch (error) {
       console.error('Failed to fetch quote:', error);
-      setError(error instanceof Error ? error.message : 'Failed to get quote');
       setToAmount('');
     } finally {
       setQuoteLoading(false);
     }
   }, [fromToken, toToken, slippage]);
+
+  // Clear swap button error when inputs change
+  useEffect(() => {
+    setSwapButtonError(null);
+  }, [fromAmount, fromToken, toToken]);
 
   // Debounced quote fetching
   useEffect(() => {
@@ -173,7 +209,7 @@ export default function SwapPage() {
       if (fromAmount) {
         fetchQuote(fromAmount);
       }
-    }, 500); // 500ms debounce
+    }, 500);
 
     return () => clearTimeout(timer);
   }, [fromAmount, fromToken, toToken, fetchQuote]);
@@ -245,31 +281,30 @@ export default function SwapPage() {
 
   const handleSwap = async () => {
     if (!address || !privateKey) {
-      setError('Wallet not connected');
+      console.error('[Swap] Wallet not connected');
       return;
     }
 
     if (!fromAmount || !toAmount) {
-      setError('Please enter an amount');
+      console.error('[Swap] Missing amount');
       return;
     }
 
-    // Validate balance
     const amount = parseFloat(fromAmount);
     const balance = parseFloat(fromToken.balance);
     
     if (isNaN(amount) || amount <= 0) {
-      setError('Invalid amount');
+      setSwapButtonError('Wrong Amount');
       return;
     }
 
     if (amount > balance) {
-      setError(`Insufficient ${fromToken.symbol} Balance`);
+      setSwapButtonError(`Insufficient ${fromToken.symbol} Balance`);
       return;
     }
 
     setLoading(true);
-    setError(null);
+    setSwapButtonError(null);
 
     try {
       // Convert private key format
@@ -295,14 +330,15 @@ export default function SwapPage() {
       console.error('Swap failed:', error);
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       if (errorMessage.includes('insufficient funds') || errorMessage.includes('exceeds the balance')) {
-        setError('Insufficient INJ Balance');
+        setSwapButtonError('Insufficient INJ Balance');
+      } else if (errorMessage.includes('reverted') || errorMessage.includes('execution')) {
+        setSwapButtonError('Swap Execution Failed');
       } else if (errorMessage.includes('slippage') || errorMessage.includes('INSUFFICIENT_OUTPUT')) {
-        setError('Slippage Too High');
+        setSwapButtonError('Slippage Too High');
       } else if (errorMessage.includes('rejected') || errorMessage.includes('denied')) {
-        setError('Transaction Rejected');
+        setSwapButtonError('Transaction Rejected');
       } else {
-        const shortMsg = errorMessage.length > 40 ? errorMessage.substring(0, 40) + '...' : errorMessage;
-        setError(`Swap Failed: ${shortMsg}`);
+        setSwapButtonError('Swap Failed');
       }
     } finally {
       setLoading(false);
@@ -522,25 +558,6 @@ export default function SwapPage() {
 
       {/* Main Content */}
       <div className="max-w-2xl mx-auto px-4 py-6">
-        {/* Error Message */}
-        {error && (
-          <div className="mb-4 p-4 rounded-2xl bg-red-500/10 border border-red-500/20">
-            <div className="flex items-start gap-3">
-              <svg className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              <div className="flex-1">
-                <p className="text-sm text-red-400">{error}</p>
-              </div>
-              <button onClick={() => setError(null)} className="text-red-400 hover:text-red-300">
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-          </div>
-        )}
-
         {aiMode ? (
           /* AI Intent Mode */
           <div className="space-y-6">
@@ -703,9 +720,11 @@ export default function SwapPage() {
             </div>
 
             {/* To Token */}
-            <div className={`p-5 rounded-2xl bg-black border border-white/10 transition-all ${
-              showToTokens ? 'relative z-[200]' : 'relative z-[1]'
-            }`}>
+            <div className={`p-5 rounded-2xl bg-black border transition-all ${
+              isSameTokenPair() && fromAmount
+                ? 'border-red-500/50 shadow-red-500/20 shadow-lg'
+                : 'border-white/10'
+            } ${showToTokens ? 'relative z-[200]' : 'relative z-[1]'}`}>
               <div className="flex items-center justify-between mb-3">
                 <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">To</span>
                 <span className="text-xs text-gray-500">Balance: {toToken.balance}</span>

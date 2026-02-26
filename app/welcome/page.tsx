@@ -61,7 +61,12 @@ export default function WelcomePage() {
       unlock(privateKey, keystore);
       router.push('/dashboard');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to create wallet');
+      const msg = err instanceof Error ? err.message : '';
+      if (msg.includes('timed out') || msg.includes('not allowed') || msg.includes('cancelled') || msg.includes('canceled') || msg.includes('AbortError') || msg.includes('NotAllowedError')) {
+        console.log('[Welcome] Passkey creation cancelled by user');
+      } else {
+        setError(msg || 'Failed to create wallet');
+      }
     } finally {
       setLoading(false);
       setShowCreateModal(false);
@@ -92,7 +97,12 @@ export default function WelcomePage() {
       unlock(privateKey, keystore);
       router.push('/dashboard');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to recover wallet');
+      const msg = err instanceof Error ? err.message : '';
+      if (msg.includes('timed out') || msg.includes('not allowed') || msg.includes('cancelled') || msg.includes('canceled') || msg.includes('AbortError') || msg.includes('NotAllowedError')) {
+        console.log('[Welcome] Passkey recovery cancelled by user');
+      } else {
+        setError(msg || 'Failed to recover wallet');
+      }
     } finally {
       setLoading(false);
     }
