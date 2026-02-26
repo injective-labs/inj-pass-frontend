@@ -311,7 +311,6 @@ export async function executeSwap(params: SwapParams): Promise<Hash> {
       });
     } else if (isNativeToken(toToken)) {
       // Token -> INJ (swapExactTokensForETH)
-      // First, check and approve if needed
       const tokenAddress = getTokenAddress(fromToken) as Address;
       const allowance = await checkAllowance(tokenAddress, userAddress, ROUTER_ADDRESS);
       
@@ -328,7 +327,6 @@ export async function executeSwap(params: SwapParams): Promise<Hash> {
       });
     } else {
       // Token -> Token (swapExactTokensForTokens)
-      // First, check and approve if needed
       const tokenAddress = getTokenAddress(fromToken) as Address;
       const allowance = await checkAllowance(tokenAddress, userAddress, ROUTER_ADDRESS);
       

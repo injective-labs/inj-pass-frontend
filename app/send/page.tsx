@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useWallet } from '@/contexts/WalletContext';
 import { usePin } from '@/contexts/PinContext';
-import { estimateGas, sendTransaction } from '@/wallet/chain';
+import { estimateGas, sendTransaction, getBalance } from '@/wallet/chain';
 import { INJECTIVE_MAINNET, GasEstimate } from '@/types/chain';
 import { isNFCSupported, readNFCCard } from '@/services/nfc';
 import LoadingSpinner from '@/components/LoadingSpinner';
@@ -44,6 +44,58 @@ function SendPageContent() {
   const [nfcError, setNfcError] = useState('');
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [nfcSupported, setNfcSupported] = useState(true);
+  const [userBalance, setUserBalance] = useState('0');
+
+  // Check if address is EVM format (0x...)
+  const isEvmAddress = (addr: string): boolean => {
+    return addr.startsWith('0x') && addr.length === 42;
+  };
+
+  // Check if address is Cosmos format (inj1...)
+  const isCosmosAddress = (addr: string): boolean => {
+    return addr.startsWith('inj1') && addr.length >= 40;
+  };
+
+  // Fetch user balance
+  useEffect(() => {
+    if (address) {
+      getBalance(address, INJECTIVE_MAINNET).then(bal => {
+        setUserBalance(bal.formatted);
+      }).catch(console.error);
+    }
+  }, [address]);
+
+  // Validate recipient address
+  const isValidRecipientAddress = (addr: string): boolean => {
+    if (!addr) return true;
+    return isEvmAddress(addr) || isCosmosAddress(addr);
+  };
+
+  // Check if amount exceeds balance
+  const isInsufficientBalance = (): boolean => {
+    if (!amount || !recipient) return false;
+    const amt = parseFloat(amount);
+    const bal = parseFloat(userBalance);
+    return !isNaN(amt) && amt > 0 && amt > bal;
+  };
+
+  // Get button state
+  const getButtonState = (): { label: string; isError: boolean; disabled: boolean } => {
+    if (loading) return { label: 'Sending...', isError: false, disabled: true };
+    if (error) {
+      return { label: error, isError: true, disabled: true };
+    }
+    if (recipient && !isValidRecipientAddress(recipient)) {
+      return { label: 'Invalid Address', isError: true, disabled: true };
+    }
+    if (recipient && amount && isInsufficientBalance()) {
+      return { label: 'Insufficient Balance', isError: true, disabled: true };
+    }
+    if (!recipient || !amount || !gasEstimate) {
+      return { label: 'Send Transaction', isError: false, disabled: true };
+    }
+    return { label: 'Send Transaction', isError: false, disabled: false };
+  };
 
   // Load address book from localStorage
   useEffect(() => {
@@ -181,16 +233,6 @@ function SendPageContent() {
     closeNfcScanner();
   };
 
-  // Check if address is EVM format (0x...)
-  const isEvmAddress = (address: string): boolean => {
-    return address.startsWith('0x') && address.length === 42;
-  };
-
-  // Check if address is Cosmos format (inj1...)
-  const isCosmosAddress = (address: string): boolean => {
-    return address.startsWith('inj1') && address.length >= 40;
-  };
-
   // Convert between EVM and Cosmos addresses using official Injective SDK
   const convertAddress = () => {
     try {
@@ -278,9 +320,11 @@ function SendPageContent() {
         stack: err instanceof Error ? err.stack : undefined
       });
       
-      // Only show error if not using defaults
       if (!useDefaults) {
-        setError(err instanceof Error ? err.message : 'Failed to estimate gas');
+        const msg = err instanceof Error ? err.message : 'Failed to estimate gas';
+        if (!msg.includes('invalid') && !msg.includes('Invalid') && !msg.includes('checksum')) {
+          setError(msg);
+        }
       }
     } finally {
       setEstimating(false);
@@ -295,16 +339,22 @@ function SendPageContent() {
     }
   }, [address, recipient, amount, handleEstimate]);
 
-  // Auto-estimate gas when recipient and amount are filled
+  // Clear error when inputs change
   useEffect(() => {
-    if (recipient && amount && address) {
+    if (error) setError('');
+  }, [recipient, amount]);
+
+  // Auto-estimate gas when recipient and amount are filled (only for valid addresses)
+  useEffect(() => {
+    if (recipient && amount && address && isValidRecipientAddress(recipient)) {
       handleEstimate(false);
     }
   }, [recipient, amount, address, handleEstimate]);
 
   // Auto-refresh every 3 seconds
   useEffect(() => {
-    const shouldEstimate = (recipient && amount) || (!recipient && !amount);
+    const hasValidInput = recipient && amount && isValidRecipientAddress(recipient);
+    const shouldEstimate = hasValidInput || (!recipient && !amount);
     if (!address || !shouldEstimate) return;
 
     const interval = setInterval(() => {
@@ -344,7 +394,17 @@ function SendPageContent() {
       
       setTxHash(hash);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to send transaction');
+      console.error('[Send] Transaction error:', err);
+      const msg = err instanceof Error ? err.message : 'Failed to send transaction';
+      if (msg.includes('insufficient funds') || msg.includes('exceeds the balance')) {
+        setError('Insufficient Balance');
+      } else if (msg.includes('rejected') || msg.includes('denied')) {
+        setError('Transaction Rejected');
+      } else if (msg.includes('invalid') || msg.includes('Invalid') || msg.includes('checksum')) {
+        setError('Invalid Address');
+      } else {
+        setError('Transaction Failed');
+      }
     } finally {
       setLoading(false);
     }
@@ -538,17 +598,6 @@ function SendPageContent() {
 
       {/* Main Content */}
       <div className="max-w-2xl mx-auto px-4 py-6">
-        {error && (
-          <div className="mb-6 p-4 rounded-2xl bg-red-500/10 border border-red-500/30 text-red-400 text-sm">
-            <div className="flex items-start gap-3">
-              <svg className="w-5 h-5 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-              </svg>
-              {error}
-            </div>
-          </div>
-        )}
-
         {/* Form */}
         <div className="space-y-6">
           {/* Recipient */}
@@ -675,13 +724,26 @@ function SendPageContent() {
             <label className="block text-sm font-bold text-gray-400 uppercase tracking-wider mb-3">
               Amount
             </label>
-            <input
-              type="text"
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-              placeholder="0.001"
-              className="w-full py-4 px-4 rounded-2xl bg-white/5 border border-white/10 text-white placeholder-gray-500 focus:outline-none focus:border-white/30 transition-all font-mono text-sm"
-            />
+            <div className="relative">
+              <input
+                type="text"
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+                placeholder="0.001"
+                className="w-full py-4 px-4 pr-16 rounded-2xl bg-white/5 border border-white/10 text-white placeholder-gray-500 focus:outline-none focus:border-white/30 transition-all font-mono text-sm"
+              />
+              <button
+                onClick={() => {
+                  const bal = parseFloat(userBalance);
+                  const max = bal - 0.0008;
+                  setAmount(max > 0 ? max.toFixed(4) : '0');
+                }}
+                className="absolute right-3 top-1/2 -translate-y-1/2 px-2 py-1 text-xs font-bold bg-white/10 hover:bg-white/20 text-white rounded transition-all"
+                title="Set maximum amount"
+              >
+                Max
+              </button>
+            </div>
           </div>
 
           {/* Gas Estimate - Always Display */}
@@ -716,28 +778,39 @@ function SendPageContent() {
           </div>
 
           {/* Send Button */}
-          <button
-            onClick={handleSendClick}
-            disabled={!recipient || !amount || loading || !gasEstimate}
-            className="w-full py-4 rounded-2xl bg-white text-black font-bold hover:bg-gray-100 transition-all disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-          >
-            {loading ? (
-              <>
-                <svg className="w-5 h-5 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                </svg>
-                Sending...
-              </>
-            ) : (
-              <>
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <line x1="12" y1="19" x2="12" y2="5" strokeWidth={2.5} strokeLinecap="round" />
-                  <polyline points="5 12 12 5 19 12" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-                Send Transaction
-              </>
-            )}
-          </button>
+          {(() => {
+            const btnState = getButtonState();
+            return (
+              <button
+                onClick={handleSendClick}
+                disabled={btnState.disabled}
+                className={`w-full py-4 rounded-2xl font-bold transition-all flex items-center justify-center gap-2 ${
+                  btnState.isError
+                    ? 'bg-red-500 text-white cursor-not-allowed'
+                    : 'bg-white text-black hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed'
+                }`}
+              >
+                {loading ? (
+                  <>
+                    <svg className="w-5 h-5 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                    Sending...
+                  </>
+                ) : btnState.isError ? (
+                  <span>{btnState.label}</span>
+                ) : (
+                  <>
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <line x1="12" y1="19" x2="12" y2="5" strokeWidth={2.5} strokeLinecap="round" />
+                      <polyline points="5 12 12 5 19 12" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                    Send Transaction
+                  </>
+                )}
+              </button>
+            );
+          })()}
         </div>
       </div>
 
