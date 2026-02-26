@@ -89,7 +89,8 @@ export default function SwapPage() {
       if (maxAmount <= 0) {
         setFromAmount('0');
       } else {
-        setFromAmount(maxAmount.toFixed(4));
+        const floored = Math.floor(maxAmount * 10000) / 10000;
+        setFromAmount(floored.toFixed(4));
       }
     } else {
       setFromAmount(fromToken.balance);
