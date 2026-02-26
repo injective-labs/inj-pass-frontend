@@ -16,7 +16,6 @@ import {
   http, 
   parseUnits, 
   formatUnits,
-  maxUint256,
   type Address,
   type Hash,
 } from 'viem';
@@ -316,8 +315,8 @@ export async function executeSwap(params: SwapParams): Promise<Hash> {
       const allowance = await checkAllowance(tokenAddress, userAddress, ROUTER_ADDRESS);
       
       if (allowance < amountInWei) {
-        console.log('Approving token with unlimited allowance...');
-        await approveToken(tokenAddress, ROUTER_ADDRESS, maxUint256, privateKey);
+        console.log('Approving token...');
+        await approveToken(tokenAddress, ROUTER_ADDRESS, amountInWei * BigInt(2), privateKey);
       }
 
       hash = await walletClient.writeContract({
@@ -332,8 +331,8 @@ export async function executeSwap(params: SwapParams): Promise<Hash> {
       const allowance = await checkAllowance(tokenAddress, userAddress, ROUTER_ADDRESS);
       
       if (allowance < amountInWei) {
-        console.log('Approving token with unlimited allowance...');
-        await approveToken(tokenAddress, ROUTER_ADDRESS, maxUint256, privateKey);
+        console.log('Approving token...');
+        await approveToken(tokenAddress, ROUTER_ADDRESS, amountInWei * BigInt(2), privateKey);
       }
 
       hash = await walletClient.writeContract({
