@@ -44,12 +44,58 @@ export default function SwapPage() {
   const [copied, setCopied] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
 
+  const GAS_RESERVE_INJ = 0.0008;
+
   // Check if amount exceeds balance
   const isAmountExceedsBalance = () => {
     if (!fromAmount || fromAmount === '') return false;
     const amount = parseFloat(fromAmount);
     const balance = parseFloat(fromToken.balance);
     return !isNaN(amount) && amount > balance;
+  };
+
+  // Check if INJ balance is sufficient for gas (when swapping non-INJ tokens)
+  const isInsufficientINJForGas = (): boolean => {
+    if (!fromAmount || fromAmount === '') return false;
+    if (fromToken.symbol === 'INJ') {
+      const amount = parseFloat(fromAmount);
+      const balance = parseFloat(fromToken.balance);
+      return !isNaN(amount) && (amount + GAS_RESERVE_INJ) > balance;
+    }
+    // For USDT/USDC swaps, need INJ for gas
+    const injToken = tokens.find(t => t.symbol === 'INJ');
+    const injBalance = injToken ? parseFloat(injToken.balance) : 0;
+    return injBalance < GAS_RESERVE_INJ;
+  };
+
+  // Handle max button click
+  const handleMaxClick = () => {
+    if (fromToken.symbol === 'INJ') {
+      const balance = parseFloat(fromToken.balance);
+      const maxAmount = balance - GAS_RESERVE_INJ;
+      if (maxAmount <= 0) {
+        setFromAmount('0');
+      } else {
+        setFromAmount(maxAmount.toFixed(4));
+      }
+    } else {
+      setFromAmount(fromToken.balance);
+    }
+  };
+
+  // Get swap button state
+  const getSwapButtonState = (): { label: string; isError: boolean; disabled: boolean } => {
+    if (loading) return { label: 'Swapping...', isError: false, disabled: true };
+    if (isAmountExceedsBalance()) {
+      return { label: `Insufficient ${fromToken.symbol} Balance`, isError: true, disabled: true };
+    }
+    if (fromAmount && parseFloat(fromAmount) > 0 && isInsufficientINJForGas()) {
+      return { label: 'Insufficient INJ Balance', isError: true, disabled: true };
+    }
+    if (!fromAmount || !toAmount || quoteLoading) {
+      return { label: 'Swap Tokens', isError: false, disabled: true };
+    }
+    return { label: 'Swap Tokens', isError: false, disabled: false };
   };
 
   // Token list with real balances
@@ -78,11 +124,15 @@ export default function SwapPage() {
         { symbol: 'USDC', name: 'USD Coin', icon: '/USDC_Logo.png', balance: parseFloat(balances.USDC).toFixed(2) },
       ]);
 
-      // Update current token balances
-      const currentFrom = tokens.find(t => t.symbol === fromToken.symbol);
-      const currentTo = tokens.find(t => t.symbol === toToken.symbol);
-      if (currentFrom) setFromToken({ ...currentFrom, balance: balances[currentFrom.symbol] });
-      if (currentTo) setToToken({ ...currentTo, balance: balances[currentTo.symbol] });
+      const updatedTokens = [
+        { symbol: 'INJ', name: 'Injective', icon: '/injswap.png', balance: parseFloat(balances.INJ).toFixed(4) },
+        { symbol: 'USDT', name: 'Tether USD', icon: '/USDT_Logo.png', balance: parseFloat(balances.USDT).toFixed(2) },
+        { symbol: 'USDC', name: 'USD Coin', icon: '/USDC_Logo.png', balance: parseFloat(balances.USDC).toFixed(2) },
+      ];
+      const currentFrom = updatedTokens.find(t => t.symbol === fromToken.symbol);
+      const currentTo = updatedTokens.find(t => t.symbol === toToken.symbol);
+      if (currentFrom) setFromToken(currentFrom);
+      if (currentTo) setToToken(currentTo);
     } catch (error) {
       console.error('Failed to fetch balances:', error);
     }
@@ -214,7 +264,7 @@ export default function SwapPage() {
     }
 
     if (amount > balance) {
-      setError(`Insufficient balance. You have ${fromToken.balance} ${fromToken.symbol}`);
+      setError(`Insufficient ${fromToken.symbol} Balance`);
       return;
     }
 
@@ -244,7 +294,16 @@ export default function SwapPage() {
     } catch (error) {
       console.error('Swap failed:', error);
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      setError(`Swap failed: ${errorMessage}`);
+      if (errorMessage.includes('insufficient funds') || errorMessage.includes('exceeds the balance')) {
+        setError('Insufficient INJ Balance');
+      } else if (errorMessage.includes('slippage') || errorMessage.includes('INSUFFICIENT_OUTPUT')) {
+        setError('Slippage Too High');
+      } else if (errorMessage.includes('rejected') || errorMessage.includes('denied')) {
+        setError('Transaction Rejected');
+      } else {
+        const shortMsg = errorMessage.length > 40 ? errorMessage.substring(0, 40) + '...' : errorMessage;
+        setError(`Swap Failed: ${shortMsg}`);
+      }
     } finally {
       setLoading(false);
     }
@@ -553,7 +612,7 @@ export default function SwapPage() {
                 <div className="flex items-center gap-2">
                   <span className="text-xs text-gray-500">Balance: {fromToken.balance}</span>
                   <button
-                    onClick={() => setFromAmount(fromToken.balance)}
+                    onClick={handleMaxClick}
                     className="px-2 py-1 text-xs font-bold bg-white/10 hover:bg-white/20 text-white rounded transition-all"
                     title="Set maximum amount"
                   >
@@ -773,32 +832,43 @@ export default function SwapPage() {
             </div>
 
             {/* Swap Button */}
-            <button
-              onClick={handleSwapClick}
-              disabled={!fromAmount || !toAmount || loading || quoteLoading || isAmountExceedsBalance()}
-              className="w-full py-4 rounded-2xl bg-white text-black font-bold hover:bg-gray-100 transition-all disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-            >
-              {loading ? (
-                <>
-                  <svg className="animate-spin h-5 w-5" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                  </svg>
-                  <span>Swapping...</span>
-                </>
-              ) : (
-                <>
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <polyline points="16 3 21 3 21 8" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />
-                    <line x1="4" y1="20" x2="21" y2="3" strokeWidth={2.5} strokeLinecap="round" />
-                    <polyline points="21 16 21 21 16 21" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />
-                    <line x1="15" y1="15" x2="21" y2="21" strokeWidth={2.5} strokeLinecap="round" />
-                    <line x1="4" y1="4" x2="9" y2="9" strokeWidth={2.5} strokeLinecap="round" />
-                  </svg>
-                  <span>Swap Tokens</span>
-                </>
-              )}
-            </button>
+            {(() => {
+              const btnState = getSwapButtonState();
+              return (
+                <button
+                  onClick={handleSwapClick}
+                  disabled={btnState.disabled}
+                  className={`w-full py-4 rounded-2xl font-bold transition-all flex items-center justify-center gap-2 ${
+                    btnState.isError
+                      ? 'bg-red-500 text-white cursor-not-allowed'
+                      : 'bg-white text-black hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed'
+                  }`}
+                >
+                  {loading ? (
+                    <>
+                      <svg className="animate-spin h-5 w-5" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      <span>Swapping...</span>
+                    </>
+                  ) : btnState.isError ? (
+                    <span>{btnState.label}</span>
+                  ) : (
+                    <>
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <polyline points="16 3 21 3 21 8" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />
+                        <line x1="4" y1="20" x2="21" y2="3" strokeWidth={2.5} strokeLinecap="round" />
+                        <polyline points="21 16 21 21 16 21" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />
+                        <line x1="15" y1="15" x2="21" y2="21" strokeWidth={2.5} strokeLinecap="round" />
+                        <line x1="4" y1="4" x2="9" y2="9" strokeWidth={2.5} strokeLinecap="round" />
+                      </svg>
+                      <span>Swap Tokens</span>
+                    </>
+                  )}
+                </button>
+              );
+            })()}
           </div>
         )}
       </div>
