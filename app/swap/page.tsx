@@ -146,15 +146,10 @@ export default function SwapPage() {
         { symbol: 'USDC', name: 'USD Coin', icon: '/USDC_Logo.png', balance: parseFloat(balances.USDC).toFixed(2) },
       ]);
 
-      const updatedTokens = [
-        { symbol: 'INJ', name: 'Injective', icon: '/injswap.png', balance: parseFloat(balances.INJ).toFixed(4) },
-        { symbol: 'USDT', name: 'Tether USD', icon: '/USDT_Logo.png', balance: parseFloat(balances.USDT).toFixed(2) },
-        { symbol: 'USDC', name: 'USD Coin', icon: '/USDC_Logo.png', balance: parseFloat(balances.USDC).toFixed(2) },
-      ];
-      const currentFrom = updatedTokens.find(t => t.symbol === fromToken.symbol);
-      const currentTo = updatedTokens.find(t => t.symbol === toToken.symbol);
-      if (currentFrom) setFromToken(currentFrom);
-      if (currentTo) setToToken(currentTo);
+      const currentFrom = tokens.find(t => t.symbol === fromToken.symbol);
+      const currentTo = tokens.find(t => t.symbol === toToken.symbol);
+      if (currentFrom) setFromToken({ ...currentFrom, balance: balances[currentFrom.symbol] });
+      if (currentTo) setToToken({ ...currentTo, balance: balances[currentTo.symbol] });
     } catch (error) {
       console.error('Failed to fetch balances:', error);
     }
