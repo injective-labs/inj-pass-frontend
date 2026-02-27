@@ -14,9 +14,9 @@ import type { Address } from 'viem';
 type Model =
   | 'claude-sonnet-4-5'
   | 'claude-sonnet-4-6'
-  | 'gemini-2.5-pro-preview'
-  | 'gpt-4.5-preview'
-  | 'deepseek-v3';
+  | 'gemini-3.1-pro-preview'
+  | 'gpt-5.2'
+  | 'deepseek-v3.2';
 
 /** Display message shown in the chat UI */
 interface ChatMessage {
@@ -61,11 +61,11 @@ interface PendingConfirmation {
 }
 
 const MODEL_OPTIONS: { value: Model; label: string }[] = [
-  { value: 'claude-sonnet-4-6',      label: 'Claude Sonnet 4.6' },
-  { value: 'claude-sonnet-4-5',      label: 'Claude Sonnet 4.5' },
-  { value: 'gemini-2.5-pro-preview', label: 'Gemini 2.5 Pro' },
-  { value: 'gpt-4.5-preview',        label: 'GPT-4.5 Preview' },
-  { value: 'deepseek-v3',            label: 'DeepSeek V3' },
+  { value: 'claude-sonnet-4-6',    label: 'Claude Sonnet 4.6' },
+  { value: 'claude-sonnet-4-5',    label: 'Claude Sonnet 4.5' },
+  { value: 'gemini-3.1-pro-preview', label: 'Gemini 3.1 Pro' },
+  { value: 'gpt-5.2',             label: 'GPT-5.2' },
+  { value: 'deepseek-v3.2',       label: 'DeepSeek V3.2' },
 ];
 
 const STORAGE_KEY = 'injpass_agent_conversations';
