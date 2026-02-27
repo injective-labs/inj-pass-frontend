@@ -119,6 +119,7 @@ export default function WelcomePage() {
     setWalletExists(hasWallet());
   }, []);
 
+  // Focus the input shortly after it fades in
   useEffect(() => {
     if (showCreateModal) {
       const t = setTimeout(() => inputRef.current?.focus(), 60);
@@ -192,294 +193,183 @@ export default function WelcomePage() {
   };
 
   return (
-    <div className="relative min-h-screen flex flex-col overflow-hidden bg-black">
+    <div className="relative min-h-screen flex flex-col overflow-hidden">
       {/* Tunnel Background Animation */}
       <TunnelBackground />
-
-      {/* Ambient glow orbs */}
-      <div className="fixed inset-0 z-[1] pointer-events-none overflow-hidden">
-        <div className="absolute -top-40 -left-40 w-[600px] h-[600px] rounded-full bg-[#4c3af9]/10 blur-[120px]" />
-        <div className="absolute -bottom-60 -right-40 w-[500px] h-[500px] rounded-full bg-[#7c3aed]/8 blur-[100px]" />
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[400px] rounded-full bg-[#4c3af9]/5 blur-[140px]" />
+      
+      {/* Content Layer */}
+      <div className="relative z-10">
+      {/* Top Banner - Purple Background */}
+      <div className="fixed top-0 left-0 right-0 bg-[#4c3af9]/90 backdrop-blur-sm z-50 px-4 py-1.5 flex items-center justify-between gap-2 animate-fade-in overflow-hidden">
+        <div className="flex items-center gap-2 flex-shrink-0">
+          <span className="text-white text-[0.7rem] md:text-xs font-semibold tracking-wide">
+            INJ Pass
+          </span>
+        </div>
+        <div className="flex-1 flex items-center justify-center min-w-0">
+          <a href="https://x.com/INJ_Pass" target="_blank" rel="noopener noreferrer" className="text-white text-[0.75rem] md:text-[0.805rem] font-semibold text-center truncate underline underline-offset-2 hover:text-white/80 transition-colors">
+            Unaudited Release, DYOR
+          </a>
+        </div>
+        <div className="flex gap-2 items-center flex-shrink-0">
+          <a href="https://t.me/injective" target="_blank" rel="noopener noreferrer" className="text-white hover:text-white/70 transition-colors">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4 md:w-[1.1rem] md:h-[1.1rem]">
+              <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.562 8.161l-1.84 8.673c-.136.624-.5.778-.999.485l-2.761-2.036-1.332 1.281c-.147.147-.271.271-.556.271l.199-2.822 5.13-4.638c.223-.199-.049-.31-.346-.111l-6.341 3.993-2.733-.853c-.593-.187-.605-.593.126-.879l10.691-4.12c.496-.183.929.112.762.874z"/>
+            </svg>
+          </a>
+          <a href="https://x.com/INJ_Pass" target="_blank" rel="noopener noreferrer" className="text-white hover:text-white/70 transition-colors">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4 md:w-[1.1rem] md:h-[1.1rem]">
+              <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
+            </svg>
+          </a>
+        </div>
       </div>
 
-      {/* Content Layer */}
-      <div className="relative z-10 flex flex-col min-h-screen">
-
-        {/* Top Banner */}
-        <div className="fixed top-0 left-0 right-0 bg-[#4c3af9]/90 backdrop-blur-sm z-50 px-4 py-1.5 flex items-center justify-between gap-2 animate-fade-in overflow-hidden">
-          <div className="flex items-center gap-2 flex-shrink-0">
-            <span className="text-white text-[0.7rem] md:text-xs font-semibold tracking-wide">
-              INJ Pass
-            </span>
-          </div>
-          <div className="flex-1 flex items-center justify-center min-w-0">
-            <a href="https://x.com/INJ_Pass" target="_blank" rel="noopener noreferrer" className="text-white text-[0.75rem] md:text-[0.805rem] font-semibold text-center truncate underline underline-offset-2 hover:text-white/80 transition-colors">
-              Unaudited Release, DYOR
-            </a>
-          </div>
-          <div className="flex gap-2 items-center flex-shrink-0">
-            <a href="https://t.me/injective" target="_blank" rel="noopener noreferrer" className="text-white hover:text-white/70 transition-colors">
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4 md:w-[1.1rem] md:h-[1.1rem]">
-                <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.562 8.161l-1.84 8.673c-.136.624-.5.778-.999.485l-2.761-2.036-1.332 1.281c-.147.147-.271.271-.556.271l.199-2.822 5.13-4.638c.223-.199-.049-.31-.346-.111l-6.341 3.993-2.733-.853c-.593-.187-.605-.593.126-.879l10.691-4.12c.496-.183.929.112.762.874z"/>
-              </svg>
-            </a>
-            <a href="https://x.com/INJ_Pass" target="_blank" rel="noopener noreferrer" className="text-white hover:text-white/70 transition-colors">
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4 md:w-[1.1rem] md:h-[1.1rem]">
-                <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
-              </svg>
-            </a>
-          </div>
-        </div>
-
-        {/* Hero Section */}
-        <div className="flex flex-col items-center justify-center flex-1 w-full px-4 md:px-8 pt-20 pb-8 min-h-screen">
-          <div className="w-full max-w-xl mx-auto flex flex-col items-center">
-
-            {/* Logo mark */}
-            <div className="mb-6 animate-fade-in">
-              <div className="w-14 h-14 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center shadow-lg shadow-[#4c3af9]/10 backdrop-blur-sm">
-                <Image src="/lambdalogo.png" alt="INJ Pass" width={36} height={36} className="w-8 h-8 object-contain" />
-              </div>
-            </div>
-
-            {/* Title */}
-            <h1 className="text-5xl md:text-7xl text-white mb-3 leading-tight font-bold tracking-tight text-center animate-fade-in title-3d tunnel-title">
-              <span className="lambda-gradient">λ</span> to Injective
-            </h1>
-
-            {/* Subtitle */}
-            <p className="text-base md:text-lg text-gray-400 leading-relaxed font-medium text-center mb-5 animate-fade-in">
+      {/* Hero Section */}
+      <div className="flex flex-col items-center justify-center flex-1 w-full px-4 md:px-8 pt-16 md:pt-24 pb-16 md:pb-24 min-h-screen">
+        <div className="text-center w-full max-w-2xl mx-auto">
+          <h1 className="text-4xl md:text-6xl lg:text-7xl text-white mb-4 leading-tight font-bold tracking-tight break-words animate-fade-in title-3d tunnel-title">
+            <span className="lambda-gradient">λ</span> to Injective
+          </h1>
+          
+          <div className="mb-6 animate-fade-in">
+            <p className="text-base md:text-lg lg:text-xl text-gray-400 leading-relaxed font-medium">
               Your First Onchain Portal
             </p>
+          </div>
 
-            {/* Trust badges */}
-            <div className="flex flex-wrap items-center justify-center gap-2 mb-8 animate-fade-in">
-              {[
-                { icon: '🔑', label: 'Non-Custodial' },
-                { icon: '🛡️', label: 'Passkey Secured' },
-                { icon: '🤖', label: 'AI-Powered' },
-                { icon: '⚡', label: 'Injective Native' },
-              ].map((badge) => (
-                <span
-                  key={badge.label}
-                  className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/5 border border-white/10 text-xs text-gray-300 font-medium backdrop-blur-sm hover:bg-white/10 transition-colors"
-                >
-                  <span className="text-sm leading-none">{badge.icon}</span>
-                  {badge.label}
-                </span>
-              ))}
+          {error && (
+            <div className="bg-red-500/10 border border-red-500/30 rounded-2xl px-4 py-3 mb-6 text-red-400 text-sm">
+              {error}
             </div>
+          )}
 
-            {error && (
-              <div className="bg-red-500/10 border border-red-500/30 rounded-2xl px-4 py-3 mb-5 text-red-400 text-sm w-full max-w-md animate-fade-in">
-                {error}
-              </div>
-            )}
+          <div className="flex flex-col gap-4 w-full max-w-md mx-auto animate-fade-in">
 
-            {/* CTA Buttons */}
-            <div className="flex flex-col gap-4 w-full max-w-md mx-auto animate-fade-in">
-
-              <div className="grid">
-                {/* CREATE NEW WALLET button */}
-                <div
-                  style={{ gridArea: '1 / 1' }}
-                  className={`transition-all duration-300 ease-in-out ${
-                    showCreateModal
-                      ? 'opacity-0 -translate-y-1 scale-95 pointer-events-none'
-                      : 'opacity-100 translate-y-0 scale-100'
-                  }`}
-                >
-                  <button
-                    onClick={() => setShowCreateModal(true)}
-                    disabled={loading}
-                    className="w-full flex items-center justify-center gap-2 md:gap-3 bg-white text-black rounded-2xl px-6 md:px-8 py-4 text-sm md:text-base font-bold cursor-pointer transition-colors shadow-lg hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap tracking-wide"
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4 md:w-5 md:h-5 flex-shrink-0">
-                      <line x1="12" y1="5" x2="12" y2="19" />
-                      <line x1="5" y1="12" x2="19" y2="12" />
-                    </svg>
-                    <span>CREATE NEW WALLET</span>
-                  </button>
-                </div>
-
-                {/* Wallet-name input */}
-                <div
-                  style={{ gridArea: '1 / 1' }}
-                  className={`transition-all duration-300 ease-in-out ${
-                    showCreateModal
-                      ? 'opacity-100 translate-y-0 scale-100'
-                      : 'opacity-0 translate-y-1 scale-95 pointer-events-none'
-                  }`}
-                >
-                  <div className="relative bg-white rounded-2xl shadow-lg">
-                    <input
-                      ref={inputRef}
-                      type="text"
-                      value={walletNameInput}
-                      onChange={(e) => setWalletNameInput(e.target.value)}
-                      placeholder="Wallet name…"
-                      className="w-full bg-transparent pl-5 pr-14 py-4 text-black text-sm md:text-base font-bold placeholder-black/40 focus:outline-none rounded-2xl"
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' && walletNameInput.trim()) handleCreateWallet();
-                        if (e.key === 'Escape') {
-                          setShowCreateModal(false);
-                          setWalletNameInput('');
-                          setError('');
-                        }
-                      }}
-                    />
-                    <button
-                      onClick={handleCreateWallet}
-                      disabled={loading || !walletNameInput.trim()}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 p-2 rounded-xl hover:bg-black/8 transition-colors disabled:opacity-25 disabled:cursor-not-allowed"
-                      title="Continue"
-                    >
-                      {loading ? (
-                        <svg className="w-5 h-5 text-black animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                        </svg>
-                      ) : (
-                        <svg className="w-5 h-5 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
-                        </svg>
-                      )}
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              {/* RECOVER WALLET */}
-              <button
-                onClick={handleRecoverWallet}
-                disabled={loading}
-                className="flex items-center justify-center gap-2 md:gap-3 bg-white/8 backdrop-blur-sm text-white border border-white/15 rounded-2xl px-6 md:px-8 py-4 text-sm md:text-base font-bold cursor-pointer transition-all hover:bg-white/15 hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 whitespace-nowrap tracking-wide"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4 md:w-5 md:h-5 flex-shrink-0">
-                  <path d="M21 2v6h-6" />
-                  <path d="M3 12a9 9 0 0 1 15-6.7L21 8" />
-                  <path d="M3 22v-6h6" />
-                  <path d="M21 12a9 9 0 0 1-15 6.7L3 16" />
-                </svg>
-                <span>{loading ? 'RECOVERING...' : 'RECOVER WALLET'}</span>
-              </button>
-
-              {/* Import Private Key link */}
-              <button
-                onClick={() => setShowImportModal(true)}
-                disabled={loading}
-                className="text-gray-400 text-sm underline underline-offset-2 hover:text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Import Private Key
-              </button>
-
+            {/*
+              ── Slot 1: CREATE NEW WALLET button  ↔  wallet-name input ──
+              Both children share the same grid cell so neither displaces
+              RECOVER WALLET when one swaps for the other.
+            */}
+            <div className="grid">
+              {/* CREATE NEW WALLET button */}
               <div
+                style={{ gridArea: '1 / 1' }}
                 className={`transition-all duration-300 ease-in-out ${
                   showCreateModal
-                    ? 'opacity-100'
-                    : 'opacity-0 pointer-events-none'
+                    ? 'opacity-0 -translate-y-1 scale-95 pointer-events-none'
+                    : 'opacity-100 translate-y-0 scale-100'
                 }`}
               >
                 <button
-                  onClick={() => {
-                    setShowCreateModal(false);
-                    setWalletNameInput('');
-                    setError('');
-                  }}
-                  className="w-full text-gray-400 text-sm hover:text-white transition-colors text-center py-1"
+                  onClick={() => setShowCreateModal(true)}
+                  disabled={loading}
+                  className="w-full flex items-center justify-center gap-2 md:gap-3 bg-white text-black rounded-2xl px-6 md:px-8 py-4 text-sm md:text-base font-bold cursor-pointer transition-colors shadow-lg hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap tracking-wide"
                 >
-                  ← Back
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4 md:w-5 md:h-5 flex-shrink-0">
+                    <line x1="12" y1="5" x2="12" y2="19" />
+                    <line x1="5" y1="12" x2="19" y2="12" />
+                  </svg>
+                  <span>CREATE NEW WALLET</span>
                 </button>
               </div>
 
+              {/* Wallet-name input (fades in when showCreateModal = true) */}
+              <div
+                style={{ gridArea: '1 / 1' }}
+                className={`transition-all duration-300 ease-in-out ${
+                  showCreateModal
+                    ? 'opacity-100 translate-y-0 scale-100'
+                    : 'opacity-0 translate-y-1 scale-95 pointer-events-none'
+                }`}
+              >
+                <div className="relative bg-white rounded-2xl shadow-lg">
+                  <input
+                    ref={inputRef}
+                    type="text"
+                    value={walletNameInput}
+                    onChange={(e) => setWalletNameInput(e.target.value)}
+                    placeholder="Wallet name…"
+                    className="w-full bg-transparent pl-5 pr-14 py-4 text-black text-sm md:text-base font-bold placeholder-black/40 focus:outline-none rounded-2xl"
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && walletNameInput.trim()) handleCreateWallet();
+                      if (e.key === 'Escape') {
+                        setShowCreateModal(false);
+                        setWalletNameInput('');
+                        setError('');
+                      }
+                    }}
+                  />
+                  {/* Black arrow — absolute-centred on the right */}
+                  <button
+                    onClick={handleCreateWallet}
+                    disabled={loading || !walletNameInput.trim()}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 p-2 rounded-xl hover:bg-black/8 transition-colors disabled:opacity-25 disabled:cursor-not-allowed"
+                    title="Continue"
+                  >
+                    {loading ? (
+                      <svg className="w-5 h-5 text-black animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                      </svg>
+                    ) : (
+                      <svg className="w-5 h-5 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
+                      </svg>
+                    )}
+                  </button>
+                </div>
+              </div>
             </div>
 
-            {/* Feature Cards */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 w-full max-w-xl mt-10 animate-fade-in">
-              {[
-                {
-                  icon: (
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
-                    </svg>
-                  ),
-                  title: 'No Seed Phrase',
-                  desc: 'Passkey-protected. Sign with Face ID or Touch ID.',
-                  accent: 'from-violet-500/20 to-transparent',
-                  border: 'border-violet-500/20',
-                },
-                {
-                  icon: (
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17H3a2 2 0 01-2-2V5a2 2 0 012-2h14a2 2 0 012 2v10a2 2 0 01-2 2h-2" />
-                    </svg>
-                  ),
-                  title: 'AI Agent Built-in',
-                  desc: 'Swap, send, and query your wallet in plain English.',
-                  accent: 'from-blue-500/20 to-transparent',
-                  border: 'border-blue-500/20',
-                },
-                {
-                  icon: (
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                    </svg>
-                  ),
-                  title: 'Injective Native',
-                  desc: 'Sub-second finality. Near-zero gas fees on mainnet.',
-                  accent: 'from-emerald-500/20 to-transparent',
-                  border: 'border-emerald-500/20',
-                },
-              ].map((card) => (
-                <div
-                  key={card.title}
-                  className={`relative rounded-2xl bg-white/3 border ${card.border} p-4 overflow-hidden backdrop-blur-sm hover:bg-white/6 transition-colors group`}
-                >
-                  <div className={`absolute inset-0 bg-gradient-to-br ${card.accent} opacity-60 group-hover:opacity-100 transition-opacity`} />
-                  <div className="relative">
-                    <div className="w-9 h-9 rounded-xl bg-white/10 flex items-center justify-center text-white mb-3">
-                      {card.icon}
-                    </div>
-                    <h3 className="text-white text-sm font-bold mb-1">{card.title}</h3>
-                    <p className="text-gray-400 text-xs leading-relaxed">{card.desc}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
+            {/* RECOVER WALLET — position is always identical */}
+            <button
+              onClick={handleRecoverWallet}
+              disabled={loading}
+              className="flex items-center justify-center gap-2 md:gap-3 bg-white/8 backdrop-blur-sm text-white border border-white/15 rounded-2xl px-6 md:px-8 py-4 text-sm md:text-base font-bold cursor-pointer transition-all hover:bg-white/15 hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 whitespace-nowrap tracking-wide"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4 md:w-5 md:h-5 flex-shrink-0">
+                <path d="M21 2v6h-6" />
+                <path d="M3 12a9 9 0 0 1 15-6.7L21 8" />
+                <path d="M3 22v-6h6" />
+                <path d="M21 12a9 9 0 0 1-15 6.7L3 16" />
+              </svg>
+              <span>{loading ? 'RECOVERING...' : 'RECOVER WALLET'}</span>
+            </button>
 
-            {/* Stats row */}
-            <div className="flex items-center gap-6 mt-8 mb-4 animate-fade-in">
-              {[
-                { value: '< 10s', label: 'Setup time' },
-                { value: 'EVM + Cosmos', label: 'Networks' },
-                { value: '100%', label: 'Non-custodial' },
-              ].map((stat, i) => (
-                <div key={stat.label} className="flex items-center gap-6">
-                  <div className="text-center">
-                    <div className="text-white text-sm font-bold">{stat.value}</div>
-                    <div className="text-gray-500 text-xs mt-0.5">{stat.label}</div>
-                  </div>
-                  {i < 2 && <div className="w-px h-8 bg-white/10" />}
-                </div>
-              ))}
+            {/* Import Private Key link */}
+            <button
+              onClick={() => setShowImportModal(true)}
+              disabled={loading}
+              className="text-gray-400 text-sm underline underline-offset-2 hover:text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Import Private Key
+            </button>
+
+            {/*
+              Back — always rendered (same height reserved) so RECOVER WALLET
+              never shifts. Fades in/out with pointer-events toggled.
+            */}
+            <div
+              className={`transition-all duration-300 ease-in-out ${
+                showCreateModal
+                  ? 'opacity-100'
+                  : 'opacity-0 pointer-events-none'
+              }`}
+            >
+              <button
+                onClick={() => {
+                  setShowCreateModal(false);
+                  setWalletNameInput('');
+                  setError('');
+                }}
+                className="w-full text-gray-400 text-sm hover:text-white transition-colors text-center py-1"
+              >
+                ← Back
+              </button>
             </div>
 
           </div>
         </div>
-
-        {/* Powered by Injective */}
-        <div className="fixed bottom-3 md:bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-2 z-10 text-xs md:text-sm animate-fade-in">
-          <span className="text-gray-400">Powered by</span>
-          <span className="text-white font-semibold">Injective</span>
-          <Image 
-            src="/injlogo.png" 
-            alt="Injective Logo" 
-            width={20} 
-            height={20}
-            className="w-4 h-4 md:w-5 md:h-5 -ml-1.5"
-          />
-        </div>
-
       </div>
 
       {/* Import Private Key Modal */}
@@ -488,15 +378,8 @@ export default function WelcomePage() {
           <div className="bg-[#1a1a2e] border border-white/10 rounded-3xl w-full max-w-md p-6 md:p-8 shadow-2xl">
             {importStep === 'key' ? (
               <>
-                <div className="flex items-center gap-3 mb-1">
-                  <div className="w-8 h-8 rounded-xl bg-white/10 flex items-center justify-center flex-shrink-0">
-                    <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
-                    </svg>
-                  </div>
-                  <h2 className="text-white text-xl font-bold">Import Private Key</h2>
-                </div>
-                <p className="text-gray-400 text-sm mb-6 ml-11">Enter your Web3 private key to access INJ Pass.</p>
+                <h2 className="text-white text-xl font-bold mb-1">Import Private Key</h2>
+                <p className="text-gray-400 text-sm mb-6">Enter your Web3 private key to access INJ Pass.</p>
 
                 <div className="relative mb-4">
                   <input
@@ -548,15 +431,8 @@ export default function WelcomePage() {
               </>
             ) : (
               <>
-                <div className="flex items-center gap-3 mb-1">
-                  <div className="w-8 h-8 rounded-xl bg-white/10 flex items-center justify-center flex-shrink-0">
-                    <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                    </svg>
-                  </div>
-                  <h2 className="text-white text-xl font-bold">Set a Password</h2>
-                </div>
-                <p className="text-gray-400 text-sm mb-6 ml-11">Your private key will be encrypted with this password.</p>
+                <h2 className="text-white text-xl font-bold mb-1">Set a Password</h2>
+                <p className="text-gray-400 text-sm mb-6">Your private key will be encrypted with this password.</p>
 
                 <input
                   ref={importPasswordRef}
@@ -601,6 +477,19 @@ export default function WelcomePage() {
         </div>
       )}
 
+      {/* Powered by Injective */}
+      <div className="fixed bottom-3 md:bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-2 z-10 text-xs md:text-sm animate-fade-in">
+        <span className="text-gray-400">Powered by</span>
+        <span className="text-white font-semibold">Injective</span>
+        <Image 
+          src="/injlogo.png" 
+          alt="Injective Logo" 
+          width={20} 
+          height={20}
+          className="w-4 h-4 md:w-5 md:h-5 -ml-1.5"
+        />
+      </div>
+      </div>
     </div>
   );
 }
