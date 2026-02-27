@@ -28,7 +28,7 @@ export default function DashboardPage() {
   const [usdcPriceChange24h, setUsdcPriceChange24h] = useState<number>(0);
   const [balanceVisible, setBalanceVisible] = useState(true);
   const [copied, setCopied] = useState(false);
-  const [activeTab, setActiveTab] = useState<'settings' | 'wallet' | 'discover'>('wallet');
+  const [activeTab, setActiveTab] = useState<'settings' | 'wallet' | 'discover' | 'agents'>('wallet');
   const [assetTab, setAssetTab] = useState<'tokens' | 'nfts' | 'defi'>('tokens');
   const [tokenBalances, setTokenBalances] = useState<Record<string, string>>({
     INJ: '0.0000',
@@ -932,7 +932,7 @@ export default function DashboardPage() {
       {/* Bottom Navigation */}
       <div className="fixed bottom-0 left-0 right-0 bg-black/95 border-t border-white/10 backdrop-blur-lg">
         <div className="max-w-7xl mx-auto px-4">
-          <div className="grid grid-cols-3 gap-4 py-3">
+          <div className="grid grid-cols-4 gap-2 py-3">
             {/* Settings */}
             <button
               onClick={() => {
@@ -1005,6 +1005,30 @@ export default function DashboardPage() {
                 </svg>
               </div>
               <span className="text-xs font-semibold">Discover</span>
+            </button>
+
+            {/* Agents */}
+            <button
+              onClick={() => {
+                setActiveTab('agents');
+                router.push('/agents');
+              }}
+              className={`flex flex-col items-center gap-1 py-2 rounded-xl transition-all ${
+                activeTab === 'agents' 
+                  ? 'text-white' 
+                  : 'text-gray-500 hover:text-gray-300'
+              }`}
+            >
+              <div className={`p-2 rounded-xl transition-all ${
+                activeTab === 'agents' 
+                  ? 'bg-white/10' 
+                  : 'bg-transparent'
+              }`}>
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17H3a2 2 0 01-2-2V5a2 2 0 012-2h14a2 2 0 012 2v10a2 2 0 01-2 2h-2" />
+                </svg>
+              </div>
+              <span className="text-xs font-semibold">Agents</span>
             </button>
           </div>
         </div>
