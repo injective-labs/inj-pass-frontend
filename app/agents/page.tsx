@@ -718,18 +718,15 @@ export default function AgentsPage() {
             </div>
           ) : (
             <div className="max-w-3xl mx-auto px-4 py-6 space-y-6">
-              {messages.map((msg) => (
+              {messages.filter((msg) => msg.role !== 'tool').map((msg) => (
                 <div key={msg.id} className={`flex gap-3 ${msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
-                  <div className={`w-8 h-8 rounded-full flex-shrink-0 flex items-center justify-center text-xs font-bold ${
-                    msg.role === 'user' ? 'bg-white text-black'
-                    : msg.role === 'tool' ? 'bg-blue-500/20 text-blue-400'
-                    : 'bg-white/10 text-gray-300'
+                  <div className={`w-8 h-8 rounded-full flex-shrink-0 flex items-center justify-center text-sm font-bold ${
+                    msg.role === 'user' ? 'bg-white text-black' : 'bg-white/10 text-white'
                   }`}>
-                    {msg.role === 'user' ? 'U' : msg.role === 'tool' ? '⚙' : 'AI'}
+                    {msg.role === 'user' ? 'U' : 'λ'}
                   </div>
                   <div className={`max-w-[80%] rounded-2xl px-4 py-3 ${
                     msg.role === 'user' ? 'bg-white text-black rounded-tr-sm'
-                    : msg.role === 'tool' ? 'bg-blue-500/10 border border-blue-500/20 text-blue-100 rounded-tl-sm'
                     : msg.isError ? 'bg-red-500/10 border border-red-500/20 text-red-200 rounded-tl-sm'
                     : 'bg-white/5 border border-white/10 text-gray-100 rounded-tl-sm'
                   }`}>
@@ -743,7 +740,7 @@ export default function AgentsPage() {
 
               {isRunning && (
                 <div className="flex gap-3">
-                  <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center text-xs font-bold text-gray-300">AI</div>
+                  <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center text-sm font-bold text-white">λ</div>
                   <div className="bg-white/5 border border-white/10 rounded-2xl rounded-tl-sm px-4 py-3">
                     <div className="flex gap-1 items-center h-5">
                       {[0, 150, 300].map((d) => (
