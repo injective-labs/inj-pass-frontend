@@ -85,7 +85,10 @@ function uid() {
 function loadConversations(): Conversation[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    return raw ? JSON.parse(raw) : [];
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as Conversation[];
+    // Normalise old records that pre-date the apiHistory field
+    return parsed.map((c) => ({ ...c, apiHistory: Array.isArray(c.apiHistory) ? c.apiHistory : [] }));
   } catch {
     return [];
   }
@@ -175,7 +178,7 @@ export default function AgentsPage() {
   }
 
   function appendApi(convId: string, msg: ApiMessage) {
-    updateConv(convId, (c) => ({ ...c, apiHistory: [...c.apiHistory, msg] }));
+    updateConv(convId, (c) => ({ ...c, apiHistory: [...(c.apiHistory ?? []), msg] }));
   }
 
   function getApiHistory(convId: string): ApiMessage[] {
