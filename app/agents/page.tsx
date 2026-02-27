@@ -13,12 +13,28 @@ import type { Address } from 'viem';
 
 type Model = 'claude-sonnet-4-5' | 'claude-sonnet-4-6';
 
+/** Display message shown in the chat UI */
 interface ChatMessage {
   id: string;
-  role: 'user' | 'assistant' | 'tool_result';
+  role: 'user' | 'assistant' | 'tool';
   content: string;
   isError?: boolean;
-  isPending?: boolean;
+}
+
+/** Anthropic API message format stored alongside display messages */
+interface ApiBlock {
+  type: string;
+  text?: string;
+  id?: string;
+  name?: string;
+  input?: Record<string, unknown>;
+  tool_use_id?: string;
+  content?: string;
+}
+
+interface ApiMessage {
+  role: 'user' | 'assistant';
+  content: string | ApiBlock[];
 }
 
 interface Conversation {
@@ -26,13 +42,17 @@ interface Conversation {
   title: string;
   createdAt: number;
   messages: ChatMessage[];
+  apiHistory: ApiMessage[];
 }
 
-// A pending tool call waiting for user confirmation
-interface PendingTool {
-  tool_use_id: string;
-  name: string;
-  input: Record<string, unknown>;
+/** State while waiting for the user to confirm a destructive tool */
+interface PendingConfirmation {
+  convId: string;
+  toolUseId: string;
+  toolName: string;
+  toolInput: Record<string, unknown>;
+  /** The full assistant api message that triggered the tool call */
+  assistantApiMessage: ApiMessage;
 }
 
 const MODEL_OPTIONS: { value: Model; label: string }[] = [
@@ -41,6 +61,12 @@ const MODEL_OPTIONS: { value: Model; label: string }[] = [
 ];
 
 const STORAGE_KEY = 'injpass_agent_conversations';
+
+const TOKEN_ICONS: Record<string, string> = {
+  INJ: '/injswap.png',
+  USDT: '/USDT_Logo.png',
+  USDC: '/USDC_Logo.png',
+};
 
 // ─── Helpers ───────────────────────────────────────────────────────────────
 
@@ -60,9 +86,7 @@ function loadConversations(): Conversation[] {
 function saveConversations(convs: Conversation[]) {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(convs));
-  } catch {
-    // storage full — ignore
-  }
+  } catch { /* storage full */ }
 }
 
 // ─── Main Component ────────────────────────────────────────────────────────
@@ -75,15 +99,14 @@ export default function AgentsPage() {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [input, setInput] = useState('');
   const [model, setModel] = useState<Model>('claude-sonnet-4-6');
-  const [isStreaming, setIsStreaming] = useState(false);
+  const [isRunning, setIsRunning] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [pendingTool, setPendingTool] = useState<PendingTool | null>(null);
+  const [pendingConfirm, setPendingConfirm] = useState<PendingConfirmation | null>(null);
   const [confirmLoading, setConfirmLoading] = useState(false);
 
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  // Active conversation derived from list
   const activeConv = conversations.find((c) => c.id === activeId) ?? null;
   const messages = activeConv?.messages ?? [];
 
@@ -101,12 +124,10 @@ export default function AgentsPage() {
     if (saved.length > 0) setActiveId(saved[0].id);
   }, []);
 
-  // ── Auto-scroll ─────────────────────────────────────────────────────────
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+  }, [messages, isRunning]);
 
-  // ── Textarea auto-resize ────────────────────────────────────────────────
   useEffect(() => {
     const el = textareaRef.current;
     if (!el) return;
@@ -114,7 +135,6 @@ export default function AgentsPage() {
     el.style.height = Math.min(el.scrollHeight, 160) + 'px';
   }, [input]);
 
-  // ── Persist conversations whenever they change ──────────────────────────
   useEffect(() => {
     saveConversations(conversations);
   }, [conversations]);
@@ -123,7 +143,7 @@ export default function AgentsPage() {
 
   function newConversation() {
     const id = uid();
-    const conv: Conversation = { id, title: 'New chat', createdAt: Date.now(), messages: [] };
+    const conv: Conversation = { id, title: 'New chat', createdAt: Date.now(), messages: [], apiHistory: [] };
     setConversations((prev) => [conv, ...prev]);
     setActiveId(id);
     setSidebarOpen(false);
@@ -131,30 +151,39 @@ export default function AgentsPage() {
 
   function deleteConversation(id: string) {
     setConversations((prev) => prev.filter((c) => c.id !== id));
-    if (activeId === id) {
+    setActiveId((prev) => {
+      if (prev !== id) return prev;
       const remaining = conversations.filter((c) => c.id !== id);
-      setActiveId(remaining.length > 0 ? remaining[0].id : null);
-    }
+      return remaining.length > 0 ? remaining[0].id : null;
+    });
   }
 
-  function updateMessages(id: string, updater: (msgs: ChatMessage[]) => ChatMessage[]) {
-    setConversations((prev) =>
-      prev.map((c) => (c.id === id ? { ...c, messages: updater(c.messages) } : c))
-    );
+  function updateConv(id: string, updater: (c: Conversation) => Conversation) {
+    setConversations((prev) => prev.map((c) => (c.id === id ? updater(c) : c)));
   }
 
-  function setTitle(id: string, title: string) {
-    setConversations((prev) =>
-      prev.map((c) => (c.id === id ? { ...c, title: title.slice(0, 40) } : c))
-    );
+  function appendDisplay(convId: string, msg: ChatMessage) {
+    updateConv(convId, (c) => ({ ...c, messages: [...c.messages, msg] }));
   }
 
-  // ─── Tool execution (client-side, private key never leaves browser) ──────
+  function appendApi(convId: string, msg: ApiMessage) {
+    updateConv(convId, (c) => ({ ...c, apiHistory: [...c.apiHistory, msg] }));
+  }
+
+  function getApiHistory(convId: string): ApiMessage[] {
+    return conversations.find((c) => c.id === convId)?.apiHistory ?? [];
+  }
+
+  // ─── Tool execution ──────────────────────────────────────────────────────
 
   async function executeTool(name: string, input: Record<string, unknown>): Promise<string> {
     if (!address) return JSON.stringify({ error: 'Wallet not connected' });
 
     try {
+      if (name === 'get_wallet_info') {
+        return JSON.stringify({ address, network: 'Injective EVM Mainnet', chainId: 1776 });
+      }
+
       if (name === 'get_balance') {
         const balances = await getTokenBalances(['INJ', 'USDT', 'USDC'], address as Address);
         return JSON.stringify({ INJ: balances.INJ, USDT: balances.USDT, USDC: balances.USDC });
@@ -162,10 +191,7 @@ export default function AgentsPage() {
 
       if (name === 'get_swap_quote') {
         const { fromToken, toToken, amount, slippage = 0.5 } = input as {
-          fromToken: string;
-          toToken: string;
-          amount: string;
-          slippage?: number;
+          fromToken: string; toToken: string; amount: string; slippage?: number;
         };
         const quote = await getSwapQuote(fromToken, toToken, amount, Number(slippage));
         return JSON.stringify({
@@ -182,16 +208,11 @@ export default function AgentsPage() {
       if (name === 'execute_swap') {
         if (!privateKey) return JSON.stringify({ error: 'Wallet locked' });
         const { fromToken, toToken, amount, slippage = 0.5 } = input as {
-          fromToken: string;
-          toToken: string;
-          amount: string;
-          slippage?: number;
+          fromToken: string; toToken: string; amount: string; slippage?: number;
         };
         const pkHex = privateKeyToHex(privateKey);
         const txHash = await executeSwap({
-          fromToken,
-          toToken,
-          amountIn: amount,
+          fromToken, toToken, amountIn: amount,
           slippage: Number(slippage),
           userAddress: address as Address,
           privateKey: pkHex,
@@ -226,22 +247,20 @@ export default function AgentsPage() {
     }
   }
 
-  // ─── Core chat loop ─────────────────────────────────────────────────────
+  // ─── Core agent loop ─────────────────────────────────────────────────────
+  // Runs until the model returns a final text response with no more tool calls.
+  // Destructive tools (swap, send) pause and wait for the confirmation modal.
 
-  const runAgentLoop = useCallback(
-    async (convId: string, currentMessages: ChatMessage[]) => {
-      setIsStreaming(true);
+  const runLoop = useCallback(async (convId: string, history: ApiMessage[]) => {
+    setIsRunning(true);
 
-      // Build API message format (skip tool_result pseudo-messages for display only)
-      const apiMessages = currentMessages
-        .filter((m) => m.role !== 'tool_result')
-        .map((m) => ({ role: m.role as 'user' | 'assistant', content: m.content }));
-
-      try {
+    try {
+      // eslint-disable-next-line no-constant-condition
+      while (true) {
         const res = await fetch('/api/agents', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ messages: apiMessages, model }),
+          body: JSON.stringify({ messages: history, model }),
         });
 
         if (!res.ok) {
@@ -250,187 +269,162 @@ export default function AgentsPage() {
         }
 
         const data = await res.json();
+        const blocks: ApiBlock[] = data.content ?? [];
 
-        // Extract text and tool_use blocks
-        const textBlocks: string[] = [];
-        const toolBlocks: { id: string; name: string; input: Record<string, unknown> }[] = [];
+        // Build the assistant api message and persist it
+        const assistantApiMsg: ApiMessage = { role: 'assistant', content: blocks };
+        history = [...history, assistantApiMsg];
+        appendApi(convId, assistantApiMsg);
 
-        for (const block of data.content ?? []) {
-          if (block.type === 'text') textBlocks.push(block.text);
-          if (block.type === 'tool_use') toolBlocks.push({ id: block.id, name: block.name, input: block.input });
+        // Render text blocks
+        const textContent = blocks
+          .filter((b) => b.type === 'text')
+          .map((b) => b.text ?? '')
+          .join('\n')
+          .trim();
+
+        if (textContent) {
+          appendDisplay(convId, { id: uid(), role: 'assistant', content: textContent });
         }
 
-        const assistantText = textBlocks.join('\n').trim();
+        // Find tool_use blocks
+        const toolUseBlocks = blocks.filter((b) => b.type === 'tool_use');
 
-        if (assistantText) {
-          const assistantMsg: ChatMessage = { id: uid(), role: 'assistant', content: assistantText };
-          updateMessages(convId, (msgs) => [...msgs, assistantMsg]);
-        }
+        // No more tools → done
+        if (toolUseBlocks.length === 0) break;
 
-        // If there are tool calls
-        if (toolBlocks.length > 0) {
-          const tool = toolBlocks[0]; // Handle one at a time
-          const isDestructive = tool.name === 'execute_swap' || tool.name === 'send_token';
-          // get_swap_quote, get_balance, get_tx_history are all safe to run immediately
+        // Process tools in sequence
+        let shouldPause = false;
+
+        for (const tool of toolUseBlocks) {
+          const toolName = tool.name!;
+          const toolInput = (tool.input ?? {}) as Record<string, unknown>;
+          const toolId = tool.id!;
+          const isDestructive = toolName === 'execute_swap' || toolName === 'send_token';
 
           if (isDestructive) {
-            // Ask user to confirm before executing
-            setPendingTool({ tool_use_id: tool.id, name: tool.name, input: tool.input });
-            setIsStreaming(false);
-            return;
+            // Pause and show confirmation modal
+            setPendingConfirm({
+              convId,
+              toolUseId: toolId,
+              toolName,
+              toolInput,
+              assistantApiMessage: assistantApiMsg,
+            });
+            setIsRunning(false);
+            shouldPause = true;
+            break;
           }
 
-          // Non-destructive: execute immediately
-          const toolResultContent = await executeTool(tool.name, tool.input);
-          const displayMsg: ChatMessage = {
-            id: uid(),
-            role: 'tool_result',
-            content: `🔧 **${tool.name}** result:\n\`\`\`json\n${JSON.stringify(JSON.parse(toolResultContent), null, 2)}\n\`\`\``,
-          };
-          const updatedMessages = [...currentMessages, displayMsg];
-          updateMessages(convId, () => updatedMessages);
+          // Safe tool — execute immediately and show result
+          const resultContent = await executeTool(toolName, toolInput);
 
-          // Send tool result back to Claude
-          const toolResultRes = await fetch('/api/agents', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              messages: apiMessages.concat([{ role: 'assistant', content: data.content }]),
-              model,
-              toolResults: [{ tool_use_id: tool.id, content: toolResultContent }],
-            }),
+          // Show in UI
+          appendDisplay(convId, {
+            id: uid(),
+            role: 'tool',
+            content: formatToolResult(toolName, resultContent),
           });
 
-          if (!toolResultRes.ok) throw new Error('Tool result API error');
-          const toolResultData = await toolResultRes.json();
-
-          const finalText = (toolResultData.content ?? [])
-            .filter((b: { type: string }) => b.type === 'text')
-            .map((b: { text: string }) => b.text)
-            .join('\n')
-            .trim();
-
-          if (finalText) {
-            updateMessages(convId, (msgs) => [
-              ...msgs,
-              { id: uid(), role: 'assistant', content: finalText },
-            ]);
-          }
+          // Add tool_result to history
+          const toolResultMsg: ApiMessage = {
+            role: 'user',
+            content: [{
+              type: 'tool_result',
+              tool_use_id: toolId,
+              content: resultContent,
+            }],
+          };
+          history = [...history, toolResultMsg];
+          appendApi(convId, toolResultMsg);
         }
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : 'Unknown error';
-        updateMessages(convId, (msgs) => [
-          ...msgs,
-          { id: uid(), role: 'assistant', content: `❌ Error: ${msg}`, isError: true },
-        ]);
-      } finally {
-        setIsStreaming(false);
+
+        if (shouldPause) return; // resume handled by handleConfirm / handleCancel
       }
-    },
-    [model]
-  );
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Unknown error';
+      appendDisplay(convId, { id: uid(), role: 'assistant', content: `❌ Error: ${msg}`, isError: true });
+    } finally {
+      setIsRunning(false);
+    }
+  }, [model]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ─── Confirm destructive tool ────────────────────────────────────────────
 
-  async function handleToolConfirm() {
-    if (!pendingTool || !activeId) return;
+  async function handleConfirm() {
+    if (!pendingConfirm) return;
+    const { convId, toolUseId, toolName, toolInput } = pendingConfirm;
     setConfirmLoading(true);
 
-    const toolResultContent = await executeTool(pendingTool.name, pendingTool.input);
-    const parsed = JSON.parse(toolResultContent);
-    const isSuccess = !parsed.error;
+    const resultContent = await executeTool(toolName, toolInput);
+    const parsed = JSON.parse(resultContent);
 
-    const displayMsg: ChatMessage = {
+    // Display result
+    appendDisplay(convId, {
       id: uid(),
-      role: 'tool_result',
-      content: isSuccess
-        ? `✅ **${pendingTool.name}** executed\nTx Hash: \`${parsed.txHash}\``
-        : `❌ **${pendingTool.name}** failed: ${parsed.error}`,
+      role: 'tool',
+      content: parsed.error
+        ? `❌ **${toolName}** failed: ${parsed.error}`
+        : `✅ **${toolName}** executed\nTx Hash: \`${parsed.txHash}\`\n[View on Blockscout](${parsed.explorerUrl})`,
+    });
+
+    // Add tool_result to API history and continue loop
+    const toolResultMsg: ApiMessage = {
+      role: 'user',
+      content: [{ type: 'tool_result', tool_use_id: toolUseId, content: resultContent }],
     };
+    appendApi(convId, toolResultMsg);
 
-    const currentMsgs = conversations.find((c) => c.id === activeId)?.messages ?? [];
-    const apiMsgs = currentMsgs
-      .filter((m) => m.role !== 'tool_result')
-      .map((m) => ({ role: m.role as 'user' | 'assistant', content: m.content }));
+    // Get current history including the new tool result
+    const currentHistory = [...getApiHistory(convId), toolResultMsg];
 
-    updateMessages(activeId, (msgs) => [...msgs, displayMsg]);
-
-    // Send tool result back to Claude for final response
-    try {
-      const res = await fetch('/api/agents', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          messages: apiMsgs,
-          model,
-          toolResults: [{ tool_use_id: pendingTool.tool_use_id, content: toolResultContent }],
-        }),
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        const finalText = (data.content ?? [])
-          .filter((b: { type: string }) => b.type === 'text')
-          .map((b: { text: string }) => b.text)
-          .join('\n')
-          .trim();
-        if (finalText) {
-          updateMessages(activeId, (msgs) => [
-            ...msgs,
-            { id: uid(), role: 'assistant', content: finalText },
-          ]);
-        }
-      }
-    } catch {
-      // ignore
-    }
-
-    setPendingTool(null);
+    setPendingConfirm(null);
     setConfirmLoading(false);
+
+    // Continue the agent loop with updated history
+    await runLoop(convId, currentHistory);
   }
 
-  function handleToolCancel() {
-    if (!activeId) return;
-    updateMessages(activeId, (msgs) => [
-      ...msgs,
-      { id: uid(), role: 'assistant', content: '🚫 Operation cancelled.' },
-    ]);
-    setPendingTool(null);
+  function handleCancel() {
+    if (!pendingConfirm) return;
+    appendDisplay(pendingConfirm.convId, {
+      id: uid(),
+      role: 'assistant',
+      content: '🚫 Operation cancelled.',
+    });
+    setPendingConfirm(null);
   }
 
   // ─── Send message ────────────────────────────────────────────────────────
 
   async function handleSend() {
     const text = input.trim();
-    if (!text || isStreaming) return;
-
+    if (!text || isRunning) return;
     setInput('');
 
     let convId = activeId;
+    let currentHistory: ApiMessage[] = [];
 
-    // Create a new conversation if none active
     if (!convId) {
       const id = uid();
-      const conv: Conversation = { id, title: text.slice(0, 40), createdAt: Date.now(), messages: [] };
+      const conv: Conversation = { id, title: text.slice(0, 40), createdAt: Date.now(), messages: [], apiHistory: [] };
       setConversations((prev) => [conv, ...prev]);
       setActiveId(id);
       convId = id;
-    } else if (messages.length === 0) {
-      setTitle(convId, text);
+    } else {
+      currentHistory = getApiHistory(convId);
+      if (messages.length === 0) {
+        updateConv(convId, (c) => ({ ...c, title: text.slice(0, 40) }));
+      }
     }
 
-    const userMsg: ChatMessage = { id: uid(), role: 'user', content: text };
-    let updatedMessages: ChatMessage[] = [];
-    updateMessages(convId, (msgs) => {
-      updatedMessages = [...msgs, userMsg];
-      return updatedMessages;
-    });
+    // Add user message
+    appendDisplay(convId, { id: uid(), role: 'user', content: text });
+    const userApiMsg: ApiMessage = { role: 'user', content: text };
+    appendApi(convId, userApiMsg);
+    currentHistory = [...currentHistory, userApiMsg];
 
-    // Small delay to ensure state update
-    await new Promise((r) => setTimeout(r, 50));
-    const conv = conversations.find((c) => c.id === convId);
-    const msgsForApi = conv ? [...conv.messages, userMsg] : [userMsg];
-    await runAgentLoop(convId, msgsForApi);
+    await runLoop(convId, currentHistory);
   }
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
@@ -442,21 +436,26 @@ export default function AgentsPage() {
 
   // ─── Render helpers ──────────────────────────────────────────────────────
 
+  function formatToolResult(name: string, raw: string): string {
+    try {
+      const parsed = JSON.parse(raw);
+      return `🔧 **${name}**\n\`\`\`json\n${JSON.stringify(parsed, null, 2)}\n\`\`\``;
+    } catch {
+      return `🔧 **${name}**: ${raw}`;
+    }
+  }
+
   function renderMessageContent(content: string) {
-    // Basic markdown-ish rendering: code blocks, bold, inline code
     const lines = content.split('\n');
     const elements: React.ReactNode[] = [];
     let inCode = false;
     let codeLines: string[] = [];
     let keyIdx = 0;
 
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i];
+    for (const line of lines) {
       if (line.startsWith('```')) {
-        if (!inCode) {
-          inCode = true;
-          codeLines = [];
-        } else {
+        if (!inCode) { inCode = true; codeLines = []; }
+        else {
           elements.push(
             <pre key={keyIdx++} className="bg-white/5 border border-white/10 rounded-lg p-3 my-2 overflow-x-auto text-xs font-mono text-green-300 whitespace-pre-wrap">
               {codeLines.join('\n')}
@@ -466,49 +465,43 @@ export default function AgentsPage() {
         }
         continue;
       }
-      if (inCode) {
-        codeLines.push(line);
-        continue;
-      }
+      if (inCode) { codeLines.push(line); continue; }
 
-      // Render inline formatting
-      const rendered = renderInline(line, keyIdx++);
-      elements.push(<p key={keyIdx++} className="mb-1 leading-relaxed">{rendered}</p>);
+      elements.push(
+        <p key={keyIdx++} className="mb-1 leading-relaxed">
+          {renderInline(line)}
+        </p>
+      );
     }
-
     return <div className="text-sm">{elements}</div>;
   }
 
-  function renderInline(text: string, key: number): React.ReactNode {
-    // Handle **bold** and `code`
-    const parts = text.split(/(`[^`]+`|\*\*[^*]+\*\*)/g);
-    return parts.map((part, i) => {
-      if (part.startsWith('`') && part.endsWith('`')) {
+  function renderInline(text: string): React.ReactNode {
+    return text.split(/(`[^`]+`|\*\*[^*]+\*\*|\[[^\]]+\]\([^)]+\))/g).map((part, i) => {
+      if (part.startsWith('`') && part.endsWith('`'))
         return <code key={i} className="bg-white/10 px-1 rounded text-xs font-mono text-blue-300">{part.slice(1, -1)}</code>;
-      }
-      if (part.startsWith('**') && part.endsWith('**')) {
+      if (part.startsWith('**') && part.endsWith('**'))
         return <strong key={i}>{part.slice(2, -2)}</strong>;
-      }
+      const linkMatch = part.match(/^\[([^\]]+)\]\(([^)]+)\)$/);
+      if (linkMatch)
+        return <a key={i} href={linkMatch[2]} target="_blank" rel="noopener noreferrer" className="text-blue-400 underline">{linkMatch[1]}</a>;
       return part;
     });
   }
 
-  function toolLabel(name: string, input: Record<string, unknown>) {
+  function toolConfirmLabel(name: string, input: Record<string, unknown>) {
     if (name === 'execute_swap') {
-      const expected = input.expectedOutput ? ` → ~${Number(input.expectedOutput).toFixed(4)} ${input.toToken}` : ` → ${input.toToken}`;
+      const expected = input.expectedOutput
+        ? ` → ~${Number(input.expectedOutput).toFixed(4)} ${input.toToken}`
+        : ` → ${input.toToken}`;
       return `Swap ${input.amount} ${input.fromToken}${expected}`;
     }
     if (name === 'send_token') {
-      return `Send ${input.amount} INJ to ${String(input.toAddress).slice(0, 10)}...${String(input.toAddress).slice(-6)}`;
+      const addr = String(input.toAddress);
+      return `Send ${input.amount} INJ to ${addr.slice(0, 10)}...${addr.slice(-6)}`;
     }
     return name;
   }
-
-  const TOKEN_ICONS: Record<string, string> = {
-    INJ: '/injswap.png',
-    USDT: '/USDT_Logo.png',
-    USDC: '/USDC_Logo.png',
-  };
 
   if (isCheckingSession) {
     return (
@@ -523,27 +516,18 @@ export default function AgentsPage() {
   return (
     <div className="flex h-screen bg-black text-white overflow-hidden">
 
-      {/* ── Sidebar overlay (mobile) ── */}
+      {/* Sidebar overlay (mobile) */}
       {sidebarOpen && (
-        <div
-          className="fixed inset-0 bg-black/60 z-20 md:hidden"
-          onClick={() => setSidebarOpen(false)}
-        />
+        <div className="fixed inset-0 bg-black/60 z-20 md:hidden" onClick={() => setSidebarOpen(false)} />
       )}
 
-      {/* ── Sidebar ── */}
-      <aside
-        className={`
-          fixed md:relative z-30 md:z-auto
-          top-0 left-0 h-full
-          w-72 flex-shrink-0
-          bg-[#0a0a0a] border-r border-white/10
-          flex flex-col
-          transition-transform duration-300
-          ${sidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
-        `}
-      >
-        {/* Sidebar header */}
+      {/* Sidebar */}
+      <aside className={`
+        fixed md:relative z-30 md:z-auto top-0 left-0 h-full w-72 flex-shrink-0
+        bg-[#0a0a0a] border-r border-white/10 flex flex-col
+        transition-transform duration-300
+        ${sidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
+      `}>
         <div className="p-4 border-b border-white/10 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <div className="w-7 h-7 rounded-lg bg-white/10 flex items-center justify-center">
@@ -553,56 +537,40 @@ export default function AgentsPage() {
             </div>
             <span className="font-bold text-sm">Agents</span>
           </div>
-          <button
-            onClick={newConversation}
-            className="p-1.5 rounded-lg hover:bg-white/10 transition-colors"
-            title="New chat"
-          >
+          <button onClick={newConversation} className="p-1.5 rounded-lg hover:bg-white/10 transition-colors" title="New chat">
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
             </svg>
           </button>
         </div>
 
-        {/* Conversation list */}
         <div className="flex-1 overflow-y-auto py-2 space-y-0.5 px-2">
           {conversations.length === 0 ? (
-            <div className="text-center py-10 text-gray-600 text-xs">
-              <p>No conversations yet</p>
-              <p className="mt-1">Start a new chat</p>
-            </div>
-          ) : (
-            conversations.map((conv) => (
-              <div
-                key={conv.id}
-                className={`group flex items-center justify-between gap-2 px-3 py-2.5 rounded-xl cursor-pointer transition-colors ${
-                  conv.id === activeId ? 'bg-white/10' : 'hover:bg-white/5'
-                }`}
-                onClick={() => {
-                  setActiveId(conv.id);
-                  setSidebarOpen(false);
-                }}
-              >
-                <div className="flex items-center gap-2 min-w-0">
-                  <svg className="w-3.5 h-3.5 text-gray-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
-                  </svg>
-                  <span className="text-xs truncate text-gray-300">{conv.title}</span>
-                </div>
-                <button
-                  onClick={(e) => { e.stopPropagation(); deleteConversation(conv.id); }}
-                  className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-white/10 transition-all flex-shrink-0"
-                >
-                  <svg className="w-3 h-3 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
+            <div className="text-center py-10 text-gray-600 text-xs"><p>No conversations yet</p></div>
+          ) : conversations.map((conv) => (
+            <div
+              key={conv.id}
+              className={`group flex items-center justify-between gap-2 px-3 py-2.5 rounded-xl cursor-pointer transition-colors ${conv.id === activeId ? 'bg-white/10' : 'hover:bg-white/5'}`}
+              onClick={() => { setActiveId(conv.id); setSidebarOpen(false); }}
+            >
+              <div className="flex items-center gap-2 min-w-0">
+                <svg className="w-3.5 h-3.5 text-gray-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
+                </svg>
+                <span className="text-xs truncate text-gray-300">{conv.title}</span>
               </div>
-            ))
-          )}
+              <button
+                onClick={(e) => { e.stopPropagation(); deleteConversation(conv.id); }}
+                className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-white/10 transition-all flex-shrink-0"
+              >
+                <svg className="w-3 h-3 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+          ))}
         </div>
 
-        {/* Wallet info at bottom of sidebar */}
         <div className="p-4 border-t border-white/10">
           <div className="flex items-center gap-2">
             <div className="w-7 h-7 rounded-full bg-white/10 flex items-center justify-center flex-shrink-0">
@@ -625,23 +593,17 @@ export default function AgentsPage() {
         </div>
       </aside>
 
-      {/* ── Main chat area ── */}
-      <div className="flex-1 flex flex-col min-w-0 h-full">
+      {/* Main chat area */}
+      <div className="flex-1 flex flex-col min-w-0 h-full relative">
 
         {/* Top bar */}
         <header className="flex items-center gap-3 px-4 py-3 border-b border-white/10 bg-black/50 backdrop-blur-sm flex-shrink-0">
-          <button
-            onClick={() => setSidebarOpen(true)}
-            className="p-2 rounded-lg hover:bg-white/10 transition-colors md:hidden"
-          >
+          <button onClick={() => setSidebarOpen(true)} className="p-2 rounded-lg hover:bg-white/10 transition-colors md:hidden">
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
             </svg>
           </button>
-          <button
-            onClick={() => router.push('/dashboard')}
-            className="p-2 rounded-lg hover:bg-white/10 transition-colors"
-          >
+          <button onClick={() => router.push('/dashboard')} className="p-2 rounded-lg hover:bg-white/10 transition-colors">
             <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
             </svg>
@@ -649,11 +611,7 @@ export default function AgentsPage() {
           <div className="flex-1 text-center">
             <span className="font-semibold text-sm">{activeConv?.title ?? 'New chat'}</span>
           </div>
-          <button
-            onClick={newConversation}
-            className="p-2 rounded-lg hover:bg-white/10 transition-colors"
-            title="New conversation"
-          >
+          <button onClick={newConversation} className="p-2 rounded-lg hover:bg-white/10 transition-colors">
             <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
             </svg>
@@ -663,7 +621,6 @@ export default function AgentsPage() {
         {/* Messages */}
         <div className="flex-1 overflow-y-auto">
           {messages.length === 0 ? (
-            // Welcome screen
             <div className="flex flex-col items-center justify-center h-full px-6 text-center">
               <div className="w-16 h-16 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center mb-6">
                 <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -672,21 +629,21 @@ export default function AgentsPage() {
               </div>
               <h2 className="text-xl font-bold mb-2">INJ Pass Agent</h2>
               <p className="text-gray-400 text-sm max-w-sm mb-8">
-                Your AI-powered wallet assistant. Ask me to check balances, swap tokens, send INJ, or explain anything on Injective.
+                AI-powered wallet assistant. Ask me to check balances, swap tokens, send INJ, or explain anything on Injective.
               </p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full max-w-sm">
                 {[
-                  'What is my current balance?',
-                  'Swap 0.01 INJ to USDT',
+                  'What is my wallet address?',
+                  'Show my balances',
+                  'Swap all INJ to USDT',
                   'Show my recent transactions',
-                  'Explain staking on Injective',
-                ].map((suggestion) => (
+                ].map((s) => (
                   <button
-                    key={suggestion}
-                    onClick={() => { setInput(suggestion); textareaRef.current?.focus(); }}
+                    key={s}
+                    onClick={() => { setInput(s); textareaRef.current?.focus(); }}
                     className="text-left px-4 py-3 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-sm text-gray-300 transition-colors"
                   >
-                    {suggestion}
+                    {s}
                   </button>
                 ))}
               </div>
@@ -694,30 +651,19 @@ export default function AgentsPage() {
           ) : (
             <div className="max-w-3xl mx-auto px-4 py-6 space-y-6">
               {messages.map((msg) => (
-                <div
-                  key={msg.id}
-                  className={`flex gap-3 ${msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}
-                >
-                  {/* Avatar */}
+                <div key={msg.id} className={`flex gap-3 ${msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
                   <div className={`w-8 h-8 rounded-full flex-shrink-0 flex items-center justify-center text-xs font-bold ${
-                    msg.role === 'user'
-                      ? 'bg-white text-black'
-                      : msg.role === 'tool_result'
-                      ? 'bg-blue-500/20 text-blue-400'
-                      : 'bg-white/10 text-gray-300'
+                    msg.role === 'user' ? 'bg-white text-black'
+                    : msg.role === 'tool' ? 'bg-blue-500/20 text-blue-400'
+                    : 'bg-white/10 text-gray-300'
                   }`}>
-                    {msg.role === 'user' ? 'U' : msg.role === 'tool_result' ? '⚙' : 'AI'}
+                    {msg.role === 'user' ? 'U' : msg.role === 'tool' ? '⚙' : 'AI'}
                   </div>
-
-                  {/* Bubble */}
                   <div className={`max-w-[80%] rounded-2xl px-4 py-3 ${
-                    msg.role === 'user'
-                      ? 'bg-white text-black rounded-tr-sm'
-                      : msg.role === 'tool_result'
-                      ? 'bg-blue-500/10 border border-blue-500/20 text-blue-100 rounded-tl-sm'
-                      : msg.isError
-                      ? 'bg-red-500/10 border border-red-500/20 text-red-200 rounded-tl-sm'
-                      : 'bg-white/5 border border-white/10 text-gray-100 rounded-tl-sm'
+                    msg.role === 'user' ? 'bg-white text-black rounded-tr-sm'
+                    : msg.role === 'tool' ? 'bg-blue-500/10 border border-blue-500/20 text-blue-100 rounded-tl-sm'
+                    : msg.isError ? 'bg-red-500/10 border border-red-500/20 text-red-200 rounded-tl-sm'
+                    : 'bg-white/5 border border-white/10 text-gray-100 rounded-tl-sm'
                   }`}>
                     {msg.role === 'user'
                       ? <p className="text-sm">{msg.content}</p>
@@ -727,32 +673,27 @@ export default function AgentsPage() {
                 </div>
               ))}
 
-              {/* Streaming indicator */}
-              {isStreaming && (
+              {isRunning && (
                 <div className="flex gap-3">
-                  <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center text-xs font-bold text-gray-300">
-                    AI
-                  </div>
+                  <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center text-xs font-bold text-gray-300">AI</div>
                   <div className="bg-white/5 border border-white/10 rounded-2xl rounded-tl-sm px-4 py-3">
                     <div className="flex gap-1 items-center h-5">
-                      <div className="w-1.5 h-1.5 rounded-full bg-gray-400 animate-bounce" style={{ animationDelay: '0ms' }} />
-                      <div className="w-1.5 h-1.5 rounded-full bg-gray-400 animate-bounce" style={{ animationDelay: '150ms' }} />
-                      <div className="w-1.5 h-1.5 rounded-full bg-gray-400 animate-bounce" style={{ animationDelay: '300ms' }} />
+                      {[0, 150, 300].map((d) => (
+                        <div key={d} className="w-1.5 h-1.5 rounded-full bg-gray-400 animate-bounce" style={{ animationDelay: `${d}ms` }} />
+                      ))}
                     </div>
                   </div>
                 </div>
               )}
-
               <div ref={bottomRef} />
             </div>
           )}
         </div>
 
-        {/* ── Confirmation modal for destructive tools ── */}
-        {pendingTool && (
+        {/* ── Confirmation modal ── */}
+        {pendingConfirm && (
           <div className="absolute inset-0 bg-black/70 backdrop-blur-sm flex items-end sm:items-center justify-center z-50 p-4">
             <div className="bg-[#111] border border-white/15 rounded-2xl w-full max-w-sm shadow-2xl overflow-hidden">
-              {/* Header */}
               <div className="px-5 pt-5 pb-4 border-b border-white/10">
                 <div className="flex items-center gap-3">
                   <div className="w-9 h-9 rounded-full bg-amber-500/20 flex items-center justify-center flex-shrink-0">
@@ -767,15 +708,14 @@ export default function AgentsPage() {
                 </div>
               </div>
 
-              {/* Swap visual (for execute_swap) */}
-              {pendingTool.name === 'execute_swap' && (() => {
-                const { fromToken, toToken, amount, expectedOutput } = pendingTool.input as {
+              {/* Swap visual */}
+              {pendingConfirm.toolName === 'execute_swap' && (() => {
+                const { fromToken, toToken, amount, expectedOutput } = pendingConfirm.toolInput as {
                   fromToken: string; toToken: string; amount: string; expectedOutput?: string;
                 };
                 return (
                   <div className="px-5 py-4 border-b border-white/10">
                     <div className="flex items-center gap-3">
-                      {/* From */}
                       <div className="flex-1 bg-white/5 rounded-xl p-3 text-center">
                         <div className="flex items-center justify-center mb-2">
                           {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -784,13 +724,11 @@ export default function AgentsPage() {
                         <div className="text-base font-bold">{amount}</div>
                         <div className="text-xs text-gray-400">{fromToken}</div>
                       </div>
-                      {/* Arrow */}
                       <div className="flex-shrink-0">
                         <svg className="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
                         </svg>
                       </div>
-                      {/* To */}
                       <div className="flex-1 bg-white/5 rounded-xl p-3 text-center">
                         <div className="flex items-center justify-center mb-2">
                           {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -802,26 +740,23 @@ export default function AgentsPage() {
                         <div className="text-xs text-gray-400">{toToken}</div>
                       </div>
                     </div>
-                    {pendingTool.input.slippage != null && (
+                    {pendingConfirm.toolInput.slippage != null && (
                       <div className="mt-3 flex justify-between text-xs text-gray-500">
-                        <span>Slippage</span>
-                        <span>{String(pendingTool.input.slippage)}%</span>
+                        <span>Slippage</span><span>{String(pendingConfirm.toolInput.slippage)}%</span>
                       </div>
                     )}
                   </div>
                 );
               })()}
 
-              {/* Send visual (for send_token) */}
-              {pendingTool.name === 'send_token' && (() => {
-                const { toAddress, amount } = pendingTool.input as { toAddress: string; amount: string };
+              {/* Send visual */}
+              {pendingConfirm.toolName === 'send_token' && (() => {
+                const { toAddress, amount } = pendingConfirm.toolInput as { toAddress: string; amount: string };
                 return (
                   <div className="px-5 py-4 border-b border-white/10">
                     <div className="text-center mb-3">
-                      <div className="flex items-center justify-center mb-1">
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src="/injswap.png" alt="INJ" className="w-10 h-10 object-contain" />
-                      </div>
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src="/injswap.png" alt="INJ" className="w-10 h-10 object-contain mx-auto mb-1" />
                       <div className="text-2xl font-bold">{amount} INJ</div>
                     </div>
                     <div className="bg-white/5 rounded-xl p-3">
@@ -833,30 +768,21 @@ export default function AgentsPage() {
               })()}
 
               <div className="px-5 py-3">
+                <div className="text-xs text-gray-400 mb-3">
+                  {toolConfirmLabel(pendingConfirm.toolName, pendingConfirm.toolInput)}
+                </div>
                 <div className="flex items-center gap-2 mb-4">
                   <svg className="w-3.5 h-3.5 text-green-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
                   </svg>
-                  <p className="text-xs text-gray-400">
-                    Private key never leaves your device. Signed locally.
-                  </p>
+                  <p className="text-xs text-gray-400">Private key never leaves your device. Signed locally.</p>
                 </div>
                 <div className="flex gap-3">
-                  <button
-                    onClick={handleToolCancel}
-                    disabled={confirmLoading}
-                    className="flex-1 py-3 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 font-bold text-sm transition-colors"
-                  >
+                  <button onClick={handleCancel} disabled={confirmLoading} className="flex-1 py-3 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 font-bold text-sm transition-colors">
                     Cancel
                   </button>
-                  <button
-                    onClick={handleToolConfirm}
-                    disabled={confirmLoading}
-                    className="flex-1 py-3 rounded-xl bg-white hover:bg-gray-100 text-black font-bold text-sm transition-colors flex items-center justify-center gap-2"
-                  >
-                    {confirmLoading ? (
-                      <div className="w-4 h-4 border-2 border-black/20 border-t-black rounded-full animate-spin" />
-                    ) : null}
+                  <button onClick={handleConfirm} disabled={confirmLoading} className="flex-1 py-3 rounded-xl bg-white hover:bg-gray-100 text-black font-bold text-sm transition-colors flex items-center justify-center gap-2">
+                    {confirmLoading && <div className="w-4 h-4 border-2 border-black/20 border-t-black rounded-full animate-spin" />}
                     {confirmLoading ? 'Processing…' : 'Confirm'}
                   </button>
                 </div>
@@ -865,26 +791,20 @@ export default function AgentsPage() {
           </div>
         )}
 
-        {/* ── Input area ── */}
+        {/* Input area */}
         <div className="flex-shrink-0 border-t border-white/10 bg-black/80 backdrop-blur-sm p-4">
           <div className="max-w-3xl mx-auto">
             <div className="flex items-end gap-3 bg-white/5 border border-white/15 rounded-2xl px-4 py-3 focus-within:border-white/30 transition-colors">
-              {/* Model selector */}
               <select
                 value={model}
                 onChange={(e) => setModel(e.target.value as Model)}
                 className="bg-transparent text-xs text-gray-400 border-none outline-none cursor-pointer hover:text-white transition-colors py-1 pr-1 flex-shrink-0"
               >
                 {MODEL_OPTIONS.map((opt) => (
-                  <option key={opt.value} value={opt.value} className="bg-black">
-                    {opt.label}
-                  </option>
+                  <option key={opt.value} value={opt.value} className="bg-black">{opt.label}</option>
                 ))}
               </select>
-
               <div className="w-px h-5 bg-white/15 flex-shrink-0 self-center" />
-
-              {/* Text input */}
               <textarea
                 ref={textareaRef}
                 value={input}
@@ -892,23 +812,18 @@ export default function AgentsPage() {
                 onKeyDown={handleKeyDown}
                 placeholder="Ask anything about your wallet…"
                 rows={1}
-                disabled={isStreaming || !!pendingTool}
+                disabled={isRunning || !!pendingConfirm}
                 className="flex-1 bg-transparent text-sm text-white placeholder-gray-500 resize-none outline-none min-h-[24px] max-h-40 py-1 disabled:opacity-50"
               />
-
-              {/* Send button */}
               <button
                 onClick={handleSend}
-                disabled={!input.trim() || isStreaming || !!pendingTool}
+                disabled={!input.trim() || isRunning || !!pendingConfirm}
                 className="w-8 h-8 rounded-xl bg-white hover:bg-gray-100 disabled:bg-white/20 disabled:cursor-not-allowed text-black flex items-center justify-center transition-all flex-shrink-0 self-end"
               >
-                {isStreaming ? (
-                  <div className="w-3.5 h-3.5 border-2 border-black/30 border-t-black rounded-full animate-spin" />
-                ) : (
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 12h14M12 5l7 7-7 7" />
-                  </svg>
-                )}
+                {isRunning
+                  ? <div className="w-3.5 h-3.5 border-2 border-black/30 border-t-black rounded-full animate-spin" />
+                  : <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 12h14M12 5l7 7-7 7" /></svg>
+                }
               </button>
             </div>
             <p className="text-center text-xs text-gray-600 mt-2">

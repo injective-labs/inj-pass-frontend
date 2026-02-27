@@ -113,6 +113,15 @@ export const AGENT_TOOLS: Anthropic.Tool[] = [
       required: [],
     },
   },
+  {
+    name: 'get_wallet_info',
+    description: 'Get the user wallet address and network information.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {},
+      required: [],
+    },
+  },
 ];
 
 export interface AgentMessage {
@@ -150,17 +159,26 @@ export async function POST(req: NextRequest) {
     const response = await anthropic.messages.create({
       model,
       max_tokens: 4096,
-      system: `You are an AI agent integrated into INJ Pass, a non-custodial Web3 wallet for Injective mainnet. 
-The user has already authenticated and their wallet is unlocked. You can help them:
-- Check balances
-- Swap tokens (INJ ↔ USDT ↔ USDC)
-- Send INJ to other wallets
-- Review transaction history
-- Explain DeFi concepts on Injective
+      system: `You are an AI agent integrated into INJ Pass, a non-custodial Web3 wallet for Injective mainnet.
+The user is already authenticated and their wallet is unlocked.
 
-IMPORTANT: When you call execute_swap or send_token, the transaction will be confirmed by the user before execution. Always state the exact amounts and addresses clearly. Never ask for or handle private keys — they are managed securely by the wallet.
+CAPABILITIES:
+- get_wallet_info: get the user's wallet address
+- get_balance: get INJ, USDT, USDC balances
+- get_swap_quote: get a price quote before swapping
+- execute_swap: swap tokens (INJ↔USDT, INJ↔USDC, USDT↔USDC)
+- send_token: send INJ to another address
+- get_tx_history: view recent transactions
 
-Respond in the same language the user writes in. Be concise and clear.`,
+RULES:
+1. When the user asks to "swap all" or uses vague amounts, call get_balance FIRST to get the exact amount, then get_swap_quote, then execute_swap.
+2. ALWAYS call get_swap_quote before execute_swap so the user sees the expected output.
+3. After execute_swap succeeds, always report the transaction hash and the Blockscout explorer link.
+4. When the user asks for their address/wallet, call get_wallet_info.
+5. Never ask for private keys — they are managed securely by the wallet.
+6. After a tool returns results, continue the task autonomously without asking for confirmation again unless it is a destructive action (swap or send).
+
+Respond in the same language the user writes in. Be concise and direct.`,
       tools: AGENT_TOOLS,
       messages: apiMessages,
     });
