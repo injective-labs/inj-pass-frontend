@@ -244,6 +244,7 @@ export default function AgentsPage() {
   // Sandbox
   const [sandboxBalances, setSandboxBalances] = useState<{ INJ: string; USDT: string; USDC: string } | null>(null);
   const [harvestLoading, setHarvestLoading] = useState(false);
+  const [showSandboxPanel, setShowSandboxPanel] = useState(false);
 
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -279,6 +280,9 @@ export default function AgentsPage() {
   useEffect(() => {
     saveConversations(conversations);
   }, [conversations]);
+
+  // Close sandbox panel when switching conversations
+  useEffect(() => { setShowSandboxPanel(false); }, [activeId]);
 
   // Poll sandbox wallet balance
   useEffect(() => {
@@ -505,7 +509,24 @@ export default function AgentsPage() {
       if (injBal > 0.002) {
         await sendTransaction(pk, address, (injBal - 0.001).toFixed(6));
       }
-      // Refresh balances after a short delay
+      // AI feedback in chat
+      const convId = activeId;
+      if (convId) {
+        const harvested = [
+          parseFloat(bals.USDT ?? '0') > 0 && `${parseFloat(bals.USDT).toFixed(2)} USDT`,
+          parseFloat(bals.USDC ?? '0') > 0 && `${parseFloat(bals.USDC).toFixed(2)} USDC`,
+          injBal > 0.002 && `${(injBal - 0.001).toFixed(4)} INJ`,
+        ].filter(Boolean).join(', ');
+        appendDisplay(convId, {
+          id: uid(),
+          role: 'assistant',
+          content: harvested
+            ? `✅ Sweep complete — transferred ${harvested} from the sandbox wallet to your real wallet (${address?.slice(0, 10)}…${address?.slice(-6)}).`
+            : `ℹ️ Nothing to sweep — the sandbox wallet balance is too low to cover gas fees.`,
+        });
+      }
+
+      // Refresh balances
       setTimeout(async () => {
         const nb = await getTokenBalances(['INJ', 'USDT', 'USDC'], sandboxAddr);
         setSandboxBalances({ INJ: nb.INJ ?? '0', USDT: nb.USDT ?? '0', USDC: nb.USDC ?? '0' });
@@ -514,6 +535,7 @@ export default function AgentsPage() {
       console.error('[harvest]', err);
     } finally {
       setHarvestLoading(false);
+      setShowSandboxPanel(false);
     }
   }
 
@@ -1214,80 +1236,132 @@ export default function AgentsPage() {
         {/* Input area */}
         <div className="flex-shrink-0 border-t border-white/10 bg-black/80 backdrop-blur-sm p-4">
           <div className="max-w-3xl mx-auto">
-            {/* Sandbox address strip */}
-            {isSandboxEnabled() && activeConv?.sandboxAddress && (
+
+            {/* Sandbox / takeover address badge — click to flip card */}
+            {activeConv?.sandboxAddress && (
               <div className="flex items-center gap-2 mb-2 px-1">
-                <span className="text-[10px] font-medium text-amber-400/70 bg-amber-400/10 border border-amber-400/20 rounded-full px-2 py-0.5 select-all">
-                  🛡 Sandbox · {activeConv.sandboxAddress.slice(0, 10)}…{activeConv.sandboxAddress.slice(-6)}
-                </span>
+                <button
+                  onClick={() => setShowSandboxPanel(p => !p)}
+                  className={`text-[10px] font-semibold rounded-full px-2.5 py-0.5 cursor-pointer transition-colors ${
+                    isSandboxEnabled()
+                      ? 'text-emerald-400/90 bg-emerald-400/10 border border-emerald-400/25 hover:bg-emerald-400/20'
+                      : 'text-amber-400/90 bg-amber-400/10 border border-amber-400/25 hover:bg-amber-400/20'
+                  }`}
+                >
+                  {isSandboxEnabled() ? 'Sandbox' : '接管'} · {activeConv.sandboxAddress.slice(0, 10)}…{activeConv.sandboxAddress.slice(-6)}
+                </button>
               </div>
             )}
-            <div className="flex items-end gap-3 bg-white/5 border border-white/15 rounded-2xl px-4 py-3 focus-within:border-white/30 transition-colors">
-              <select
-                value={model}
-                onChange={(e) => setModel(e.target.value as Model)}
-                className="bg-transparent text-xs text-gray-400 border-none outline-none cursor-pointer hover:text-white transition-colors py-1 pr-1 flex-shrink-0"
+
+            {/* Flip card: front = input, back = balance panel */}
+            <div style={{ perspective: '900px' }}>
+              <div
+                style={{
+                  transformStyle: 'preserve-3d',
+                  transform: showSandboxPanel ? 'rotateY(180deg)' : 'rotateY(0deg)',
+                  transition: 'transform 0.45s cubic-bezier(0.4, 0, 0.2, 1)',
+                  position: 'relative',
+                }}
               >
-                {MODEL_OPTIONS.map((opt) => (
-                  <option key={opt.value} value={opt.value} className="bg-black">{opt.label}</option>
-                ))}
-              </select>
-              <div className="w-px h-5 bg-white/15 flex-shrink-0 self-center" />
-              <textarea
-                ref={textareaRef}
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                onKeyDown={handleKeyDown}
-                placeholder="Ask anything about your wallet…"
-                rows={1}
-                disabled={isRunning || !!pendingConfirm}
-                className="flex-1 bg-transparent text-sm text-white placeholder-gray-500 resize-none outline-none min-h-[24px] max-h-40 py-1 disabled:opacity-50"
-              />
-              {/* 🌾 Harvest button — only shown in sandbox mode */}
-              {isSandboxEnabled() && activeConv?.sandboxKey && (() => {
-                const hasfunds = sandboxBalances != null && (
-                  parseFloat(sandboxBalances.INJ) > 0.002 ||
-                  parseFloat(sandboxBalances.USDT) > 0 ||
-                  parseFloat(sandboxBalances.USDC) > 0
-                );
-                const balSummary = sandboxBalances
-                  ? [
-                      parseFloat(sandboxBalances.INJ) > 0 && `${parseFloat(sandboxBalances.INJ).toFixed(4)} INJ`,
-                      parseFloat(sandboxBalances.USDT) > 0 && `${parseFloat(sandboxBalances.USDT).toFixed(2)} USDT`,
-                      parseFloat(sandboxBalances.USDC) > 0 && `${parseFloat(sandboxBalances.USDC).toFixed(2)} USDC`,
-                    ].filter(Boolean).join(', ')
-                  : '';
-                const tooltip = hasfunds
-                  ? `Sweep sandbox funds to your wallet${balSummary ? ` (${balSummary})` : ''}`
-                  : 'Sandbox wallet has no funds to harvest';
-                return (
-                  <button
-                    title={tooltip}
-                    onClick={hasfunds && !harvestLoading ? harvestSandbox : undefined}
-                    disabled={!hasfunds || harvestLoading}
-                    className={`w-8 h-8 rounded-xl flex items-center justify-center transition-all flex-shrink-0 self-end text-base
-                      ${hasfunds
-                        ? 'bg-amber-500/20 hover:bg-amber-500/40 border border-amber-500/40 cursor-pointer'
-                        : 'bg-white/5 border border-white/10 cursor-not-allowed opacity-40'
-                      }`}
-                  >
-                    {harvestLoading
-                      ? <div className="w-3.5 h-3.5 border-2 border-amber-400/30 border-t-amber-400 rounded-full animate-spin" />
-                      : '🌾'}
-                  </button>
-                );
-              })()}
-              <button
-                onClick={handleSend}
-                disabled={!input.trim() || isRunning || !!pendingConfirm}
-                className="w-8 h-8 rounded-xl bg-white hover:bg-gray-100 disabled:bg-white/20 disabled:cursor-not-allowed text-black flex items-center justify-center transition-all flex-shrink-0 self-end"
-              >
-                {isRunning
-                  ? <div className="w-3.5 h-3.5 border-2 border-black/30 border-t-black rounded-full animate-spin" />
-                  : <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 12h14M12 5l7 7-7 7" /></svg>
-                }
-              </button>
+                {/* ── Front face: normal input bar ── */}
+                <div style={{ backfaceVisibility: 'hidden', WebkitBackfaceVisibility: 'hidden' } as React.CSSProperties}>
+                  <div className="flex items-end gap-3 bg-white/5 border border-white/15 rounded-2xl px-4 py-3 focus-within:border-white/30 transition-colors">
+                    <select
+                      value={model}
+                      onChange={(e) => setModel(e.target.value as Model)}
+                      className="bg-transparent text-xs text-gray-400 border-none outline-none cursor-pointer hover:text-white transition-colors py-1 pr-1 flex-shrink-0"
+                    >
+                      {MODEL_OPTIONS.map((opt) => (
+                        <option key={opt.value} value={opt.value} className="bg-black">{opt.label}</option>
+                      ))}
+                    </select>
+                    <div className="w-px h-5 bg-white/15 flex-shrink-0 self-center" />
+                    <textarea
+                      ref={textareaRef}
+                      value={input}
+                      onChange={(e) => setInput(e.target.value)}
+                      onKeyDown={handleKeyDown}
+                      placeholder="Ask anything about your wallet…"
+                      rows={1}
+                      disabled={isRunning || !!pendingConfirm}
+                      className="flex-1 bg-transparent text-sm text-white placeholder-gray-500 resize-none outline-none min-h-[24px] max-h-40 py-1 disabled:opacity-50"
+                    />
+                    <button
+                      onClick={handleSend}
+                      disabled={!input.trim() || isRunning || !!pendingConfirm}
+                      className="w-8 h-8 rounded-xl bg-white hover:bg-gray-100 disabled:bg-white/20 disabled:cursor-not-allowed text-black flex items-center justify-center transition-all flex-shrink-0 self-end"
+                    >
+                      {isRunning
+                        ? <div className="w-3.5 h-3.5 border-2 border-black/30 border-t-black rounded-full animate-spin" />
+                        : <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 12h14M12 5l7 7-7 7" /></svg>
+                      }
+                    </button>
+                  </div>
+                </div>
+
+                {/* ── Back face: sandbox balance panel ── */}
+                <div
+                  style={{
+                    backfaceVisibility: 'hidden',
+                    WebkitBackfaceVisibility: 'hidden',
+                    transform: 'rotateY(180deg)',
+                    position: 'absolute',
+                    top: 0, left: 0, right: 0, bottom: 0,
+                  } as React.CSSProperties}
+                >
+                  <div className="flex items-center gap-4 bg-white/5 border border-white/15 rounded-2xl px-4 py-3 h-full">
+                    {/* Balances */}
+                    <div className="flex-1 flex items-center gap-5">
+                      {sandboxBalances ? (
+                        ['INJ', 'USDT', 'USDC'].map(sym => {
+                          const raw = sandboxBalances[sym as keyof typeof sandboxBalances] ?? '0';
+                          const val = parseFloat(raw);
+                          return (
+                            <div key={sym} className="text-xs">
+                              <span className="text-gray-500 mr-1">{sym}</span>
+                              <span className={val > 0 ? 'text-white font-bold' : 'text-gray-600'}>
+                                {sym === 'INJ' ? val.toFixed(4) : val.toFixed(2)}
+                              </span>
+                            </div>
+                          );
+                        })
+                      ) : (
+                        <span className="text-xs text-gray-600">Loading…</span>
+                      )}
+                    </div>
+
+                    {/* Actions */}
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      {/* Sweep / withdraw */}
+                      <button
+                        onClick={() => !harvestLoading && harvestSandbox()}
+                        disabled={harvestLoading}
+                        title="Sweep all funds to your real wallet"
+                        className="w-8 h-8 rounded-xl bg-white/5 hover:bg-emerald-500/20 border border-white/10 hover:border-emerald-500/30 flex items-center justify-center transition-all disabled:opacity-40"
+                      >
+                        {harvestLoading
+                          ? <div className="w-3.5 h-3.5 border-2 border-emerald-400/30 border-t-emerald-400 rounded-full animate-spin" />
+                          : <svg className="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
+                            </svg>
+                        }
+                      </button>
+                      {/* Close */}
+                      <button
+                        onClick={() => setShowSandboxPanel(false)}
+                        title="Close"
+                        className="w-8 h-8 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 flex items-center justify-center transition-all"
+                      >
+                        <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
+
             <p className="text-center text-xs text-gray-600 mt-2">
               AI can make mistakes. Always verify transactions before confirming.
             </p>

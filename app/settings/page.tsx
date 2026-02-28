@@ -457,8 +457,10 @@ export default function SettingsPage() {
           <div className="p-4 rounded-2xl bg-white/5 border border-white/10">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-full bg-white flex items-center justify-center shadow-lg flex-shrink-0 text-lg">
-                  🛡
+                <div className="w-12 h-12 rounded-full bg-white hover:bg-gray-100 flex items-center justify-center shadow-lg transition-all flex-shrink-0">
+                  <svg className="w-5 h-5 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M21 7.5l-9-5.25L3 7.5m18 0l-9 5.25m9-5.25v9l-9 5.25M3 7.5l9 5.25M3 7.5v9l9 5.25m0-9v9" />
+                  </svg>
                 </div>
                 <div className="text-left">
                   <div className="text-sm font-bold text-white">Sandbox Mode</div>
@@ -496,11 +498,6 @@ export default function SettingsPage() {
                 </button>
               </div>
             </div>
-            {sandboxModeDisplay && (
-              <p className="text-xs text-amber-400/70 mt-3 pl-[60px]">
-                Each new conversation creates a fresh isolated wallet. Use the 🌾 button in Agents to sweep any funds back to your real wallet.
-              </p>
-            )}
           </div>
         </div>
 
