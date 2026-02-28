@@ -245,6 +245,7 @@ export default function AgentsPage() {
   const [sandboxBalances, setSandboxBalances] = useState<{ INJ: string; USDT: string; USDC: string } | null>(null);
   const [harvestLoading, setHarvestLoading] = useState(false);
   const [showSandboxPanel, setShowSandboxPanel] = useState(false);
+  const [showSandboxKey, setShowSandboxKey] = useState(false);
 
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -282,7 +283,7 @@ export default function AgentsPage() {
   }, [conversations]);
 
   // Close sandbox panel when switching conversations
-  useEffect(() => { setShowSandboxPanel(false); }, [activeId]);
+  useEffect(() => { setShowSandboxPanel(false); setShowSandboxKey(false); }, [activeId]);
 
   // Poll sandbox wallet balance
   useEffect(() => {
@@ -521,8 +522,8 @@ export default function AgentsPage() {
           id: uid(),
           role: 'assistant',
           content: harvested
-            ? `✅ Sweep complete — transferred ${harvested} from the sandbox wallet to your real wallet (${address?.slice(0, 10)}…${address?.slice(-6)}).`
-            : `ℹ️ Nothing to sweep — the sandbox wallet balance is too low to cover gas fees.`,
+            ? `Sweep complete — transferred ${harvested} from the sandbox wallet to your real wallet (${address?.slice(0, 10)}…${address?.slice(-6)}).`
+            : `Nothing to sweep — the sandbox wallet balance is too low to cover gas fees.`,
         });
       }
 
@@ -1253,12 +1254,12 @@ export default function AgentsPage() {
               </div>
             )}
 
-            {/* Flip card: front = input, back = balance panel */}
+            {/* Flip card: front = input, back = balance panel (flips top-to-bottom) */}
             <div style={{ perspective: '900px' }}>
               <div
                 style={{
                   transformStyle: 'preserve-3d',
-                  transform: showSandboxPanel ? 'rotateY(180deg)' : 'rotateY(0deg)',
+                  transform: showSandboxPanel ? 'rotateX(180deg)' : 'rotateX(0deg)',
                   transition: 'transform 0.45s cubic-bezier(0.4, 0, 0.2, 1)',
                   position: 'relative',
                 }}
@@ -1304,59 +1305,94 @@ export default function AgentsPage() {
                   style={{
                     backfaceVisibility: 'hidden',
                     WebkitBackfaceVisibility: 'hidden',
-                    transform: 'rotateY(180deg)',
+                    transform: 'rotateX(180deg)',
                     position: 'absolute',
                     top: 0, left: 0, right: 0, bottom: 0,
                   } as React.CSSProperties}
                 >
-                  <div className="flex items-center gap-4 bg-white/5 border border-white/15 rounded-2xl px-4 py-3 h-full">
-                    {/* Balances */}
-                    <div className="flex-1 flex items-center gap-5">
-                      {sandboxBalances ? (
-                        ['INJ', 'USDT', 'USDC'].map(sym => {
-                          const raw = sandboxBalances[sym as keyof typeof sandboxBalances] ?? '0';
-                          const val = parseFloat(raw);
-                          return (
-                            <div key={sym} className="text-xs">
-                              <span className="text-gray-500 mr-1">{sym}</span>
-                              <span className={val > 0 ? 'text-white font-bold' : 'text-gray-600'}>
-                                {sym === 'INJ' ? val.toFixed(4) : val.toFixed(2)}
-                              </span>
-                            </div>
-                          );
-                        })
-                      ) : (
-                        <span className="text-xs text-gray-600">Loading…</span>
-                      )}
+                  <div className="flex flex-col justify-center gap-2 bg-white/5 border border-white/15 rounded-2xl px-4 py-3 h-full">
+                    {/* Row 1: balances + action buttons */}
+                    <div className="flex items-center gap-4">
+                      {/* Balances */}
+                      <div className="flex-1 flex items-center gap-5">
+                        {sandboxBalances ? (
+                          ['INJ', 'USDT', 'USDC'].map(sym => {
+                            const raw = sandboxBalances[sym as keyof typeof sandboxBalances] ?? '0';
+                            const val = parseFloat(raw);
+                            return (
+                              <div key={sym} className="text-xs">
+                                <span className="text-gray-500 mr-1">{sym}</span>
+                                <span className={val > 0 ? 'text-white font-bold' : 'text-gray-600'}>
+                                  {sym === 'INJ' ? val.toFixed(4) : val.toFixed(2)}
+                                </span>
+                              </div>
+                            );
+                          })
+                        ) : (
+                          <span className="text-xs text-gray-600">Loading…</span>
+                        )}
+                      </div>
+
+                      {/* Actions */}
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        {/* Show private key */}
+                        <button
+                          onClick={() => setShowSandboxKey(p => !p)}
+                          title={showSandboxKey ? 'Hide private key' : 'Show private key'}
+                          className={`w-8 h-8 rounded-xl border flex items-center justify-center transition-all ${
+                            showSandboxKey
+                              ? 'bg-white/15 border-white/30'
+                              : 'bg-white/5 hover:bg-white/10 border-white/10'
+                          }`}
+                        >
+                          <svg className="w-4 h-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.75 5.25a3 3 0 013 3m3 0a6 6 0 01-7.029 5.912c-.563-.097-1.159.026-1.563.43L10.5 17.25H8.25v2.25H6v2.25H2.25v-2.818c0-.597.237-1.17.659-1.591l6.499-6.499c.404-.404.527-1 .43-1.563A6 6 0 1121.75 8.25z" />
+                          </svg>
+                        </button>
+                        {/* Sweep / withdraw */}
+                        <button
+                          onClick={() => !harvestLoading && harvestSandbox()}
+                          disabled={harvestLoading}
+                          title="Sweep all funds to your real wallet"
+                          className="w-8 h-8 rounded-xl bg-white/5 hover:bg-emerald-500/20 border border-white/10 hover:border-emerald-500/30 flex items-center justify-center transition-all disabled:opacity-40"
+                        >
+                          {harvestLoading
+                            ? <div className="w-3.5 h-3.5 border-2 border-emerald-400/30 border-t-emerald-400 rounded-full animate-spin" />
+                            : <svg className="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
+                              </svg>
+                          }
+                        </button>
+                        {/* Close */}
+                        <button
+                          onClick={() => { setShowSandboxPanel(false); setShowSandboxKey(false); }}
+                          title="Close"
+                          className="w-8 h-8 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 flex items-center justify-center transition-all"
+                        >
+                          <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                        </button>
+                      </div>
                     </div>
 
-                    {/* Actions */}
-                    <div className="flex items-center gap-2 flex-shrink-0">
-                      {/* Sweep / withdraw */}
-                      <button
-                        onClick={() => !harvestLoading && harvestSandbox()}
-                        disabled={harvestLoading}
-                        title="Sweep all funds to your real wallet"
-                        className="w-8 h-8 rounded-xl bg-white/5 hover:bg-emerald-500/20 border border-white/10 hover:border-emerald-500/30 flex items-center justify-center transition-all disabled:opacity-40"
-                      >
-                        {harvestLoading
-                          ? <div className="w-3.5 h-3.5 border-2 border-emerald-400/30 border-t-emerald-400 rounded-full animate-spin" />
-                          : <svg className="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
-                            </svg>
-                        }
-                      </button>
-                      {/* Close */}
-                      <button
-                        onClick={() => setShowSandboxPanel(false)}
-                        title="Close"
-                        className="w-8 h-8 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 flex items-center justify-center transition-all"
-                      >
-                        <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                        </svg>
-                      </button>
-                    </div>
+                    {/* Row 2: private key (visible only when toggled) */}
+                    {showSandboxKey && activeConv?.sandboxKey && (
+                      <div className="flex items-center gap-2 bg-white/5 border border-white/10 rounded-xl px-3 py-1.5">
+                        <span className="flex-1 text-[10px] font-mono text-gray-400 break-all select-all leading-relaxed">
+                          {activeConv.sandboxKey}
+                        </span>
+                        <button
+                          onClick={() => navigator.clipboard.writeText(activeConv.sandboxKey ?? '')}
+                          title="Copy private key"
+                          className="flex-shrink-0 w-6 h-6 rounded-lg bg-white/10 hover:bg-white/20 flex items-center justify-center transition-all"
+                        >
+                          <svg className="w-3 h-3 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                          </svg>
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
