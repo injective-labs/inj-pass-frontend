@@ -85,6 +85,7 @@ export class InjPassConnector {
     reject: (reason: any) => void;
   }>();
   private messageHandler: ((event: MessageEvent) => void) | null = null;
+  private disconnectListeners: Set<() => void> = new Set();
 
   constructor(config: InjPassConfig) {
     if (!config.embedUrl) {
@@ -184,6 +185,11 @@ export class InjPassConnector {
             this.pendingRequests.delete(event.data.requestId);
           }
         }
+
+        // Handle disconnect from embed page (when user clicks Disconnect in embed)
+        if (type === 'INJPASS_DISCONNECTED') {
+          this.disconnect();
+        }
       };
 
       window.addEventListener('message', this.messageHandler);
@@ -207,6 +213,30 @@ export class InjPassConnector {
 
     this.connected = false;
     this.pendingRequests.clear();
+
+    // Notify all disconnect listeners
+    this.notifyDisconnectListeners();
+  }
+
+  /**
+   * Subscribe to disconnect events
+   */
+  onDisconnect(listener: () => void): () => void {
+    this.disconnectListeners.add(listener);
+    return () => this.disconnectListeners.delete(listener);
+  }
+
+  /**
+   * Notify all listeners when disconnected
+   */
+  private notifyDisconnectListeners(): void {
+    this.disconnectListeners.forEach(listener => {
+      try {
+        listener();
+      } catch (error) {
+        console.error('Error in disconnect listener:', error);
+      }
+    });
   }
 
   /**
