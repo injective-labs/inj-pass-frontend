@@ -68,7 +68,10 @@ export default function EmbedPage() {
       const { type, data } = event.data;
 
       if (type === 'INJPASS_SIGN_REQUEST') {
+        console.log('📩 Received INJPASS_SIGN_REQUEST:', data);
+        
         if (!connected) {
+          console.log('❌ Wallet not connected');
           event.source?.postMessage({
             type: 'INJPASS_SIGN_RESPONSE',
             requestId: data.id,
@@ -77,7 +80,61 @@ export default function EmbedPage() {
           return;
         }
 
-        if (authPopup && !authPopup.closed) {
+        // 如果 popup 已关闭，重新打开用于签名
+        if (!authPopup || authPopup.closed) {
+          console.log('🔄 Auth popup closed, reopening for signing...');
+          
+          // 打开新的 auth popup
+          const authUrl = `${window.location.origin}/auth`;
+          const width = 400, height = 600;
+          const left = Math.max(0, (screen.availWidth || screen.width) - width - 20);
+          const top = Math.max(0, (screen.availHeight || screen.height) - height - 60);
+          const features = `width=${width},height=${height},left=${left},top=${top},menubar=no,toolbar=no,location=no,status=no,resizable=yes,scrollbars=no`;
+          
+          const newPopup = window.open(authUrl, 'injpass_auth', features);
+          
+          if (!newPopup) {
+            console.log('❌ Popup blocked');
+            event.source?.postMessage({
+              type: 'INJPASS_SIGN_RESPONSE',
+              requestId: data.id,
+              error: 'Popup blocked. Please allow popups for this site.',
+            }, { targetOrigin: event.origin });
+            return;
+          }
+          
+          setAuthPopup(newPopup);
+          
+          // 等待 popup 加载完成，然后发送签名请求
+          const waitForReady = (attempts = 0) => {
+            if (attempts > 50) { // 5秒超时
+              console.log('❌ Popup loading timeout');
+              event.source?.postMessage({
+                type: 'INJPASS_SIGN_RESPONSE',
+                requestId: data.id,
+                error: 'Auth popup loading timeout',
+              }, { targetOrigin: event.origin });
+              return;
+            }
+            
+            if (!newPopup.closed) {
+              newPopup.postMessage({
+                type: 'SIGN_REQUEST',
+                requestId: data.id,
+                message: data.message,
+              }, window.location.origin);
+              
+              // 继续轮询发送，直到 popup 确认收到
+              setTimeout(() => waitForReady(attempts + 1), 100);
+            }
+          };
+          
+          setTimeout(() => waitForReady(), 500); // 延迟 500ms 等待 popup 加载
+          setHasPendingSign(true);
+          
+        } else {
+          // Popup 仍然打开，直接发送签名请求
+          console.log('✅ Sending sign request to existing popup');
           authPopup.postMessage({
             type: 'SIGN_REQUEST',
             requestId: data.id,
@@ -85,16 +142,11 @@ export default function EmbedPage() {
           }, window.location.origin);
           try { authPopup.focus(); } catch (_) {}
           setHasPendingSign(true);
-        } else {
-          event.source?.postMessage({
-            type: 'INJPASS_SIGN_RESPONSE',
-            requestId: data.id,
-            error: 'Auth popup is closed. Please reconnect.',
-          }, { targetOrigin: event.origin });
         }
       }
 
       if (type === 'SIGN_RESPONSE') {
+        console.log('✅ Received SIGN_RESPONSE:', data);
         setHasPendingSign(false);
         window.parent.postMessage({
           type: 'INJPASS_SIGN_RESPONSE',

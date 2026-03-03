@@ -343,10 +343,15 @@ class InjPassSigner {
    * This ensures security while bypassing iframe limitations
    */
   async signMessage(message: string): Promise<Uint8Array> {
+    console.log('🔐 InjPassSigner.signMessage() called in SDK');
+    console.log('   Message preview:', message.substring(0, 100) + '...');
+    console.log('   Sending INJPASS_SIGN_REQUEST to iframe...');
+    
     const requestId = `sign_${++this.requestCounter}_${Date.now()}`;
 
     return new Promise((resolve, reject) => {
       const timeout = setTimeout(() => {
+        console.error('❌ Signing timeout after 30s');
         reject(new Error('Signing timeout'));
       }, 30000);
 
@@ -356,8 +361,10 @@ class InjPassSigner {
           window.removeEventListener('message', handler);
 
           if (event.data.error) {
+            console.error('❌ Sign response error:', event.data.error);
             reject(new Error(event.data.error));
           } else {
+            console.log('✅ Sign response received, signature length:', event.data.signature.length);
             resolve(new Uint8Array(event.data.signature));
           }
         }
@@ -365,6 +372,7 @@ class InjPassSigner {
 
       window.addEventListener('message', handler);
 
+      console.log('   Request ID:', requestId);
       this.iframe.contentWindow?.postMessage({
         type: 'INJPASS_SIGN_REQUEST',
         data: {
@@ -372,6 +380,7 @@ class InjPassSigner {
           message,
         },
       }, this.targetOrigin);
+      console.log('   INJPASS_SIGN_REQUEST sent to iframe');
     });
   }
 }
