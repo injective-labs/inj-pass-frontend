@@ -18,7 +18,12 @@ const getAuthPopupUrl = () => {
   return '/auth';
 };
 
-const POPUP_FEATURES = 'width=400,height=600,menubar=no,toolbar=no,location=no,status=no,resizable=yes,scrollbars=yes';
+// 弹窗定位到屏幕右下角，连接完成后会缩小为悬浮球
+const getPopupFeatures = (width = 400, height = 600) => {
+  const left = Math.max(0, (screen.availWidth  || screen.width)  - width  - 20);
+  const top  = Math.max(0, (screen.availHeight || screen.height) - height - 60);
+  return `width=${width},height=${height},left=${left},top=${top},menubar=no,toolbar=no,location=no,status=no,resizable=yes,scrollbars=no`;
+};
 
 // ===== 2. 类型定义 =====
 export interface AuthRequest {
@@ -60,7 +65,7 @@ export function triggerPasskeySign(message: string): Promise<{ signature: Uint8A
     const popup = window.open(
       `${authUrl}?requestId=${requestId}&origin=${encodeURIComponent(window.location.origin)}&action=sign`,
       'injpass_auth',
-      POPUP_FEATURES
+      getPopupFeatures()
     );
 
     if (!popup) {
@@ -164,7 +169,7 @@ export function triggerPasskeySign(message: string): Promise<{ signature: Uint8A
 }
 
 // ===== 4. 弹窗授权函数 - 连接钱包 =====
-export function triggerWalletConnect(): Promise<{ address: string; walletName: string }> {
+export function triggerWalletConnect(): Promise<{ address: string; walletName: string; popup: Window }> {
   return new Promise((resolve, reject) => {
     const requestId = crypto.randomUUID();
     const authUrl = getAuthPopupUrl();
@@ -173,7 +178,7 @@ export function triggerWalletConnect(): Promise<{ address: string; walletName: s
     const popup = window.open(
       `${authUrl}?requestId=${requestId}&origin=${encodeURIComponent(window.location.origin)}&action=connect`,
       'injpass_connect',
-      POPUP_FEATURES
+      getPopupFeatures()
     );
 
     if (!popup) {
@@ -208,20 +213,26 @@ export function triggerWalletConnect(): Promise<{ address: string; walletName: s
       }
 
       if (type === 'WALLET_CONNECT_RESPONSE' && respId === requestId) {
-        // 清理所有资源
+        // 清理资源（但不关闭弹窗！）
         clearTimeout(timeout);
         clearInterval(sendInterval);
         window.removeEventListener('message', handleMessage);
         
-        if (!popup.closed) {
-          popup.close();
-        }
+        // 🔐 不关闭弹窗，让它转换为持久化签名模式
 
         if (error) {
+          // 出错时才关闭弹窗
+          if (!popup.closed) {
+            popup.close();
+          }
           reject(new Error(error));
         } else if (address && walletName) {
-          resolve({ address, walletName });
+          // 成功时返回弹窗引用
+          resolve({ address, walletName, popup });
         } else {
+          if (!popup.closed) {
+            popup.close();
+          }
           reject(new Error('Invalid response from auth window'));
         }
       }

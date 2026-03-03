@@ -14,9 +14,11 @@ export default function EmbedPage() {
   const [walletName, setWalletName] = useState<string>('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [authPopup, setAuthPopup] = useState<Window | null>(null); // 保持弹窗引用
+  const [hasPendingSign, setHasPendingSign] = useState(false); // 有签名请求待处理
 
   useEffect(() => {
-    // Listen for sign requests from parent window
+    // Listen for sign requests from parent window and responses from auth popup
     const handleMessage = async (event: MessageEvent) => {
       // ✅ 安全验证：检查消息来源
       // 在生产环境应该使用严格的白名单
@@ -37,23 +39,38 @@ export default function EmbedPage() {
           return;
         }
 
-        try {
-          // ✅ 使用弹窗授权进行签名（避免 iframe 的 WebAuthn 限制）
-          const { signature, address: signerAddress } = await triggerPasskeySign(data.message);
-          
+        // 转发签名请求到持久化的授权弹窗
+        if (authPopup && !authPopup.closed) {
+          console.log('📤 Forwarding sign request to auth popup');
+          authPopup.postMessage({
+            type: 'SIGN_REQUEST',
+            requestId: data.id,
+            message: data.message,
+          }, window.location.origin);
+          // ✅ 把弹窗提到最前面（opener 调用 focus 是浏览器允许的）
+          try { authPopup.focus(); } catch (_) {}
+          setHasPendingSign(true);
+        } else {
+          // 如果弹窗已关闭，返回错误
           event.source?.postMessage({
             type: 'INJPASS_SIGN_RESPONSE',
             requestId: data.id,
-            signature: Array.from(signature),
-            address: signerAddress,
-          }, { targetOrigin: event.origin });
-        } catch (err) {
-          event.source?.postMessage({
-            type: 'INJPASS_SIGN_RESPONSE',
-            requestId: data.id,
-            error: err instanceof Error ? err.message : 'Signing failed',
+            error: 'Auth popup is closed. Please reconnect.',
           }, { targetOrigin: event.origin });
         }
+      }
+
+      // 监听来自 auth popup 的签名响应
+      if (type === 'SIGN_RESPONSE') {
+        console.log('📥 Received sign response from auth popup, forwarding to SDK');
+        setHasPendingSign(false);
+        window.parent.postMessage({
+          type: 'INJPASS_SIGN_RESPONSE',
+          requestId: data.requestId,
+          signature: data.signature,
+          address: data.address,
+          error: data.error,
+        }, '*');
       }
 
       if (type === 'INJPASS_DISCONNECT') {
@@ -63,7 +80,7 @@ export default function EmbedPage() {
 
     window.addEventListener('message', handleMessage);
     return () => window.removeEventListener('message', handleMessage);
-  }, [connected]);
+  }, [connected, authPopup]);
 
   const handleConnect = async () => {
     setLoading(true);
@@ -71,11 +88,20 @@ export default function EmbedPage() {
 
     try {
       // ✅ 使用弹窗授权进行连接（避免 iframe 的 Storage 和 WebAuthn 限制）
-      const { address: walletAddress, walletName: name } = await triggerWalletConnect();
+      // 弹窗在连接成功后不会关闭，而是转换为持久化签名模式
+      const { address: walletAddress, walletName: name, popup } = await triggerWalletConnect();
       
       setAddress(walletAddress);
       setWalletName(name);
       setConnected(true);
+
+      // 🔐 保存弹窗引用，用于后续签名
+      if (popup && !popup.closed) {
+        setAuthPopup(popup);
+        console.log('✅ Auth popup is now in persistent signing mode');
+      } else {
+        console.warn('⚠️ Auth popup was closed unexpectedly');
+      }
 
       // Notify parent window
       window.parent.postMessage({
@@ -97,6 +123,12 @@ export default function EmbedPage() {
   };
 
   const handleDisconnect = () => {
+    // 关闭授权弹窗
+    if (authPopup && !authPopup.closed) {
+      authPopup.close();
+    }
+    setAuthPopup(null);
+
     setAddress('');
     setWalletName('');
     setConnected(false);
@@ -159,18 +191,43 @@ export default function EmbedPage() {
           </>
         ) : (
           <>
-            <div className="text-center mb-6">
-              <div className="inline-block p-3 bg-green-500/20 rounded-full mb-3">
+            <div className="text-center mb-4">
+              <div className="relative inline-block p-3 bg-green-500/20 rounded-full mb-3">
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-8 h-8 text-green-300">
                   <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
                   <polyline points="22 4 12 14.01 9 11.01"></polyline>
                 </svg>
+                {/* 签名请求指示点 */}
+                {hasPendingSign && (
+                  <span className="absolute top-0 right-0 block w-3 h-3 bg-yellow-400 rounded-full animate-ping"></span>
+                )}
               </div>
               <h2 className="text-xl font-bold text-white mb-2">Connected</h2>
               <p className="text-purple-200 text-sm break-all font-mono">
                 {address.slice(0, 6)}...{address.slice(-4)}
               </p>
             </div>
+
+            {/* 签名待处理时的提示 + 手动唤起弹窗按钮 */}
+            {hasPendingSign && authPopup && !authPopup.closed && (
+              <button
+                onClick={() => { try { authPopup.focus(); } catch (_) {} }}
+                className="w-full mb-3 py-2.5 bg-yellow-500/20 border border-yellow-500/40 text-yellow-200 rounded-lg text-sm font-semibold hover:bg-yellow-500/30 transition-all flex items-center justify-center gap-2 animate-pulse"
+              >
+                <span>&#x26A0;&#xFE0F;</span>
+                <span>Signature request pending — click to open</span>
+              </button>
+            )}
+
+            {/* 已连接时随时手动将弹窗提到最前 */}
+            {!hasPendingSign && authPopup && !authPopup.closed && (
+              <button
+                onClick={() => { try { authPopup.focus(); } catch (_) {} }}
+                className="w-full mb-3 py-2 bg-purple-500/10 border border-purple-500/20 text-purple-300 rounded-lg text-xs hover:bg-purple-500/20 transition-all"
+              >
+                Show wallet
+              </button>
+            )}
 
             <button
               onClick={handleDisconnect}
