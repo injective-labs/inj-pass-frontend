@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { triggerWalletConnect, triggerPasskeySign, isValidOrigin } from '@/lib/auth-bridge';
 
 /* ── 尺寸常量 ─────────────────────────────────────────────────────────── */
@@ -28,6 +28,9 @@ export default function EmbedPage() {
   const [authPopup, setAuthPopup] = useState<Window | null>(null);
   const [hasPendingSign, setHasPendingSign] = useState(false);
   const [minimized, setMinimized] = useState(false); // 悬浮球 / 展开
+  
+  // 追踪活动的签名请求（用于停止轮询）
+  const activeSignRequests = useRef<Set<string>>(new Set());
 
   // body 透明 — useEffect 作为保险，真正的首屏透明由内联 <style> 保证
 
@@ -84,8 +87,8 @@ export default function EmbedPage() {
         if (!authPopup || authPopup.closed) {
           console.log('🔄 Auth popup closed, reopening for signing...');
           
-          // 打开新的 auth popup
-          const authUrl = `${window.location.origin}/auth`;
+          // 打开新的 auth popup，使用 sign_persistent 模式（跳过 connect，直接进入 ready 状态）
+          const authUrl = `${window.location.origin}/auth?action=sign_persistent`;
           const width = 400, height = 600;
           const left = Math.max(0, (screen.availWidth || screen.width) - width - 20);
           const top = Math.max(0, (screen.availHeight || screen.height) - height - 60);
@@ -105,10 +108,23 @@ export default function EmbedPage() {
           
           setAuthPopup(newPopup);
           
-          // 等待 popup 加载完成，然后发送签名请求
-          const waitForReady = (attempts = 0) => {
-            if (attempts > 50) { // 5秒超时
+          // 标记这个请求为活动状态
+          activeSignRequests.current.add(data.id);
+          
+          // 等待 popup 加载完成（sign_persistent 模式会自动设置 status='ready'）
+          let attempts = 0;
+          const maxAttempts = 30; // 3秒超时
+          
+          const sendSignRequest = () => {
+            // 如果请求已经被响应（从 activeSignRequests 中移除），停止轮询
+            if (!activeSignRequests.current.has(data.id)) {
+              console.log('✅ Sign request completed, stopping polling');
+              return;
+            }
+            
+            if (attempts >= maxAttempts) {
               console.log('❌ Popup loading timeout');
+              activeSignRequests.current.delete(data.id);
               event.source?.postMessage({
                 type: 'INJPASS_SIGN_RESPONSE',
                 requestId: data.id,
@@ -117,19 +133,31 @@ export default function EmbedPage() {
               return;
             }
             
-            if (!newPopup.closed) {
-              newPopup.postMessage({
-                type: 'SIGN_REQUEST',
+            if (newPopup.closed) {
+              console.log('❌ Popup was closed');
+              activeSignRequests.current.delete(data.id);
+              event.source?.postMessage({
+                type: 'INJPASS_SIGN_RESPONSE',
                 requestId: data.id,
-                message: data.message,
-              }, window.location.origin);
-              
-              // 继续轮询发送，直到 popup 确认收到
-              setTimeout(() => waitForReady(attempts + 1), 100);
+                error: 'Auth popup was closed',
+              }, { targetOrigin: event.origin });
+              return;
             }
+            
+            attempts++;
+            console.log(`   Sending SIGN_REQUEST to popup (attempt ${attempts}/${maxAttempts})`);
+            newPopup.postMessage({
+              type: 'SIGN_REQUEST',
+              requestId: data.id,
+              message: data.message,
+            }, window.location.origin);
+            
+            // 继续轮询直到收到响应
+            setTimeout(sendSignRequest, 100);
           };
           
-          setTimeout(() => waitForReady(), 500); // 延迟 500ms 等待 popup 加载
+          // 等待 500ms 让 popup 加载，然后开始发送请求
+          setTimeout(sendSignRequest, 500);
           setHasPendingSign(true);
           
         } else {
@@ -147,6 +175,12 @@ export default function EmbedPage() {
 
       if (type === 'SIGN_RESPONSE') {
         console.log('✅ Received SIGN_RESPONSE:', data);
+        
+        // 从活动请求中移除（停止轮询）
+        if (data.requestId) {
+          activeSignRequests.current.delete(data.requestId);
+        }
+        
         setHasPendingSign(false);
         window.parent.postMessage({
           type: 'INJPASS_SIGN_RESPONSE',
