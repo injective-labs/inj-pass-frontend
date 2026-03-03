@@ -146,10 +146,7 @@ export class InjPassConnector {
           clearTimeout(timeout);
           this.connected = true;
 
-          if (this.config.autoHide && this.iframe) {
-            this.iframe.style.display = 'none';
-          }
-
+          // Don't hide — the embed page shrinks itself to a ball
           const signer = new InjPassSigner(this.iframe!, this.config.embedUrl);
           
           resolve({
@@ -157,6 +154,17 @@ export class InjPassConnector {
             walletName,
             signer,
           });
+        }
+
+        // Embed page requests iframe resize (ball ↔ card)
+        if (type === 'INJPASS_RESIZE' && this.iframe) {
+          const { width, height } = event.data;
+          this.iframe.style.width = `${width}px`;
+          this.iframe.style.height = `${height}px`;
+          this.iframe.style.borderRadius = (width <= 80 && height <= 80) ? '50%' : '16px';
+          // Reveal on first resize message, and enable hover/click
+          this.iframe.style.opacity = '1';
+          this.iframe.style.pointerEvents = 'auto';
         }
 
         if (type === 'INJPASS_ERROR') {
@@ -229,17 +237,28 @@ export class InjPassConnector {
     this.iframe.setAttribute('allow', 'publickey-credentials-get *; publickey-credentials-create *');
     
     this.iframe.style.border = 'none';
-    this.iframe.style.borderRadius = '12px';
-    this.iframe.style.boxShadow = '0 10px 40px rgba(0,0,0,0.3)';
+    this.iframe.style.borderRadius = '16px';
+    this.iframe.style.boxShadow = 'none';
+    this.iframe.style.background = 'transparent';
+    this.iframe.style.backgroundColor = 'transparent';
+    // 关键：初始尺寸为 0，且 pointerEvents 为 none，防止挡住页面
+    this.iframe.style.width = '0px';
+    this.iframe.style.height = '0px';
+    this.iframe.style.opacity = '0';
+    this.iframe.style.pointerEvents = 'none';
     this.iframe.style.zIndex = '9999';
+    this.iframe.style.transition = 'width 0.25s ease, height 0.25s ease, border-radius 0.25s ease, opacity 0.15s ease';
+    this.iframe.style.overflow = 'hidden';
+    this.iframe.setAttribute('allowtransparency', 'true');
 
     if (this.config.mode === 'floating') {
       this.iframe.style.position = 'fixed';
       Object.entries(this.config.position).forEach(([key, value]) => {
         (this.iframe!.style as any)[key] = value;
       });
-      this.iframe.style.width = this.config.size.width;
-      this.iframe.style.height = this.config.size.height;
+      // ⚠️ DO NOT set width/height here for floating mode!
+      // The embed page controls size via INJPASS_RESIZE messages
+      // iframe starts at 0×0 opacity:0, then embed page resizes it
       document.body.appendChild(this.iframe);
     } else if (this.config.mode === 'modal') {
       this.iframe.style.position = 'fixed';
