@@ -79,12 +79,14 @@ export interface ConnectedWallet {
 export class InjPassConnector {
   private iframe: HTMLIFrameElement | null = null;
   private config: Required<Omit<InjPassConfig, 'containerId'>> & Pick<InjPassConfig, 'containerId'>;
+  private embedOrigin: string;
   private connected = false;
   private pendingRequests = new Map<string, {
     resolve: (value: any) => void;
     reject: (reason: any) => void;
   }>();
   private messageHandler: ((event: MessageEvent) => void) | null = null;
+  private disconnectListeners: Set<() => void> = new Set();
 
   constructor(config: InjPassConfig) {
     if (!config.embedUrl) {
@@ -94,6 +96,8 @@ export class InjPassConnector {
       );
     }
 
+    const parsedEmbedUrl = new URL(config.embedUrl);
+
     this.config = {
       embedUrl: config.embedUrl,
       position: config.position || { bottom: '20px', right: '20px' },
@@ -102,6 +106,7 @@ export class InjPassConnector {
       autoHide: config.autoHide !== undefined ? config.autoHide : true,
       containerId: config.containerId,
     };
+    this.embedOrigin = parsedEmbedUrl.origin;
   }
 
   /**
@@ -136,7 +141,7 @@ export class InjPassConnector {
       }, 60000); // 60 second timeout
 
       this.messageHandler = (event: MessageEvent) => {
-        if (event.origin !== new URL(this.config.embedUrl).origin) {
+        if (event.origin !== this.embedOrigin) {
           return; // Ignore messages from other origins
         }
 
@@ -146,17 +151,25 @@ export class InjPassConnector {
           clearTimeout(timeout);
           this.connected = true;
 
-          if (this.config.autoHide && this.iframe) {
-            this.iframe.style.display = 'none';
-          }
-
-          const signer = new InjPassSigner(this.iframe!, this.config.embedUrl);
+          // Don't hide — the embed page shrinks itself to a ball
+          const signer = new InjPassSigner(this.iframe!, this.embedOrigin);
           
           resolve({
             address,
             walletName,
             signer,
           });
+        }
+
+        // Embed page requests iframe resize (ball ↔ card)
+        if (type === 'INJPASS_RESIZE' && this.iframe) {
+          const { width, height } = event.data;
+          this.iframe.style.width = `${width}px`;
+          this.iframe.style.height = `${height}px`;
+          this.iframe.style.borderRadius = (width <= 80 && height <= 80) ? '50%' : '16px';
+          // Reveal on first resize message, and enable hover/click
+          this.iframe.style.opacity = '1';
+          this.iframe.style.pointerEvents = 'auto';
         }
 
         if (type === 'INJPASS_ERROR') {
@@ -176,6 +189,11 @@ export class InjPassConnector {
             this.pendingRequests.delete(event.data.requestId);
           }
         }
+
+        // Handle disconnect from embed page (when user clicks Disconnect in embed)
+        if (type === 'INJPASS_DISCONNECTED') {
+          this.disconnect();
+        }
       };
 
       window.addEventListener('message', this.messageHandler);
@@ -187,7 +205,7 @@ export class InjPassConnector {
    */
   disconnect(): void {
     if (this.iframe) {
-      this.iframe.contentWindow?.postMessage({ type: 'INJPASS_DISCONNECT' }, this.config.embedUrl);
+      this.iframe.contentWindow?.postMessage({ type: 'INJPASS_DISCONNECT' }, this.embedOrigin);
       this.iframe.remove();
       this.iframe = null;
     }
@@ -199,6 +217,30 @@ export class InjPassConnector {
 
     this.connected = false;
     this.pendingRequests.clear();
+
+    // Notify all disconnect listeners
+    this.notifyDisconnectListeners();
+  }
+
+  /**
+   * Subscribe to disconnect events
+   */
+  onDisconnect(listener: () => void): () => void {
+    this.disconnectListeners.add(listener);
+    return () => this.disconnectListeners.delete(listener);
+  }
+
+  /**
+   * Notify all listeners when disconnected
+   */
+  private notifyDisconnectListeners(): void {
+    this.disconnectListeners.forEach(listener => {
+      try {
+        listener();
+      } catch (error) {
+        console.error('Error in disconnect listener:', error);
+      }
+    });
   }
 
   /**
@@ -229,17 +271,28 @@ export class InjPassConnector {
     this.iframe.setAttribute('allow', 'publickey-credentials-get *; publickey-credentials-create *');
     
     this.iframe.style.border = 'none';
-    this.iframe.style.borderRadius = '12px';
-    this.iframe.style.boxShadow = '0 10px 40px rgba(0,0,0,0.3)';
+    this.iframe.style.borderRadius = '16px';
+    this.iframe.style.boxShadow = 'none';
+    this.iframe.style.background = 'transparent';
+    this.iframe.style.backgroundColor = 'transparent';
+    // 关键：初始尺寸为 0，且 pointerEvents 为 none，防止挡住页面
+    this.iframe.style.width = '0px';
+    this.iframe.style.height = '0px';
+    this.iframe.style.opacity = '0';
+    this.iframe.style.pointerEvents = 'none';
     this.iframe.style.zIndex = '9999';
+    this.iframe.style.transition = 'width 0.25s ease, height 0.25s ease, border-radius 0.25s ease, opacity 0.15s ease';
+    this.iframe.style.overflow = 'hidden';
+    this.iframe.setAttribute('allowtransparency', 'true');
 
     if (this.config.mode === 'floating') {
       this.iframe.style.position = 'fixed';
       Object.entries(this.config.position).forEach(([key, value]) => {
         (this.iframe!.style as any)[key] = value;
       });
-      this.iframe.style.width = this.config.size.width;
-      this.iframe.style.height = this.config.size.height;
+      // ⚠️ DO NOT set width/height here for floating mode!
+      // The embed page controls size via INJPASS_RESIZE messages
+      // iframe starts at 0×0 opacity:0, then embed page resizes it
       document.body.appendChild(this.iframe);
     } else if (this.config.mode === 'modal') {
       this.iframe.style.position = 'fixed';

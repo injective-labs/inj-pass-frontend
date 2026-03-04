@@ -8,13 +8,17 @@ interface AccountHeaderProps {
   accountName?: string;
   showScanButton?: boolean;
   onScanClick?: () => void;
+  showFaucetButton?: boolean;
+  onFaucetClick?: () => void;
 }
 
 export default function AccountHeader({ 
   address, 
   accountName = 'Account 1',
   showScanButton = false,
-  onScanClick
+  onScanClick,
+  showFaucetButton = false,
+  onFaucetClick,
 }: AccountHeaderProps) {
   const [copied, setCopied] = useState(false);
 
@@ -67,25 +71,52 @@ export default function AccountHeader({
         </div>
       </div>
 
-      {/* Scan QR Code Button */}
-      {showScanButton && (
-        <button 
-          onClick={onScanClick}
-          className="p-3 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 transition-all"
-          title="Scan QR Code"
-        >
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
-            {/* Top-left corner */}
-            <path d="M3 9V5a2 2 0 0 1 2-2h4" strokeLinecap="round" strokeLinejoin="round" />
-            {/* Top-right corner */}
-            <path d="M21 9V5a2 2 0 0 0-2-2h-4" strokeLinecap="round" strokeLinejoin="round" />
-            {/* Bottom-left corner */}
-            <path d="M3 15v4a2 2 0 0 0 2 2h4" strokeLinecap="round" strokeLinejoin="round" />
-            {/* Bottom-right corner */}
-            <path d="M21 15v4a2 2 0 0 1-2 2h-4" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
-        </button>
-      )}
+      {/* Action buttons — faucet (left) then scan (right) */}
+      <div className="flex items-center gap-2">
+        {showFaucetButton && (
+          <button
+            onClick={onFaucetClick}
+            className="p-3 rounded-xl bg-white/5 hover:bg-violet-600/20 border border-white/10 hover:border-violet-500/40 transition-all group"
+            title="Testnet Faucet"
+          >
+            {/* Tap / faucet icon — inlet pipe · valve body · T-handle · pressure side · spout · drop */}
+            <svg
+              className="w-5 h-5 text-gray-400 group-hover:text-violet-300 transition-colors"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={2}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M2 12h7" />
+              <path d="M9 9h5a1 1 0 0 1 1 1v4a1 1 0 0 1-1 1H9V9z" />
+              <path d="M10 9V7M13 9V7" />
+              <path d="M10 7h3" />
+              <path d="M15 12h4" />
+              <path d="M19 10v4" />
+              <path d="M11.5 14v2" />
+              <path d="M10 16h3" />
+              <path d="M11.5 16.5c0 0-2 2-2 3.5a2 2 0 0 0 4 0c0-1.5-2-3.5-2-3.5z" />
+            </svg>
+          </button>
+        )}
+
+        {showScanButton && (
+          <button 
+            onClick={onScanClick}
+            className="p-3 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 transition-all"
+            title="Scan QR Code"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
+              <path d="M3 9V5a2 2 0 0 1 2-2h4" strokeLinecap="round" strokeLinejoin="round" />
+              <path d="M21 9V5a2 2 0 0 0-2-2h-4" strokeLinecap="round" strokeLinejoin="round" />
+              <path d="M3 15v4a2 2 0 0 0 2 2h4" strokeLinecap="round" strokeLinejoin="round" />
+              <path d="M21 15v4a2 2 0 0 1-2 2h-4" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </button>
+        )}
+      </div>
     </div>
   );
 }

@@ -23,6 +23,7 @@
     "qrcode.react": "^4.2.0",
     "react": "19.2.1",
     "react-dom": "19.2.1",
+    "secp256k1": "link:@noble/curves/secp256k1",
     "viem": "^2.42.1"
   },
   "devDependencies": {

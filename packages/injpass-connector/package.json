@@ -1,6 +1,6 @@
 {
   "name": "@injpass/connector",
-  "version": "2.0.0",
+  "version": "2.1.8",
   "description": "Lightweight SDK for embedding INJ Pass wallet in dApps - Now with popup-based authentication",
   "main": "dist/index.js",
   "module": "dist/index.mjs",

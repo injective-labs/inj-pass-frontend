@@ -4,11 +4,23 @@
  */
 
 // ===== 1. 安全配置 =====
-// 🔓 开发模式：允许所有 localhost 和当前域名
-// 🔒 生产模式：请在部署前配置严格的白名单
-const ALLOWED_ORIGINS: string[] = process.env.NODE_ENV === 'production' 
-  ? [] // 生产环境暂时禁用严格验证，后续可配置白名单
-  : []; // 开发环境暂时禁用严格验证
+// 通过环境变量配置跨域白名单（逗号分隔）：
+// NEXT_PUBLIC_ALLOWED_ORIGINS=https://omisper.example.com,https://inj-pass-frontend-test.vercel.app
+const ALLOWED_ORIGINS: string[] = (process.env.NEXT_PUBLIC_ALLOWED_ORIGINS || '')
+  .split(',')
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+
+const isLocalhostOrigin = (origin: string): boolean =>
+  origin.startsWith('http://localhost:') || origin.startsWith('http://127.0.0.1:');
+
+const isTrustedOrigin = (origin: string): boolean => {
+  const isSameOrigin = typeof window !== 'undefined' && origin === window.location.origin;
+  const isInWhitelist = ALLOWED_ORIGINS.includes(origin);
+  const allowLocalhostInDev = process.env.NODE_ENV !== 'production' && isLocalhostOrigin(origin);
+
+  return isSameOrigin || isInWhitelist || allowLocalhostInDev;
+};
 
 const getAuthPopupUrl = () => {
   // 在客户端使用 window.location.origin
@@ -18,7 +30,12 @@ const getAuthPopupUrl = () => {
   return '/auth';
 };
 
-const POPUP_FEATURES = 'width=400,height=600,menubar=no,toolbar=no,location=no,status=no,resizable=yes,scrollbars=yes';
+// 弹窗定位到屏幕右下角，连接完成后会缩小为悬浮球
+const getPopupFeatures = (width = 400, height = 600) => {
+  const left = Math.max(0, (screen.availWidth  || screen.width)  - width  - 20);
+  const top  = Math.max(0, (screen.availHeight || screen.height) - height - 60);
+  return `width=${width},height=${height},left=${left},top=${top},menubar=no,toolbar=no,location=no,status=no,resizable=yes,scrollbars=no`;
+};
 
 // ===== 2. 类型定义 =====
 export interface AuthRequest {
@@ -60,7 +77,7 @@ export function triggerPasskeySign(message: string): Promise<{ signature: Uint8A
     const popup = window.open(
       `${authUrl}?requestId=${requestId}&origin=${encodeURIComponent(window.location.origin)}&action=sign`,
       'injpass_auth',
-      POPUP_FEATURES
+      getPopupFeatures()
     );
 
     if (!popup) {
@@ -70,17 +87,8 @@ export function triggerPasskeySign(message: string): Promise<{ signature: Uint8A
 
     // 监听授权结果
     const handleMessage = (event: MessageEvent<AuthResponse>) => {
-      // 🔓 宽松模式：允许 localhost 和同源请求
-      const isLocalhost = event.origin.startsWith('http://localhost:') || event.origin.startsWith('http://127.0.0.1:');
-      const isSameOrigin = typeof window !== 'undefined' && event.origin === window.location.origin;
-      const isInWhitelist = ALLOWED_ORIGINS.length > 0 && ALLOWED_ORIGINS.includes(event.origin);
-      
-      // 如果有白名单，只允许白名单；否则允许 localhost 和同源
-      const isAllowed = ALLOWED_ORIGINS.length > 0 ? isInWhitelist : (isLocalhost || isSameOrigin);
-      
-      if (!isAllowed) {
+      if (!isTrustedOrigin(event.origin)) {
         console.warn('⚠️ Message from origin:', event.origin);
-        // 在开发模式不阻止，仅警告
         if (process.env.NODE_ENV === 'production') {
           return;
         }
@@ -164,7 +172,7 @@ export function triggerPasskeySign(message: string): Promise<{ signature: Uint8A
 }
 
 // ===== 4. 弹窗授权函数 - 连接钱包 =====
-export function triggerWalletConnect(): Promise<{ address: string; walletName: string }> {
+export function triggerWalletConnect(): Promise<{ address: string; walletName: string; popup: Window }> {
   return new Promise((resolve, reject) => {
     const requestId = crypto.randomUUID();
     const authUrl = getAuthPopupUrl();
@@ -173,7 +181,7 @@ export function triggerWalletConnect(): Promise<{ address: string; walletName: s
     const popup = window.open(
       `${authUrl}?requestId=${requestId}&origin=${encodeURIComponent(window.location.origin)}&action=connect`,
       'injpass_connect',
-      POPUP_FEATURES
+      getPopupFeatures()
     );
 
     if (!popup) {
@@ -183,14 +191,7 @@ export function triggerWalletConnect(): Promise<{ address: string; walletName: s
 
     // 监听连接结果
     const handleMessage = (event: MessageEvent<WalletConnectResponse>) => {
-      // 🔓 宽松模式：允许 localhost 和同源请求
-      const isLocalhost = event.origin.startsWith('http://localhost:') || event.origin.startsWith('http://127.0.0.1:');
-      const isSameOrigin = typeof window !== 'undefined' && event.origin === window.location.origin;
-      const isInWhitelist = ALLOWED_ORIGINS.length > 0 && ALLOWED_ORIGINS.includes(event.origin);
-      
-      const isAllowed = ALLOWED_ORIGINS.length > 0 ? isInWhitelist : (isLocalhost || isSameOrigin);
-      
-      if (!isAllowed) {
+      if (!isTrustedOrigin(event.origin)) {
         console.warn('⚠️ Message from origin:', event.origin);
         if (process.env.NODE_ENV === 'production') {
           return;
@@ -208,20 +209,26 @@ export function triggerWalletConnect(): Promise<{ address: string; walletName: s
       }
 
       if (type === 'WALLET_CONNECT_RESPONSE' && respId === requestId) {
-        // 清理所有资源
+        // 清理资源（但不关闭弹窗！）
         clearTimeout(timeout);
         clearInterval(sendInterval);
         window.removeEventListener('message', handleMessage);
         
-        if (!popup.closed) {
-          popup.close();
-        }
+        // 🔐 不关闭弹窗，让它转换为持久化签名模式
 
         if (error) {
+          // 出错时才关闭弹窗
+          if (!popup.closed) {
+            popup.close();
+          }
           reject(new Error(error));
         } else if (address && walletName) {
-          resolve({ address, walletName });
+          // 成功时返回弹窗引用
+          resolve({ address, walletName, popup });
         } else {
+          if (!popup.closed) {
+            popup.close();
+          }
           reject(new Error('Invalid response from auth window'));
         }
       }
@@ -275,16 +282,7 @@ export function triggerWalletConnect(): Promise<{ address: string; walletName: s
 
 // ===== 5. Origin 验证工具函数 =====
 export function isValidOrigin(origin: string): boolean {
-  // 🔓 宽松模式
-  const isLocalhost = origin.startsWith('http://localhost:') || origin.startsWith('http://127.0.0.1:');
-  const isSameOrigin = typeof window !== 'undefined' && origin === window.location.origin;
-  
-  // 如果有白名单，严格检查；否则允许 localhost 和同源
-  if (ALLOWED_ORIGINS.length > 0) {
-    return ALLOWED_ORIGINS.includes(origin);
-  }
-  
-  return isLocalhost || isSameOrigin;
+  return isTrustedOrigin(origin);
 }
 
 // ===== 6. 状态检查（使用 Broadcast Channel 替代 Cookie） =====
