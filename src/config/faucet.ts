@@ -87,7 +87,7 @@ export const FAUCET_NETWORKS: FaucetNetwork[] = [
   {
     id: 'polygonzkevm',
     name: 'Polygon zkEVM',
-    chainName: 'Polygon zkEVM Cardona',
+    chainName: 'Polygon zkEVM Testnet',
     rpcUrl: 'https://rpc.cardona.zkevm-rpc.com',
     chainId: 2442,
     amount: '0.02',

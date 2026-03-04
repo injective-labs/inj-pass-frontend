@@ -167,8 +167,8 @@ export default function FaucetPage() {
 
           {/* Info */}
           <div className="flex-1 min-w-0">
-            <div className="font-bold text-sm mb-0.5">INJ · Injective</div>
-            <div className="text-xs text-gray-500">Injective Testnet · 0.1 INJ per claim</div>
+            <div className="font-bold text-sm mb-0.5">INJ</div>
+            <div className="text-xs text-gray-500">Injective EVM Testnet · 0.1 INJ</div>
           </div>
 
           {/* Inventory */}
@@ -228,8 +228,8 @@ export default function FaucetPage() {
 
                 {/* Info */}
                 <div className="flex-1 min-w-0">
-                  <div className="font-bold text-sm mb-0.5">{network.symbol} · {network.name}</div>
-                  <div className="text-xs text-gray-500">{network.chainName} · {network.amount} {network.symbol} per claim</div>
+                  <div className="font-bold text-sm mb-0.5">{network.symbol}</div>
+                  <div className="text-xs text-gray-500">{network.chainName} · {network.amount} {network.symbol}</div>
                 </div>
 
                 {/* Inventory */}
