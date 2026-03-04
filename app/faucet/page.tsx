@@ -152,29 +152,35 @@ export default function FaucetPage() {
           Always included
         </div>
 
-        <div className="flex items-center gap-4 p-4 rounded-2xl bg-white/5 border border-white/10 mb-6">
-          <div className="w-12 h-12 rounded-full flex items-center justify-center overflow-hidden flex-shrink-0">
-            <Image src="/injswap.png" alt="INJ" width={48} height={48} className="w-full h-full object-contain" />
-          </div>
-          <div className="flex-1 min-w-0">
-            <div className="font-bold mb-0.5">INJ</div>
-            <div className="text-sm text-gray-400">Injective Testnet · 0.1 INJ per claim</div>
-          </div>
-          <div className="text-right flex-shrink-0">
-            <div className="text-xs text-gray-500 mb-0.5">Faucet inventory</div>
-            {loadingBals ? (
-              <div className="h-4 w-20 bg-white/10 rounded animate-pulse" />
-            ) : (
-              <div className="font-bold font-mono text-sm">
-                {injBalance ? Number(injBalance.balance).toFixed(3) : '—'} INJ
-              </div>
-            )}
-          </div>
-          {/* Always-on checkmark */}
-          <div className="w-6 h-6 rounded-full bg-violet-600 border-2 border-violet-400 flex items-center justify-center flex-shrink-0">
-            <svg className="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}>
+        <div className="w-full flex items-center gap-4 p-4 rounded-2xl bg-violet-600/15 border border-violet-500/50 mb-6">
+          {/* Radio — always checked */}
+          <div className="w-5 h-5 rounded-full border-2 bg-violet-600 border-violet-400 flex items-center justify-center flex-shrink-0">
+            <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
             </svg>
+          </div>
+
+          {/* Logo */}
+          <div className="w-10 h-10 rounded-full flex items-center justify-center overflow-hidden flex-shrink-0 bg-white/5">
+            <Image src="/injswap.png" alt="INJ" width={40} height={40} className="w-full h-full object-contain" />
+          </div>
+
+          {/* Info */}
+          <div className="flex-1 min-w-0">
+            <div className="font-bold text-sm mb-0.5">INJ · Injective</div>
+            <div className="text-xs text-gray-500">Injective Testnet · 0.1 INJ per claim</div>
+          </div>
+
+          {/* Inventory */}
+          <div className="text-right flex-shrink-0">
+            <div className="text-xs text-gray-500 mb-0.5">Inventory</div>
+            {loadingBals ? (
+              <div className="h-4 w-16 bg-white/10 rounded animate-pulse" />
+            ) : (
+              <div className="font-mono text-sm font-semibold">
+                {injBalance ? Number(injBalance.balance).toFixed(4) : '—'} INJ
+              </div>
+            )}
           </div>
         </div>
 
