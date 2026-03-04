@@ -141,10 +141,12 @@ export default function DiscoverPage() {
         {/* Header - OKX Style */}
         <div className="bg-gradient-to-b from-white/5 to-transparent border-b border-white/5 backdrop-blur-sm">
           <div className="max-w-7xl mx-auto px-4 py-6">
-            {/* Account Header with Scan Button */}
+            {/* Account Header with Faucet + Scan Buttons */}
             <div className="mb-6">
               <AccountHeader 
                 address={address || undefined}
+                showFaucetButton={true}
+                onFaucetClick={() => router.push('/faucet')}
                 showScanButton={true}
                 onScanClick={openQRScanner}
               />
