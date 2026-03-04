@@ -79,6 +79,7 @@ export interface ConnectedWallet {
 export class InjPassConnector {
   private iframe: HTMLIFrameElement | null = null;
   private config: Required<Omit<InjPassConfig, 'containerId'>> & Pick<InjPassConfig, 'containerId'>;
+  private embedOrigin: string;
   private connected = false;
   private pendingRequests = new Map<string, {
     resolve: (value: any) => void;
@@ -95,6 +96,8 @@ export class InjPassConnector {
       );
     }
 
+    const parsedEmbedUrl = new URL(config.embedUrl);
+
     this.config = {
       embedUrl: config.embedUrl,
       position: config.position || { bottom: '20px', right: '20px' },
@@ -103,6 +106,7 @@ export class InjPassConnector {
       autoHide: config.autoHide !== undefined ? config.autoHide : true,
       containerId: config.containerId,
     };
+    this.embedOrigin = parsedEmbedUrl.origin;
   }
 
   /**
@@ -137,7 +141,7 @@ export class InjPassConnector {
       }, 60000); // 60 second timeout
 
       this.messageHandler = (event: MessageEvent) => {
-        if (event.origin !== new URL(this.config.embedUrl).origin) {
+        if (event.origin !== this.embedOrigin) {
           return; // Ignore messages from other origins
         }
 
@@ -148,7 +152,7 @@ export class InjPassConnector {
           this.connected = true;
 
           // Don't hide — the embed page shrinks itself to a ball
-          const signer = new InjPassSigner(this.iframe!, this.config.embedUrl);
+          const signer = new InjPassSigner(this.iframe!, this.embedOrigin);
           
           resolve({
             address,
@@ -201,7 +205,7 @@ export class InjPassConnector {
    */
   disconnect(): void {
     if (this.iframe) {
-      this.iframe.contentWindow?.postMessage({ type: 'INJPASS_DISCONNECT' }, this.config.embedUrl);
+      this.iframe.contentWindow?.postMessage({ type: 'INJPASS_DISCONNECT' }, this.embedOrigin);
       this.iframe.remove();
       this.iframe = null;
     }
@@ -343,15 +347,10 @@ class InjPassSigner {
    * This ensures security while bypassing iframe limitations
    */
   async signMessage(message: string): Promise<Uint8Array> {
-    console.log('🔐 InjPassSigner.signMessage() called in SDK');
-    console.log('   Message preview:', message.substring(0, 100) + '...');
-    console.log('   Sending INJPASS_SIGN_REQUEST to iframe...');
-    
     const requestId = `sign_${++this.requestCounter}_${Date.now()}`;
 
     return new Promise((resolve, reject) => {
       const timeout = setTimeout(() => {
-        console.error('❌ Signing timeout after 30s');
         reject(new Error('Signing timeout'));
       }, 30000);
 
@@ -361,10 +360,8 @@ class InjPassSigner {
           window.removeEventListener('message', handler);
 
           if (event.data.error) {
-            console.error('❌ Sign response error:', event.data.error);
             reject(new Error(event.data.error));
           } else {
-            console.log('✅ Sign response received, signature length:', event.data.signature.length);
             resolve(new Uint8Array(event.data.signature));
           }
         }
@@ -372,7 +369,6 @@ class InjPassSigner {
 
       window.addEventListener('message', handler);
 
-      console.log('   Request ID:', requestId);
       this.iframe.contentWindow?.postMessage({
         type: 'INJPASS_SIGN_REQUEST',
         data: {
@@ -380,7 +376,6 @@ class InjPassSigner {
           message,
         },
       }, this.targetOrigin);
-      console.log('   INJPASS_SIGN_REQUEST sent to iframe');
     });
   }
 }
