@@ -4,7 +4,7 @@
  * INJ  : 0.1 per account per day (Injective Testnet)
  * ETH  : 0.02 per account per day — user picks exactly ONE companion chain
  *
- * @author 0xAlexWu <jsxj81@163.com>
+ * @author Alex <jsxj81@163.com>
  */
 
 export interface FaucetNetwork {

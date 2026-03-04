@@ -79,6 +79,7 @@ export default function AccountHeader({
             className="p-3 rounded-xl bg-white/5 hover:bg-violet-600/20 border border-white/10 hover:border-violet-500/40 transition-all group"
             title="Testnet Faucet"
           >
+            {/* Tap / faucet icon — inlet pipe · valve body · T-handle · pressure side · spout · drop */}
             <svg
               className="w-5 h-5 text-gray-400 group-hover:text-violet-300 transition-colors"
               viewBox="0 0 24 24"
@@ -88,11 +89,15 @@ export default function AccountHeader({
               strokeLinecap="round"
               strokeLinejoin="round"
             >
-              <path d="M5 8h7a2 2 0 0 1 2 2v1" />
-              <path d="M5 8V6" />
-              <path d="M14 11h2a1 1 0 0 1 1 1v1a1 1 0 0 1-1 1h-2" />
-              <path d="M14 17c0 1.1-.9 2-2 2s-2-.9-2-2c0-.8.5-1.5 1.2-1.8L12 14l.8 1.2c.7.3 1.2 1 1.2 1.8z" />
-              <path d="M9 8V5h4v3" />
+              <path d="M2 12h7" />
+              <path d="M9 9h5a1 1 0 0 1 1 1v4a1 1 0 0 1-1 1H9V9z" />
+              <path d="M10 9V7M13 9V7" />
+              <path d="M10 7h3" />
+              <path d="M15 12h4" />
+              <path d="M19 10v4" />
+              <path d="M11.5 14v2" />
+              <path d="M10 16h3" />
+              <path d="M11.5 16.5c0 0-2 2-2 3.5a2 2 0 0 0 4 0c0-1.5-2-3.5-2-3.5z" />
             </svg>
           </button>
         )}

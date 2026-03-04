@@ -8,7 +8,7 @@
  *
  * Key schema: `${address.toLowerCase()}::${yyyy-mm-dd}`
  *
- * @author 0xAlexWu <jsxj81@163.com>
+ * @author Alex <jsxj81@163.com>
  */
 
 interface ClaimRecord {

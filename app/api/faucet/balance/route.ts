@@ -4,7 +4,7 @@
  * Returns the faucet hot-wallet balance for every supported network.
  * No authentication required — balances are public information.
  *
- * @author 0xAlexWu <jsxj81@163.com>
+ * @author Alex <jsxj81@163.com>
  */
 
 import { NextResponse } from 'next/server';

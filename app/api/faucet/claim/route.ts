@@ -11,7 +11,7 @@
  *   • Rate-limited to 1 claim per account address per UTC day
  *   • Multiple accounts from the same IP are allowed (by design)
  *
- * @author 0xAlexWu <jsxj81@163.com>
+ * @author Alex <jsxj81@163.com>
  */
 
 import { NextRequest, NextResponse } from 'next/server';
