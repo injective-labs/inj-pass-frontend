@@ -40,7 +40,7 @@ export const FAUCET_NETWORKS: FaucetNetwork[] = [
     id: 'sepolia',
     name: 'Sepolia',
     chainName: 'Ethereum Sepolia',
-    rpcUrl: 'https://rpc.sepolia.org',
+    rpcUrl: 'https://ethereum-sepolia-rpc.publicnode.com',
     chainId: 11155111,
     amount: '0.02',
     symbol: 'ETH',
