@@ -317,6 +317,11 @@ export default function FaucetPage() {
                 <div className="w-4 h-4 border-2 border-gray-600 border-t-gray-900 rounded-full animate-spin" />
                 Sending tokens…
               </>
+            ) : pageState === 'loading-balances' ? (
+              <>
+                <div className="w-4 h-4 border-2 border-gray-600 border-t-gray-400 rounded-full animate-spin" />
+                Verifying you are human
+              </>
             ) : (
               'Claim Tokens'
             )}
