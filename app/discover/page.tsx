@@ -30,7 +30,7 @@ export default function DiscoverPage() {
   // Process dApps to include full icon URL
   const dapps: DApp[] = DAPPS.map(dapp => ({
     ...dapp,
-    icon: dapp.icon.startsWith('http') 
+    icon: dapp.icon.startsWith('http') || dapp.icon.startsWith('/')
       ? dapp.icon 
       : `${NETWORK_CONFIG.faviconService}${dapp.icon}&sz=128`
   }));
