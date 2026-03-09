@@ -185,7 +185,7 @@ export default function WelcomePage() {
                     <line x1="12" y1="5" x2="12" y2="19" />
                     <line x1="5" y1="12" x2="19" y2="12" />
                   </svg>
-                  <span>CREATE NEW WALLET</span>
+                  <span>Create INJ Pass Account</span>
                 </button>
               </div>
 
@@ -204,7 +204,7 @@ export default function WelcomePage() {
                     type="text"
                     value={walletNameInput}
                     onChange={(e) => setWalletNameInput(e.target.value)}
-                    placeholder="Wallet name…"
+                    placeholder="Account Name..."
                     className="w-full bg-transparent pl-5 pr-14 py-4 text-black text-sm md:text-base font-bold placeholder-black/40 focus:outline-none rounded-2xl"
                     onKeyDown={(e) => {
                       if (e.key === 'Enter' && walletNameInput.trim()) handleCreateWallet();
@@ -248,7 +248,7 @@ export default function WelcomePage() {
                 <path d="M3 22v-6h6" />
                 <path d="M21 12a9 9 0 0 1-15 6.7L3 16" />
               </svg>
-              <span>{loading ? 'RECOVERING...' : 'RECOVER WALLET'}</span>
+              <span>{loading ? 'Signing In...' : 'Sign In with Passkey'}</span>
             </button>
 
             {/* Back link — fades in when wallet name input is shown */}

@@ -82,5 +82,23 @@ export const DAPPS: DApp[] = [
     icon: 'choice.exchange',
     category: 'defi',
     url: 'https://choice.exchange'
+  },
+  {
+    id: '9',
+    name: 'Omisper',
+    description: 'Decentralized Social Platform',
+    icon: '/omisper.png',
+    category: 'social',
+    url: 'https://omisper-front.pages.dev/',
+    featured: true
+  },
+  {
+    id: '10',
+    name: 'Hash Mahjong',
+    description: 'Injective EVM Mini Game',
+    icon: '/hashmahjong.png',
+    category: 'game',
+    url: 'https://hash-mahjong-two.vercel.app/',
+    featured: true
   }
 ];
