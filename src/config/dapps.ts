@@ -16,10 +16,28 @@ export interface DApp {
 
 export const DAPPS: DApp[] = [
   {
+    id: '9',
+    name: 'Omisper',
+    description: 'Decentralized Social Platform',
+    icon: '/omisper.png',
+    category: 'social',
+    url: 'https://omisper-front.pages.dev/',
+    featured: true
+  },
+  {
+    id: '10',
+    name: 'Hash Mahjong',
+    description: 'Injective EVM Mini Game',
+    icon: '/hashmahjong.png',
+    category: 'game',
+    url: 'https://hash-mahjong-two.vercel.app/',
+    featured: true
+  },
+  {
     id: '1',
     name: 'Helix',
     description: 'Decentralized Derivatives Trading',
-    icon: 'helixapp.com', // Will be wrapped with favicon service
+    icon: 'helixapp.com',
     category: 'defi',
     url: 'https://helixapp.com',
     featured: true
@@ -47,8 +65,7 @@ export const DAPPS: DApp[] = [
     description: 'NFT Marketplace',
     icon: 'talis.art',
     category: 'nft',
-    url: 'https://talis.art',
-    featured: true
+    url: 'https://talis.art'
   },
   {
     id: '5',
@@ -56,8 +73,7 @@ export const DAPPS: DApp[] = [
     description: 'Multichain NFT Marketplace',
     icon: 'rarible.com',
     category: 'nft',
-    url: 'https://rarible.com',
-    featured: true
+    url: 'https://rarible.com'
   },
   {
     id: '8',
