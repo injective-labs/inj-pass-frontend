@@ -68,6 +68,15 @@ interface PendingConfirmation {
   assistantApiMessage: ApiMessage;
 }
 
+type SettingsTab = 'credits' | 'tasks' | 'payments' | 'telegram';
+
+interface InviteFriend {
+  wallet: string;
+  joinedAt: string;
+  credits: number;
+  status: 'Active' | 'Pending';
+}
+
 const MODEL_OPTIONS: { value: Model; label: string }[] = [
   { value: 'claude-sonnet-4-6',    label: 'Claude Sonnet 4.6' },
   { value: 'claude-sonnet-4-5',    label: 'Claude Sonnet 4.5' },
@@ -84,6 +93,12 @@ const TOKEN_ICONS: Record<string, string> = {
   USDT: '/USDT_Logo.png',
   USDC: '/USDC_Logo.png',
 };
+
+const INVITED_FRIENDS: InviteFriend[] = [
+  { wallet: '0x6aA1...2fd8', joinedAt: '2026-03-07', credits: 400, status: 'Active' },
+  { wallet: '0xB944...9e11', joinedAt: '2026-03-05', credits: 250, status: 'Active' },
+  { wallet: '0x13c2...7f90', joinedAt: '2026-03-02', credits: 0, status: 'Pending' },
+];
 
 // ─── Helpers ───────────────────────────────────────────────────────────────
 
@@ -240,6 +255,11 @@ export default function AgentsPage() {
   const [authLoading, setAuthLoading] = useState(false);
   const [authError, setAuthError] = useState('');
   const [authPassword, setAuthPassword] = useState('');
+  const [showInviteManager, setShowInviteManager] = useState(false);
+  const [showAgentSettings, setShowAgentSettings] = useState(false);
+  const [activeSettingsTab, setActiveSettingsTab] = useState<SettingsTab>('credits');
+  const [inviteCopied, setInviteCopied] = useState(false);
+  const [inviteLinkCopied, setInviteLinkCopied] = useState(false);
 
   // Sandbox
   const [sandboxBalances, setSandboxBalances] = useState<{ INJ: string; USDT: string; USDC: string } | null>(null);
@@ -252,6 +272,21 @@ export default function AgentsPage() {
 
   const activeConv = conversations.find((c) => c.id === activeId) ?? null;
   const messages = activeConv?.messages ?? [];
+  const inviteCode = address ? `INJ-${address.slice(2, 6).toUpperCase()}${address.slice(-4).toUpperCase()}` : 'INJ-PASS';
+  const inviteLink = `https://injpass.com/welcome?invite=${inviteCode}`;
+  const totalInviteCredits = INVITED_FRIENDS.reduce((sum, friend) => sum + friend.credits, 0);
+
+  const copyInviteCode = useCallback(() => {
+    navigator.clipboard.writeText(inviteCode);
+    setInviteCopied(true);
+    window.setTimeout(() => setInviteCopied(false), 1800);
+  }, [inviteCode]);
+
+  const copyInviteLink = useCallback(() => {
+    navigator.clipboard.writeText(inviteLink);
+    setInviteLinkCopied(true);
+    window.setTimeout(() => setInviteLinkCopied(false), 1800);
+  }, [inviteLink]);
 
   // ── Auth guard ──────────────────────────────────────────────────────────
   useEffect(() => {
@@ -923,24 +958,57 @@ export default function AgentsPage() {
           ))}
         </div>
 
-        <div className="p-4 border-t border-white/10">
-          <div className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-full bg-white/10 flex items-center justify-center flex-shrink-0">
-              <svg className="w-3.5 h-3.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <rect x="2" y="6" width="20" height="14" rx="2" strokeWidth={2} />
-                <path d="M2 10h20" strokeWidth={2} strokeLinecap="round" />
-                <circle cx="18" cy="15" r="1.5" fill="currentColor" />
+        <div className="p-4 border-t border-white/10 space-y-3">
+          <button
+            onClick={() => { setShowInviteManager(true); setSidebarOpen(false); }}
+            className="w-full rounded-2xl border border-white/15 bg-gradient-to-r from-white/[0.06] via-white/[0.03] to-transparent hover:from-white/[0.12] hover:via-white/[0.05] hover:to-white/[0.03] transition-all px-3 py-3 text-left group"
+          >
+            <div className="flex items-center gap-3">
+              <div className="flex-1 min-w-0">
+                <p className="text-[15px] leading-tight font-semibold text-white tracking-[-0.01em]">
+                  Share INJ Pass with Friends
+                </p>
+                <p className="text-[11px] mt-1 text-blue-200/90 font-medium tracking-wide">
+                  Get 1,000 Credits
+                </p>
+              </div>
+              <div className="w-8 h-8 rounded-full border border-white/20 bg-white/10 group-hover:bg-[#4c3af9]/30 group-hover:border-[#6e5dff] transition-all flex items-center justify-center">
+                <svg className="w-4 h-4 text-white/90 group-hover:translate-x-0.5 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 6l6 6-6 6" />
+                </svg>
+              </div>
+            </div>
+          </button>
+
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2 min-w-0">
+              <div className="w-7 h-7 rounded-full bg-white/10 flex items-center justify-center flex-shrink-0">
+                <svg className="w-3.5 h-3.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <rect x="2" y="6" width="20" height="14" rx="2" strokeWidth={2} />
+                  <path d="M2 10h20" strokeWidth={2} strokeLinecap="round" />
+                  <circle cx="18" cy="15" r="1.5" fill="currentColor" />
+                </svg>
+              </div>
+              <div className="min-w-0">
+                <div className="text-xs font-mono text-gray-400 truncate">
+                  {address?.slice(0, 8)}...{address?.slice(-6)}
+                </div>
+                <div className="flex items-center gap-1 mt-0.5">
+                  <div className="w-1.5 h-1.5 rounded-full bg-green-400" />
+                  <span className="text-xs text-gray-500">Injective Mainnet</span>
+                </div>
+              </div>
+            </div>
+            <button
+              onClick={() => { setShowAgentSettings(true); setSidebarOpen(false); }}
+              className="w-8 h-8 rounded-xl border border-white/15 bg-white/[0.06] hover:bg-white/[0.14] transition-colors flex items-center justify-center flex-shrink-0"
+              title="Agent settings"
+            >
+              <svg className="w-4 h-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317a1 1 0 011.35-.936l1.21.47a1 1 0 00.86 0l1.21-.47a1 1 0 011.35.936l.083 1.295a1 1 0 00.49.82l1.117.663a1 1 0 01.37 1.353l-.64 1.129a1 1 0 000 .98l.64 1.129a1 1 0 01-.37 1.353l-1.117.663a1 1 0 00-.49.82l-.083 1.295a1 1 0 01-1.35.936l-1.21-.47a1 1 0 00-.86 0l-1.21.47a1 1 0 01-1.35-.936l-.083-1.295a1 1 0 00-.49-.82l-1.117-.663a1 1 0 01-.37-1.353l.64-1.129a1 1 0 000-.98l-.64-1.129a1 1 0 01.37-1.353l1.117-.663a1 1 0 00.49-.82l.083-1.295z" />
+                <circle cx="12" cy="12" r="3" strokeWidth={2} />
               </svg>
-            </div>
-            <div className="min-w-0">
-              <div className="text-xs font-mono text-gray-400 truncate">
-                {address?.slice(0, 8)}...{address?.slice(-6)}
-              </div>
-              <div className="flex items-center gap-1 mt-0.5">
-                <div className="w-1.5 h-1.5 rounded-full bg-green-400" />
-                <span className="text-xs text-gray-500">Injective Mainnet</span>
-              </div>
-            </div>
+            </button>
           </div>
         </div>
       </aside>
@@ -1230,6 +1298,252 @@ export default function AgentsPage() {
                   Cancel
                 </button>
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* Invite manager */}
+        {showInviteManager && (
+          <div
+            className="fixed inset-0 z-[80] bg-black/80 backdrop-blur-sm p-4 sm:p-6 lg:p-10 flex items-center justify-center"
+            onClick={() => setShowInviteManager(false)}
+          >
+            <div
+              className="w-full max-w-4xl max-h-[88vh] overflow-y-auto rounded-3xl border border-white/15 bg-[#090909] shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="px-6 sm:px-8 py-5 border-b border-white/10 flex items-center justify-between">
+                <div>
+                  <h3 className="text-xl font-semibold tracking-tight">Share INJ Pass with Friends</h3>
+                  <p className="text-sm text-gray-400 mt-1">Invite friends, track activations, and earn rewards.</p>
+                </div>
+                <button
+                  onClick={() => setShowInviteManager(false)}
+                  className="w-9 h-9 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 flex items-center justify-center transition-colors"
+                >
+                  <svg className="w-4 h-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+
+              <div className="p-6 sm:p-8 grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <section className="space-y-4">
+                  <div className="rounded-2xl border border-blue-400/30 bg-gradient-to-br from-[#4c3af9]/25 via-[#4c3af9]/8 to-transparent p-5">
+                    <div className="text-xs uppercase tracking-[0.2em] text-blue-200/80">Your Invite Code</div>
+                    <div className="mt-2 text-2xl font-bold tracking-[0.12em]">{inviteCode}</div>
+                    <div className="mt-4 flex items-center gap-2">
+                      <button
+                        onClick={copyInviteCode}
+                        className="px-3 py-2 rounded-xl bg-white text-black text-sm font-semibold hover:bg-gray-100 transition-colors"
+                      >
+                        {inviteCopied ? 'Copied' : 'Copy Code'}
+                      </button>
+                      <button
+                        onClick={copyInviteLink}
+                        className="px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-sm font-semibold hover:bg-white/10 transition-colors"
+                      >
+                        {inviteLinkCopied ? 'Link Copied' : 'Copy Link'}
+                      </button>
+                    </div>
+                    <p className="mt-3 text-xs text-gray-300 break-all">{inviteLink}</p>
+                  </div>
+
+                  <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <p className="text-xs text-gray-400 uppercase tracking-widest">Invited</p>
+                        <p className="mt-1 text-2xl font-semibold">{INVITED_FRIENDS.length}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-400 uppercase tracking-widest">Credits Earned</p>
+                        <p className="mt-1 text-2xl font-semibold text-blue-300">{totalInviteCredits.toLocaleString()}</p>
+                      </div>
+                    </div>
+                  </div>
+                </section>
+
+                <section className="rounded-2xl border border-white/10 bg-white/[0.03] p-5">
+                  <h4 className="text-sm font-semibold text-white mb-4">Invited Friends</h4>
+                  <div className="space-y-3">
+                    {INVITED_FRIENDS.map((friend) => (
+                      <div key={`${friend.wallet}-${friend.joinedAt}`} className="rounded-xl border border-white/10 bg-black/30 px-4 py-3">
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="font-mono text-xs text-gray-200">{friend.wallet}</p>
+                          <span className={`text-[11px] px-2 py-1 rounded-full border ${friend.status === 'Active' ? 'border-emerald-400/40 text-emerald-300 bg-emerald-500/10' : 'border-amber-400/40 text-amber-300 bg-amber-500/10'}`}>
+                            {friend.status}
+                          </span>
+                        </div>
+                        <div className="mt-2 flex items-center justify-between text-xs text-gray-400">
+                          <span>Joined {friend.joinedAt}</span>
+                          <span>+{friend.credits.toLocaleString()} Credits</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Agent settings */}
+        {showAgentSettings && (
+          <div
+            className="fixed inset-0 z-[80] bg-black/80 backdrop-blur-sm p-4 sm:p-6 lg:p-10 flex items-center justify-center"
+            onClick={() => setShowAgentSettings(false)}
+          >
+            <div
+              className="w-full max-w-5xl h-[88vh] rounded-3xl border border-white/15 bg-[#090909] shadow-2xl overflow-hidden flex"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <aside className="w-[220px] border-r border-white/10 bg-white/[0.02] p-4 flex flex-col">
+                <div className="mb-5 px-2">
+                  <p className="text-xs uppercase tracking-[0.2em] text-gray-500">Settings</p>
+                  <p className="text-sm font-semibold text-white mt-1">Agent Control Center</p>
+                </div>
+                {[
+                  { key: 'credits' as SettingsTab, label: 'Credits Balance' },
+                  { key: 'tasks' as SettingsTab, label: 'Earn Credits' },
+                  { key: 'payments' as SettingsTab, label: 'AI Payments' },
+                  { key: 'telegram' as SettingsTab, label: 'Telegram' },
+                ].map((item) => (
+                  <button
+                    key={item.key}
+                    onClick={() => setActiveSettingsTab(item.key)}
+                    className={`text-left px-3 py-2.5 rounded-xl text-sm transition-colors mb-1 ${activeSettingsTab === item.key ? 'bg-[#4c3af9]/25 text-white border border-[#6e5dff]/40' : 'text-gray-300 hover:bg-white/5 border border-transparent'}`}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+                <div className="mt-auto pt-4">
+                  <button
+                    onClick={() => setShowAgentSettings(false)}
+                    className="w-full px-3 py-2.5 rounded-xl text-sm font-semibold bg-white/5 border border-white/10 hover:bg-white/10 transition-colors"
+                  >
+                    Close
+                  </button>
+                </div>
+              </aside>
+
+              <section className="flex-1 overflow-y-auto p-6 sm:p-8">
+                {activeSettingsTab === 'credits' && (
+                  <div className="space-y-5">
+                    <div>
+                      <h3 className="text-2xl font-semibold tracking-tight">Credits Balance</h3>
+                      <p className="text-sm text-gray-400 mt-1">Track current credits and upcoming reward tiers.</p>
+                    </div>
+                    <div className="rounded-2xl border border-blue-400/25 bg-gradient-to-r from-[#4c3af9]/25 to-transparent p-6">
+                      <p className="text-xs uppercase tracking-[0.2em] text-blue-200/80">Available</p>
+                      <p className="mt-2 text-4xl font-bold">2,360</p>
+                      <p className="text-sm text-gray-300 mt-2">640 credits to unlock Pro Agent Routing.</p>
+                      <div className="mt-4 h-2 rounded-full bg-white/10 overflow-hidden">
+                        <div className="h-full bg-gradient-to-r from-[#4c3af9] to-blue-400 w-[79%]" />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                      {[
+                        { title: 'This Week', value: '+980' },
+                        { title: 'Spent on AI', value: '-410' },
+                        { title: 'Referral Bonus', value: '+650' },
+                      ].map((item) => (
+                        <div key={item.title} className="rounded-xl border border-white/10 bg-white/[0.03] p-4">
+                          <p className="text-xs text-gray-400">{item.title}</p>
+                          <p className="text-xl font-semibold mt-1">{item.value}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {activeSettingsTab === 'tasks' && (
+                  <div className="space-y-5">
+                    <div>
+                      <h3 className="text-2xl font-semibold tracking-tight">Tasks to Earn Credits</h3>
+                      <p className="text-sm text-gray-400 mt-1">Complete daily and growth tasks to increase credits.</p>
+                    </div>
+                    <div className="space-y-3">
+                      {[
+                        { title: 'Complete first on-chain swap', reward: '+300', action: 'Start' },
+                        { title: 'Invite one activated friend', reward: '+1,000', action: 'View Invite' },
+                        { title: 'Bind Telegram notification', reward: '+200', action: 'Configure' },
+                      ].map((task) => (
+                        <div key={task.title} className="rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3 flex items-center justify-between gap-3">
+                          <div>
+                            <p className="text-sm font-medium text-white">{task.title}</p>
+                            <p className="text-xs text-blue-200 mt-1">{task.reward} Credits</p>
+                          </div>
+                          <button className="px-3 py-2 rounded-lg bg-white/5 border border-white/15 text-xs font-semibold hover:bg-white/10 transition-colors">
+                            {task.action}
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {activeSettingsTab === 'payments' && (
+                  <div className="space-y-5">
+                    <div>
+                      <h3 className="text-2xl font-semibold tracking-tight">AI Virtual Payments</h3>
+                      <p className="text-sm text-gray-400 mt-1">Configure spending guardrails for autonomous agent actions.</p>
+                    </div>
+                    <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 space-y-4">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-sm font-semibold">Daily Spend Limit</p>
+                          <p className="text-xs text-gray-400 mt-1">Hard limit for all AI-triggered transactions.</p>
+                        </div>
+                        <span className="text-sm font-semibold text-blue-300">25 INJ / day</span>
+                      </div>
+                      <div className="h-px bg-white/10" />
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-sm font-semibold">Auto-approve Micro Tx</p>
+                          <p className="text-xs text-gray-400 mt-1">Skip confirmation for tx under 0.2 INJ.</p>
+                        </div>
+                        <span className="px-2 py-1 rounded-full text-[11px] border border-emerald-400/40 text-emerald-300 bg-emerald-500/10">Enabled</span>
+                      </div>
+                      <div className="h-px bg-white/10" />
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-sm font-semibold">Emergency Freeze</p>
+                          <p className="text-xs text-gray-400 mt-1">Pause all AI spending immediately.</p>
+                        </div>
+                        <button className="px-3 py-2 rounded-lg bg-red-500/10 border border-red-400/30 text-xs font-semibold text-red-300 hover:bg-red-500/20 transition-colors">
+                          Freeze
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {activeSettingsTab === 'telegram' && (
+                  <div className="space-y-5">
+                    <div>
+                      <h3 className="text-2xl font-semibold tracking-tight">Telegram Integration</h3>
+                      <p className="text-sm text-gray-400 mt-1">Configure notifications and bot commands for your agent wallet.</p>
+                    </div>
+                    <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 space-y-4">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-sm font-semibold">Binding Status</p>
+                          <p className="text-xs text-gray-400 mt-1">@injpass_alert_bot not connected.</p>
+                        </div>
+                        <button className="px-3 py-2 rounded-lg bg-white text-black text-xs font-semibold hover:bg-gray-100 transition-colors">
+                          Connect Telegram
+                        </button>
+                      </div>
+                      <div className="h-px bg-white/10" />
+                      <div className="space-y-2 text-xs text-gray-300">
+                        <p>1. Open Telegram and search <span className="font-semibold text-white">@injpass_alert_bot</span></p>
+                        <p>2. Send <span className="font-semibold text-white">/bind {inviteCode}</span> to verify wallet ownership</p>
+                        <p>3. Enable alerts: tx confirmations, low credits, and AI payment events</p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </section>
             </div>
           </div>
         )}
