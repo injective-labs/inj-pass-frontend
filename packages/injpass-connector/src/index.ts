@@ -1,5 +1,5 @@
 /**
- * @injpass/connector - Lightweight SDK for embedding INJ Pass wallet
+ * @injpass/cli - Lightweight SDK for embedding INJ Pass wallet
  * 
  * This SDK allows dApps to easily integrate INJ Pass wallet via iframe
  * without dealing with postMessage complexity.
@@ -107,6 +107,20 @@ export class InjPassConnector {
       containerId: config.containerId,
     };
     this.embedOrigin = parsedEmbedUrl.origin;
+
+    // Auto-cleanup when page is closed/unloaded
+    // This ensures the iframe and popup are properly closed when dApp is closed
+    const cleanupHandler = () => {
+      // Only cleanup if we have an active connection or pending iframe
+      if (this.iframe || this.connected) {
+        this.disconnect();
+      }
+    };
+
+    window.addEventListener('pagehide', cleanupHandler);
+
+    // Fallback for some browsers that don't fire pagehide reliably
+    window.addEventListener('beforeunload', cleanupHandler);
   }
 
   /**
@@ -204,10 +218,17 @@ export class InjPassConnector {
    * Disconnect from wallet
    */
   disconnect(): void {
+    // Remove iframe
     if (this.iframe) {
       this.iframe.contentWindow?.postMessage({ type: 'INJPASS_DISCONNECT' }, this.embedOrigin);
       this.iframe.remove();
       this.iframe = null;
+    }
+
+    // Remove modal backdrop if exists
+    const backdrop = document.getElementById('injpass-backdrop');
+    if (backdrop) {
+      backdrop.remove();
     }
 
     if (this.messageHandler) {
