@@ -1,4 +1,4 @@
-# @injpass/connector
+# @injpass/cli
 
 Lightweight SDK for embedding INJ Pass wallet in your dApp via iframe.
 
@@ -50,13 +50,13 @@ sequenceDiagram
 ## Installation
 
 ```bash
-npm install @injpass/connector
+npm install @injpass/cli
 ```
 
 or
 
 ```bash
-pnpm add @injpass/connector
+pnpm add @injpass/cli
 ```
 
 ## Quick Start
@@ -89,7 +89,7 @@ Add to your HTML or HTTP headers to allow the iframe:
 ### 3. Use the SDK
 
 ```typescript
-import { InjPassConnector } from '@injpass/connector';
+import { InjPassConnector } from '@injpass/cli';
 
 // Create connector instance - embedUrl is REQUIRED
 const connector = new InjPassConnector({
@@ -380,7 +380,7 @@ The wallet works on:
 **Good news:** The API is 100% backward compatible! Just update:
 
 ```bash
-npm update @injpass/connector
+npm update @injpass/cli
 ```
 
 **What changed internally:**
@@ -444,7 +444,7 @@ try {
 
 ### React
 ```tsx
-import { InjPassConnector } from '@injpass/connector';
+import { InjPassConnector } from '@injpass/cli';
 import { useState } from 'react';
 
 function WalletButton() {
@@ -501,7 +501,7 @@ function WalletButton() {
 ### Vue 3
 ```vue
 <script setup>
-import { InjPassConnector } from '@injpass/connector';
+import { InjPassConnector } from '@injpass/cli';
 import { ref } from 'vue';
 
 const connector = new InjPassConnector({
@@ -552,7 +552,7 @@ async function signMessage() {
 ```tsx
 'use client';
 
-import { InjPassConnector } from '@injpass/connector';
+import { InjPassConnector } from '@injpass/cli';
 import { useState } from 'react';
 
 export default function WalletConnect() {
@@ -590,7 +590,7 @@ export default function WalletConnect() {
   <div id="status"></div>
 
   <script type="module">
-    import { InjPassConnector } from '@injpass/connector';
+    import { InjPassConnector } from '@injpass/cli';
 
     const connector = new InjPassConnector({
       embedUrl: 'http://localhost:3001/embed'
@@ -619,7 +619,7 @@ MIT
 - 📖 Documentation: https://docs.injpass.com
 - 🐛 GitHub Issues: https://github.com/injective/inj-pass/issues
 - 💬 Discord: https://discord.gg/injective
-- 📦 NPM Package: https://www.npmjs.com/package/@injpass/connector
+- 📦 NPM Package: https://www.npmjs.com/package/@injpass/cli
 
 ---
 

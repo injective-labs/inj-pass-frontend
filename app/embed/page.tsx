@@ -58,6 +58,23 @@ export default function EmbedPage() {
     }
   }, [hasPendingSign]);
 
+  // 监听页面卸载事件，当 DApp 关闭时关闭认证弹窗
+  useEffect(() => {
+    const handleUnload = () => {
+      if (authPopup && !authPopup.closed) {
+        authPopup.close();
+      }
+    };
+
+    window.addEventListener('pagehide', handleUnload);
+    window.addEventListener('beforeunload', handleUnload);
+
+    return () => {
+      window.removeEventListener('pagehide', handleUnload);
+      window.removeEventListener('beforeunload', handleUnload);
+    };
+  }, [authPopup]);
+
   const expand  = useCallback(() => setMinimized(false), []);
   const minimize = useCallback(() => setMinimized(true), []);
 
