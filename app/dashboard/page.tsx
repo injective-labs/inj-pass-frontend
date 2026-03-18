@@ -967,6 +967,8 @@ export default function DashboardPage() {
   const totalUsdNumeric = injUsdValue + usdtValue + usdcValue;
   const totalUsdValue = totalUsdNumeric.toFixed(2);
   const assetTrendSeries = buildPixelTrendSeries(totalUsdNumeric, injPriceChange24h);
+  const isWalletOverview = walletPanel === 'overview';
+  const activeWalletPanelMeta = walletPanel !== 'overview' ? walletPanelMeta[walletPanel] : null;
 
   return (
     <LoadingSpinner ready={isDashboardReady}>
@@ -1041,7 +1043,7 @@ export default function DashboardPage() {
 
           <div className="grid gap-5 xl:grid-cols-[minmax(0,1.18fr)_minmax(360px,0.82fr)] xl:items-start">
             {/* Total Balance Card - OKX Style */}
-            <div className="bg-black rounded-2xl p-6 border border-white/10 relative overflow-hidden">
+            <div className="bg-black rounded-2xl p-6 border border-white/10 relative overflow-hidden flex flex-col h-[760px] md:h-[720px]">
               {/* Subtle gradient accent */}
               <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-green-500/5 to-transparent rounded-full blur-2xl"></div>
               
@@ -1077,56 +1079,503 @@ export default function DashboardPage() {
                   </button>
                 </div>
 
-                <div className="flex flex-col gap-6 xl:flex-row xl:items-end">
-                  <div className="min-w-0 flex-1">
-                    {/* Main Balance Display */}
-                    <div className="mb-5">
-                      <div className="flex items-end gap-3 md:gap-4 flex-wrap">
-                        <span className="text-4xl md:text-5xl font-bold text-white font-mono tracking-tight">
-                          {balanceVisible ? <RollingBalanceNumber value={formattedBalance} /> : '••••••'}
-                        </span>
-                        <span className="text-xl font-semibold text-gray-400">INJ</span>
-                        <div className="flex items-baseline gap-2 pb-1 md:pb-1.5">
-                          <span className="text-sm md:text-base font-semibold text-white/90 font-mono tracking-tight">
-                            {balanceVisible ? AGENT_CREDITS_STATS.available.toLocaleString() : '••••'}
-                          </span>
-                          <span className="text-[11px] md:text-xs font-semibold uppercase tracking-[0.18em] text-gray-500">
-                            Passbits
-                          </span>
+                <div className="relative flex-1 min-h-0">
+                  <div
+                    className={`absolute inset-0 transition-all duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${
+                      isWalletOverview
+                        ? 'opacity-100 translate-y-0'
+                        : 'opacity-0 translate-y-5 pointer-events-none'
+                    }`}
+                  >
+                    <div className="flex h-full flex-col justify-center">
+                      <div className="flex flex-col gap-6 xl:flex-row xl:items-end">
+                        <div className="min-w-0 flex-1">
+                          <div className="mb-5">
+                            <div className="flex items-end gap-3 md:gap-4 flex-wrap">
+                              <span className="text-4xl md:text-5xl font-bold text-white font-mono tracking-tight">
+                                {balanceVisible ? <RollingBalanceNumber value={formattedBalance} /> : '••••••'}
+                              </span>
+                              <span className="text-xl font-semibold text-gray-400">INJ</span>
+                              <div className="flex items-baseline gap-2 pb-1 md:pb-1.5">
+                                <span className="text-sm md:text-base font-semibold text-white/90 font-mono tracking-tight">
+                                  {balanceVisible ? AGENT_CREDITS_STATS.available.toLocaleString() : '••••'}
+                                </span>
+                                <span className="text-[11px] md:text-xs font-semibold uppercase tracking-[0.18em] text-gray-500">
+                                  Passbits
+                                </span>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-4 mt-2">
+                              <div className="text-base text-gray-400 font-mono">
+                                ≈ ${balanceVisible ? totalUsdValue : '••••••'} USD
+                              </div>
+                              {balanceVisible && balance && (
+                                <div className="flex items-center gap-2">
+                                  <span className={`text-sm font-semibold ${injPriceChange24h >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                                    {injPriceChange24h >= 0 ? '+' : ''}${(parseFloat(balance.formatted) * injPrice * injPriceChange24h / 100).toFixed(2)}
+                                  </span>
+                                  <span className={`text-sm ${injPriceChange24h >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                                    {injPriceChange24h >= 0 ? '+' : ''}{injPriceChange24h.toFixed(2)}%
+                                  </span>
+                                  <span className="text-gray-500 text-xs">24h</span>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="xl:w-[320px] xl:flex-shrink-0">
+                          <PixelTrendChart
+                            values={assetTrendSeries}
+                            hidden={!balanceVisible}
+                            changePct={injPriceChange24h}
+                            currentValueLabel={totalUsdValue}
+                          />
                         </div>
                       </div>
-                      <div className="flex items-center gap-4 mt-2">
-                        <div className="text-base text-gray-400 font-mono">
-                          ≈ ${balanceVisible ? totalUsdValue : '••••••'} USD
+                    </div>
+                  </div>
+
+                  <div
+                    className={`absolute inset-0 transition-all duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${
+                      isWalletOverview
+                        ? 'opacity-0 translate-y-5 pointer-events-none'
+                        : 'opacity-100 translate-y-0'
+                    }`}
+                  >
+                    <div className="h-full rounded-[1.5rem] border border-white/10 bg-white/[0.03] px-4 py-4 sm:px-5 sm:py-5 flex flex-col overflow-hidden">
+                      <div className="flex items-start justify-between gap-4 border-b border-white/6 pb-4">
+                        <div>
+                          <div className="text-sm font-bold text-white">{activeWalletPanelMeta?.title}</div>
+                          <div className="mt-1 text-xs text-gray-400">{activeWalletPanelMeta?.subtitle}</div>
                         </div>
-                        {/* 24h Change */}
-                        {balanceVisible && balance && (
-                          <div className="flex items-center gap-2">
-                            <span className={`text-sm font-semibold ${injPriceChange24h >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                              {injPriceChange24h >= 0 ? '+' : ''}${(parseFloat(balance.formatted) * injPrice * injPriceChange24h / 100).toFixed(2)}
-                            </span>
-                            <span className={`text-sm ${injPriceChange24h >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                              {injPriceChange24h >= 0 ? '+' : ''}{injPriceChange24h.toFixed(2)}%
-                            </span>
-                            <span className="text-gray-500 text-xs">24h</span>
+                        <button
+                          onClick={() => setWalletPanel('overview')}
+                          className="w-9 h-9 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 flex items-center justify-center transition-all"
+                          title="Close panel"
+                        >
+                          <svg className="w-4 h-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.2} d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                        </button>
+                      </div>
+
+                      <div className="min-h-0 flex-1 overflow-y-auto pr-1">
+                        {walletPanel === 'send' && (
+                          <div className="grid gap-4 pt-5 lg:grid-cols-[minmax(0,1.2fr)_minmax(260px,0.8fr)]">
+                            <div className="space-y-4">
+                              <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                                <div className="flex items-center justify-between mb-2">
+                                  <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">Recipient</span>
+                                  <button
+                                    onClick={async () => {
+                                      try {
+                                        const text = await navigator.clipboard.readText();
+                                        setSendRecipient(text);
+                                        setSendError('');
+                                      } catch (error) {
+                                        console.error('Failed to read clipboard:', error);
+                                      }
+                                    }}
+                                    className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-400 hover:text-white transition-colors"
+                                  >
+                                    Paste
+                                  </button>
+                                </div>
+                                <input
+                                  value={sendRecipient}
+                                  onChange={(event) => {
+                                    setSendRecipient(event.target.value);
+                                    setSendError('');
+                                  }}
+                                  placeholder="0x... or inj1..."
+                                  className="w-full bg-transparent text-sm text-white placeholder:text-gray-600 outline-none font-mono"
+                                />
+                              </div>
+
+                              <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                                <div className="flex items-center justify-between mb-2">
+                                  <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">Amount</span>
+                                  <button
+                                    onClick={() => {
+                                      setSendAmount(tokenBalances.INJ);
+                                      setSendError('');
+                                    }}
+                                    className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-400 hover:text-white transition-colors"
+                                  >
+                                    Max
+                                  </button>
+                                </div>
+                                <div className="flex items-end gap-3">
+                                  <input
+                                    value={sendAmount}
+                                    onChange={(event) => {
+                                      setSendAmount(event.target.value);
+                                      setSendError('');
+                                    }}
+                                    inputMode="decimal"
+                                    placeholder="0.0000"
+                                    className="w-full bg-transparent text-2xl font-mono text-white placeholder:text-gray-600 outline-none"
+                                  />
+                                  <span className="pb-1 text-sm font-semibold text-gray-400">INJ</span>
+                                </div>
+                              </div>
+
+                              <div className="grid gap-3 sm:grid-cols-2">
+                                <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3">
+                                  <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">Estimated Gas</div>
+                                  <div className="mt-2 text-sm font-mono text-white">
+                                    {sendEstimating ? 'Estimating...' : sendGasEstimate ? `${Number(sendGasCost).toFixed(6)} INJ` : 'Awaiting input'}
+                                  </div>
+                                </div>
+                                <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3">
+                                  <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">Available</div>
+                                  <div className="mt-2 text-sm font-mono text-white">{tokenBalances.INJ} INJ</div>
+                                </div>
+                              </div>
+
+                              {sendError && (
+                                <div className="rounded-2xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-300">
+                                  {sendError}
+                                </div>
+                              )}
+
+                              {sendTxHash && (
+                                <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-3">
+                                  <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-200">Latest Transfer</div>
+                                  <div className="mt-2 text-sm font-mono text-white">{truncateMiddle(sendTxHash, 10, 8)}</div>
+                                </div>
+                              )}
+                            </div>
+
+                            <div className="rounded-2xl border border-white/10 bg-black/25 p-4 flex flex-col">
+                              <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">Summary</div>
+                              <div className="mt-4 space-y-3">
+                                <div className="flex items-center justify-between gap-3 text-sm">
+                                  <span className="text-gray-400">To</span>
+                                  <span className="font-mono text-white text-right">{sendRecipient ? truncateMiddle(sendRecipient, 8, 6) : 'Not set'}</span>
+                                </div>
+                                <div className="flex items-center justify-between gap-3 text-sm">
+                                  <span className="text-gray-400">Amount</span>
+                                  <span className="font-mono text-white">{sendAmount || '0.0000'} INJ</span>
+                                </div>
+                                <div className="flex items-center justify-between gap-3 text-sm">
+                                  <span className="text-gray-400">Network</span>
+                                  <span className="text-white">Injective EVM</span>
+                                </div>
+                              </div>
+
+                              <div className="mt-auto pt-5">
+                                <button
+                                  onClick={handleSendAction}
+                                  disabled={sendSubmitting || !sendRecipient || !sendAmount}
+                                  className="w-full rounded-2xl bg-white text-black font-bold py-3.5 hover:bg-gray-100 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                                >
+                                  {sendSubmitting ? 'Sending...' : 'Send INJ'}
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
+                        {walletPanel === 'receive' && (
+                          <div className="grid gap-5 pt-5 lg:grid-cols-[220px_minmax(0,1fr)] lg:items-center">
+                            <div className="flex justify-center">
+                              <div className="rounded-[2rem] bg-white p-4 shadow-2xl">
+                                <QRCodeSVG
+                                  value={receiveDisplayAddress || address || ''}
+                                  size={180}
+                                  level="H"
+                                  bgColor="#FFFFFF"
+                                  fgColor="#000000"
+                                  includeMargin={false}
+                                />
+                              </div>
+                            </div>
+
+                            <div className="space-y-4">
+                              <div className="relative p-1 bg-white/5 rounded-2xl border border-white/10">
+                                <div
+                                  className={`absolute top-1 bottom-1 w-[calc(50%-0.25rem)] rounded-[0.85rem] bg-white transition-all duration-300 ${
+                                    receiveAddressType === 'evm' ? 'left-1' : 'left-[calc(50%+0rem)]'
+                                  }`}
+                                />
+                                <div className="relative grid grid-cols-2 gap-2">
+                                  <button
+                                    onClick={() => setReceiveAddressType('evm')}
+                                    className={`rounded-[0.85rem] px-3 py-2.5 text-sm font-bold transition-all ${receiveAddressType === 'evm' ? 'text-black' : 'text-gray-400 hover:text-white'}`}
+                                  >
+                                    EVM
+                                  </button>
+                                  <button
+                                    onClick={() => setReceiveAddressType('cosmos')}
+                                    className={`rounded-[0.85rem] px-3 py-2.5 text-sm font-bold transition-all ${receiveAddressType === 'cosmos' ? 'text-black' : 'text-gray-400 hover:text-white'}`}
+                                  >
+                                    Cosmos
+                                  </button>
+                                </div>
+                              </div>
+
+                              <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                                <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">Wallet Address</div>
+                                <div className="mt-3 flex items-center gap-3">
+                                  <div className="flex-1 overflow-x-auto scrollbar-hide font-mono text-sm text-white whitespace-nowrap">
+                                    {receiveDisplayAddress}
+                                  </div>
+                                  <button
+                                    onClick={() => {
+                                      if (!receiveDisplayAddress) return;
+                                      navigator.clipboard.writeText(receiveDisplayAddress);
+                                      setReceiveCopied(true);
+                                      setTimeout(() => setReceiveCopied(false), 2000);
+                                    }}
+                                    className={`flex-shrink-0 rounded-xl border px-3 py-2 text-xs font-bold transition-all ${
+                                      receiveCopied
+                                        ? 'border-emerald-400/30 bg-emerald-500/10 text-emerald-300'
+                                        : 'border-white/10 bg-white/5 text-white hover:bg-white/10'
+                                    }`}
+                                  >
+                                    {receiveCopied ? 'Copied' : 'Copy'}
+                                  </button>
+                                </div>
+                              </div>
+
+                              <div className="grid gap-3 sm:grid-cols-2">
+                                <div className="rounded-2xl border border-emerald-500/15 bg-emerald-500/5 px-4 py-3 text-sm text-gray-300">
+                                  Use <span className="text-white">{receiveAddressType === 'evm' ? 'EVM' : 'Cosmos'}</span> format depending on the sender you are receiving from.
+                                </div>
+                                <div className="rounded-2xl border border-yellow-500/15 bg-yellow-500/5 px-4 py-3 text-sm text-gray-300">
+                                  Double-check the network before sending assets in. Wrong network deposits may not be recoverable.
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
+                        {walletPanel === 'swap' && (
+                          <div className="grid gap-4 pt-5 lg:grid-cols-[minmax(0,1.15fr)_minmax(260px,0.85fr)]">
+                            <div className="space-y-4">
+                              <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                                <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">From</div>
+                                <div className="mt-3 grid grid-cols-3 gap-2">
+                                  {swapTokenOptions.map((token) => (
+                                    <button
+                                      key={`from-${token.symbol}`}
+                                      onClick={() => {
+                                        setSwapFromToken(token.symbol);
+                                        if (token.symbol === swapToToken) {
+                                          setSwapToToken(token.symbol === 'INJ' ? 'USDT' : 'INJ');
+                                        }
+                                        setSwapError('');
+                                      }}
+                                      className={`rounded-2xl border px-3 py-3 text-left transition-all ${
+                                        swapFromToken === token.symbol
+                                          ? 'border-white/20 bg-white text-black'
+                                          : 'border-white/10 bg-white/5 hover:bg-white/10'
+                                      }`}
+                                    >
+                                      <div className="font-bold text-sm">{token.symbol}</div>
+                                      <div className={`mt-1 text-xs ${swapFromToken === token.symbol ? 'text-black/70' : 'text-gray-400'}`}>{token.balance}</div>
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+
+                              <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                                <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">To</div>
+                                <div className="mt-3 grid grid-cols-3 gap-2">
+                                  {swapTokenOptions.map((token) => (
+                                    <button
+                                      key={`to-${token.symbol}`}
+                                      onClick={() => {
+                                        setSwapToToken(token.symbol);
+                                        if (token.symbol === swapFromToken) {
+                                          setSwapFromToken(token.symbol === 'INJ' ? 'USDT' : 'INJ');
+                                        }
+                                        setSwapError('');
+                                      }}
+                                      className={`rounded-2xl border px-3 py-3 text-left transition-all ${
+                                        swapToToken === token.symbol
+                                          ? 'border-white/20 bg-white text-black'
+                                          : 'border-white/10 bg-white/5 hover:bg-white/10'
+                                      }`}
+                                    >
+                                      <div className="font-bold text-sm">{token.symbol}</div>
+                                      <div className={`mt-1 text-xs ${swapToToken === token.symbol ? 'text-black/70' : 'text-gray-400'}`}>{token.balance}</div>
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+
+                              <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                                <div className="flex items-center justify-between mb-2">
+                                  <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">Swap Amount</span>
+                                  <button
+                                    onClick={() => {
+                                      setSwapAmount(swapFromMeta.balance);
+                                      setSwapError('');
+                                    }}
+                                    className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-400 hover:text-white transition-colors"
+                                  >
+                                    Max
+                                  </button>
+                                </div>
+                                <div className="flex items-end gap-3">
+                                  <input
+                                    value={swapAmount}
+                                    onChange={(event) => {
+                                      setSwapAmount(event.target.value);
+                                      setSwapError('');
+                                    }}
+                                    inputMode="decimal"
+                                    placeholder="0.0000"
+                                    className="w-full bg-transparent text-2xl font-mono text-white placeholder:text-gray-600 outline-none"
+                                  />
+                                  <span className="pb-1 text-sm font-semibold text-gray-400">{swapFromToken}</span>
+                                </div>
+                              </div>
+
+                              <div className="flex flex-wrap gap-2">
+                                {['0.5', '1.0', '2.0'].map((value) => (
+                                  <button
+                                    key={value}
+                                    onClick={() => setSwapSlippage(value)}
+                                    className={`rounded-full px-3 py-1.5 text-xs font-semibold transition-all ${
+                                      swapSlippage === value
+                                        ? 'bg-white text-black'
+                                        : 'bg-white/5 text-gray-300 hover:bg-white/10'
+                                    }`}
+                                  >
+                                    {value}% Slippage
+                                  </button>
+                                ))}
+                              </div>
+
+                              {swapError && (
+                                <div className="rounded-2xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-300">
+                                  {swapError}
+                                </div>
+                              )}
+
+                              {swapTxHash && (
+                                <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-3">
+                                  <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-200">Latest Swap</div>
+                                  <div className="mt-2 text-sm font-mono text-white">{truncateMiddle(swapTxHash, 10, 8)}</div>
+                                </div>
+                              )}
+                            </div>
+
+                            <div className="rounded-2xl border border-white/10 bg-black/25 p-4 flex flex-col">
+                              <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">Quote</div>
+                              <div className="mt-4 space-y-3">
+                                <div className="flex items-center justify-between gap-3 text-sm">
+                                  <span className="text-gray-400">From</span>
+                                  <span className="font-mono text-white">{swapAmount || '0.0000'} {swapFromToken}</span>
+                                </div>
+                                <div className="flex items-center justify-between gap-3 text-sm">
+                                  <span className="text-gray-400">Expected Out</span>
+                                  <span className="font-mono text-white">
+                                    {swapQuoteLoading ? 'Quoting...' : swapQuoteAmount ? `${Number(swapQuoteAmount).toFixed(4)} ${swapToToken}` : 'Awaiting input'}
+                                  </span>
+                                </div>
+                                <div className="flex items-center justify-between gap-3 text-sm">
+                                  <span className="text-gray-400">Price Impact</span>
+                                  <span className="text-white">{swapPriceImpact}%</span>
+                                </div>
+                                <div className="flex items-center justify-between gap-3 text-sm">
+                                  <span className="text-gray-400">Available</span>
+                                  <span className="font-mono text-white">{swapFromMeta.balance} {swapFromToken}</span>
+                                </div>
+                              </div>
+
+                              <div className="mt-auto pt-5">
+                                <button
+                                  onClick={handleSwapAction}
+                                  disabled={swapSubmitting || !swapAmount || swapFromToken === swapToToken}
+                                  className="w-full rounded-2xl bg-white text-black font-bold py-3.5 hover:bg-gray-100 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                                >
+                                  {swapSubmitting ? 'Swapping...' : `Swap to ${swapToMeta.symbol}`}
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
+                        {walletPanel === 'history' && (
+                          <div className="pt-5">
+                            <div className="flex flex-wrap gap-2">
+                              {(['all', 'send', 'receive', 'swap'] as DashboardHistoryFilter[]).map((filter) => (
+                                <button
+                                  key={filter}
+                                  onClick={() => setHistoryFilter(filter)}
+                                  className={`rounded-full px-3 py-1.5 text-xs font-semibold transition-all ${
+                                    historyFilter === filter
+                                      ? 'bg-white text-black'
+                                      : 'bg-white/5 text-gray-300 hover:bg-white/10'
+                                  }`}
+                                >
+                                  {filter === 'all' ? 'All' : filter.charAt(0).toUpperCase() + filter.slice(1)}
+                                </button>
+                              ))}
+                            </div>
+
+                            {historyError && (
+                              <div className="mt-4 rounded-2xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-300">
+                                {historyError}
+                              </div>
+                            )}
+
+                            {historyLoading ? (
+                              <div className="mt-5 flex items-center justify-center py-14">
+                                <div className="w-10 h-10 rounded-full border-4 border-white/10 border-t-white animate-spin" />
+                              </div>
+                            ) : filteredHistoryItems.length === 0 ? (
+                              <div className="mt-5 rounded-2xl border border-white/10 bg-white/5 px-4 py-10 text-center text-sm text-gray-400">
+                                No transactions yet. Your recent wallet activity will appear here.
+                              </div>
+                            ) : (
+                              <div className="mt-5 space-y-3">
+                                {filteredHistoryItems.map((item) => (
+                                  <div
+                                    key={item.id}
+                                    className="rounded-2xl border border-white/10 bg-white/5 px-4 py-4"
+                                  >
+                                    <div className="flex items-start justify-between gap-4">
+                                      <div className="min-w-0">
+                                        <div className="flex items-center gap-2">
+                                          <span className="text-sm font-bold text-white capitalize">{item.type}</span>
+                                          <span className="rounded-full border border-white/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.16em] text-gray-400">
+                                            {item.chainType}
+                                          </span>
+                                        </div>
+                                        <div className="mt-1 text-sm text-gray-400">{item.address}</div>
+                                        <div className="mt-2 text-xs text-gray-500">{formatDashboardTimestamp(item.timestamp)}</div>
+                                      </div>
+                                      <div className="text-right">
+                                        <div className="text-sm font-mono text-white">{item.amount} {item.token}</div>
+                                        <div className={`mt-1 text-xs font-semibold ${
+                                          item.status === 'completed'
+                                            ? 'text-emerald-300'
+                                            : item.status === 'failed'
+                                              ? 'text-red-300'
+                                              : 'text-amber-300'
+                                        }`}>
+                                          {item.status}
+                                        </div>
+                                      </div>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
                           </div>
                         )}
                       </div>
                     </div>
                   </div>
-
-                  <div className="xl:w-[320px] xl:flex-shrink-0">
-                    <PixelTrendChart
-                      values={assetTrendSeries}
-                      hidden={!balanceVisible}
-                      changePct={injPriceChange24h}
-                      currentValueLabel={totalUsdValue}
-                    />
-                  </div>
                 </div>
 
-                {/* Action Buttons - Circular White Style */}
-                <div className="grid grid-cols-4 gap-4 mt-1">
+                <div className="grid grid-cols-4 gap-4 pt-5">
                   {/* Send Button */}
                   <button 
                     onClick={() => toggleWalletPanel('send')}
@@ -1202,436 +1651,6 @@ export default function DashboardPage() {
                     <span className={`text-xs font-semibold transition-colors ${walletPanel === 'history' ? 'text-white' : 'text-gray-300'}`}>History</span>
                   </button>
                 </div>
-
-                {walletPanel !== 'overview' && (
-                  <div className="mt-6 rounded-[1.5rem] border border-white/10 bg-white/[0.03] px-4 py-4 sm:px-5 sm:py-5">
-                    <div className="flex items-start justify-between gap-4 border-b border-white/6 pb-4">
-                      <div>
-                        <div className="text-sm font-bold text-white">{walletPanelMeta[walletPanel].title}</div>
-                        <div className="mt-1 text-xs text-gray-400">{walletPanelMeta[walletPanel].subtitle}</div>
-                      </div>
-                      <button
-                        onClick={() => setWalletPanel('overview')}
-                        className="w-9 h-9 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 flex items-center justify-center transition-all"
-                        title="Close panel"
-                      >
-                        <svg className="w-4 h-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.2} d="M6 18L18 6M6 6l12 12" />
-                        </svg>
-                      </button>
-                    </div>
-
-                    {walletPanel === 'send' && (
-                      <div className="mt-5 grid gap-4 lg:grid-cols-[minmax(0,1.2fr)_minmax(260px,0.8fr)]">
-                        <div className="space-y-4">
-                          <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
-                            <div className="flex items-center justify-between mb-2">
-                              <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">Recipient</span>
-                              <button
-                                onClick={async () => {
-                                  try {
-                                    const text = await navigator.clipboard.readText();
-                                    setSendRecipient(text);
-                                    setSendError('');
-                                  } catch (error) {
-                                    console.error('Failed to read clipboard:', error);
-                                  }
-                                }}
-                                className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-400 hover:text-white transition-colors"
-                              >
-                                Paste
-                              </button>
-                            </div>
-                            <input
-                              value={sendRecipient}
-                              onChange={(event) => {
-                                setSendRecipient(event.target.value);
-                                setSendError('');
-                              }}
-                              placeholder="0x... or inj1..."
-                              className="w-full bg-transparent text-sm text-white placeholder:text-gray-600 outline-none font-mono"
-                            />
-                          </div>
-
-                          <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
-                            <div className="flex items-center justify-between mb-2">
-                              <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">Amount</span>
-                              <button
-                                onClick={() => {
-                                  setSendAmount(tokenBalances.INJ);
-                                  setSendError('');
-                                }}
-                                className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-400 hover:text-white transition-colors"
-                              >
-                                Max
-                              </button>
-                            </div>
-                            <div className="flex items-end gap-3">
-                              <input
-                                value={sendAmount}
-                                onChange={(event) => {
-                                  setSendAmount(event.target.value);
-                                  setSendError('');
-                                }}
-                                inputMode="decimal"
-                                placeholder="0.0000"
-                                className="w-full bg-transparent text-2xl font-mono text-white placeholder:text-gray-600 outline-none"
-                              />
-                              <span className="pb-1 text-sm font-semibold text-gray-400">INJ</span>
-                            </div>
-                          </div>
-
-                          <div className="grid gap-3 sm:grid-cols-2">
-                            <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3">
-                              <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">Estimated Gas</div>
-                              <div className="mt-2 text-sm font-mono text-white">
-                                {sendEstimating ? 'Estimating...' : sendGasEstimate ? `${Number(sendGasCost).toFixed(6)} INJ` : 'Awaiting input'}
-                              </div>
-                            </div>
-                            <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3">
-                              <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">Available</div>
-                              <div className="mt-2 text-sm font-mono text-white">{tokenBalances.INJ} INJ</div>
-                            </div>
-                          </div>
-
-                          {sendError && (
-                            <div className="rounded-2xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-300">
-                              {sendError}
-                            </div>
-                          )}
-
-                          {sendTxHash && (
-                            <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-3">
-                              <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-200">Latest Transfer</div>
-                              <div className="mt-2 text-sm font-mono text-white">{truncateMiddle(sendTxHash, 10, 8)}</div>
-                            </div>
-                          )}
-                        </div>
-
-                        <div className="rounded-2xl border border-white/10 bg-black/25 p-4 flex flex-col">
-                          <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">Summary</div>
-                          <div className="mt-4 space-y-3">
-                            <div className="flex items-center justify-between gap-3 text-sm">
-                              <span className="text-gray-400">To</span>
-                              <span className="font-mono text-white text-right">{sendRecipient ? truncateMiddle(sendRecipient, 8, 6) : 'Not set'}</span>
-                            </div>
-                            <div className="flex items-center justify-between gap-3 text-sm">
-                              <span className="text-gray-400">Amount</span>
-                              <span className="font-mono text-white">{sendAmount || '0.0000'} INJ</span>
-                            </div>
-                            <div className="flex items-center justify-between gap-3 text-sm">
-                              <span className="text-gray-400">Network</span>
-                              <span className="text-white">Injective EVM</span>
-                            </div>
-                          </div>
-
-                          <div className="mt-auto pt-5">
-                            <button
-                              onClick={handleSendAction}
-                              disabled={sendSubmitting || !sendRecipient || !sendAmount}
-                              className="w-full rounded-2xl bg-white text-black font-bold py-3.5 hover:bg-gray-100 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-                            >
-                              {sendSubmitting ? 'Sending...' : 'Send INJ'}
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-
-                    {walletPanel === 'receive' && (
-                      <div className="mt-5 grid gap-5 lg:grid-cols-[220px_minmax(0,1fr)] lg:items-center">
-                        <div className="flex justify-center">
-                          <div className="rounded-[2rem] bg-white p-4 shadow-2xl">
-                            <QRCodeSVG
-                              value={receiveDisplayAddress || address || ''}
-                              size={180}
-                              level="H"
-                              bgColor="#FFFFFF"
-                              fgColor="#000000"
-                              includeMargin={false}
-                            />
-                          </div>
-                        </div>
-
-                        <div className="space-y-4">
-                          <div className="relative p-1 bg-white/5 rounded-2xl border border-white/10">
-                            <div
-                              className={`absolute top-1 bottom-1 w-[calc(50%-0.25rem)] rounded-[0.85rem] bg-white transition-all duration-300 ${
-                                receiveAddressType === 'evm' ? 'left-1' : 'left-[calc(50%+0rem)]'
-                              }`}
-                            />
-                            <div className="relative grid grid-cols-2 gap-2">
-                              <button
-                                onClick={() => setReceiveAddressType('evm')}
-                                className={`rounded-[0.85rem] px-3 py-2.5 text-sm font-bold transition-all ${receiveAddressType === 'evm' ? 'text-black' : 'text-gray-400 hover:text-white'}`}
-                              >
-                                EVM
-                              </button>
-                              <button
-                                onClick={() => setReceiveAddressType('cosmos')}
-                                className={`rounded-[0.85rem] px-3 py-2.5 text-sm font-bold transition-all ${receiveAddressType === 'cosmos' ? 'text-black' : 'text-gray-400 hover:text-white'}`}
-                              >
-                                Cosmos
-                              </button>
-                            </div>
-                          </div>
-
-                          <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
-                            <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">Wallet Address</div>
-                            <div className="mt-3 flex items-center gap-3">
-                              <div className="flex-1 overflow-x-auto scrollbar-hide font-mono text-sm text-white whitespace-nowrap">
-                                {receiveDisplayAddress}
-                              </div>
-                              <button
-                                onClick={() => {
-                                  if (!receiveDisplayAddress) return;
-                                  navigator.clipboard.writeText(receiveDisplayAddress);
-                                  setReceiveCopied(true);
-                                  setTimeout(() => setReceiveCopied(false), 2000);
-                                }}
-                                className={`flex-shrink-0 rounded-xl border px-3 py-2 text-xs font-bold transition-all ${
-                                  receiveCopied
-                                    ? 'border-emerald-400/30 bg-emerald-500/10 text-emerald-300'
-                                    : 'border-white/10 bg-white/5 text-white hover:bg-white/10'
-                                }`}
-                              >
-                                {receiveCopied ? 'Copied' : 'Copy'}
-                              </button>
-                            </div>
-                          </div>
-
-                          <div className="grid gap-3 sm:grid-cols-2">
-                            <div className="rounded-2xl border border-emerald-500/15 bg-emerald-500/5 px-4 py-3 text-sm text-gray-300">
-                              Use <span className="text-white">{receiveAddressType === 'evm' ? 'EVM' : 'Cosmos'}</span> format depending on the sender you are receiving from.
-                            </div>
-                            <div className="rounded-2xl border border-yellow-500/15 bg-yellow-500/5 px-4 py-3 text-sm text-gray-300">
-                              Double-check the network before sending assets in. Wrong network deposits may not be recoverable.
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-
-                    {walletPanel === 'swap' && (
-                      <div className="mt-5 grid gap-4 lg:grid-cols-[minmax(0,1.15fr)_minmax(260px,0.85fr)]">
-                        <div className="space-y-4">
-                          <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
-                            <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">From</div>
-                            <div className="mt-3 grid grid-cols-3 gap-2">
-                              {swapTokenOptions.map((token) => (
-                                <button
-                                  key={`from-${token.symbol}`}
-                                  onClick={() => {
-                                    setSwapFromToken(token.symbol);
-                                    if (token.symbol === swapToToken) {
-                                      setSwapToToken(token.symbol === 'INJ' ? 'USDT' : 'INJ');
-                                    }
-                                    setSwapError('');
-                                  }}
-                                  className={`rounded-2xl border px-3 py-3 text-left transition-all ${
-                                    swapFromToken === token.symbol
-                                      ? 'border-white/20 bg-white text-black'
-                                      : 'border-white/10 bg-white/5 hover:bg-white/10'
-                                  }`}
-                                >
-                                  <div className="font-bold text-sm">{token.symbol}</div>
-                                  <div className={`mt-1 text-xs ${swapFromToken === token.symbol ? 'text-black/70' : 'text-gray-400'}`}>{token.balance}</div>
-                                </button>
-                              ))}
-                            </div>
-                          </div>
-
-                          <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
-                            <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">To</div>
-                            <div className="mt-3 grid grid-cols-3 gap-2">
-                              {swapTokenOptions.map((token) => (
-                                <button
-                                  key={`to-${token.symbol}`}
-                                  onClick={() => {
-                                    setSwapToToken(token.symbol);
-                                    if (token.symbol === swapFromToken) {
-                                      setSwapFromToken(token.symbol === 'INJ' ? 'USDT' : 'INJ');
-                                    }
-                                    setSwapError('');
-                                  }}
-                                  className={`rounded-2xl border px-3 py-3 text-left transition-all ${
-                                    swapToToken === token.symbol
-                                      ? 'border-white/20 bg-white text-black'
-                                      : 'border-white/10 bg-white/5 hover:bg-white/10'
-                                  }`}
-                                >
-                                  <div className="font-bold text-sm">{token.symbol}</div>
-                                  <div className={`mt-1 text-xs ${swapToToken === token.symbol ? 'text-black/70' : 'text-gray-400'}`}>{token.balance}</div>
-                                </button>
-                              ))}
-                            </div>
-                          </div>
-
-                          <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
-                            <div className="flex items-center justify-between mb-2">
-                              <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">Swap Amount</span>
-                              <button
-                                onClick={() => {
-                                  setSwapAmount(swapFromMeta.balance);
-                                  setSwapError('');
-                                }}
-                                className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-400 hover:text-white transition-colors"
-                              >
-                                Max
-                              </button>
-                            </div>
-                            <div className="flex items-end gap-3">
-                              <input
-                                value={swapAmount}
-                                onChange={(event) => {
-                                  setSwapAmount(event.target.value);
-                                  setSwapError('');
-                                }}
-                                inputMode="decimal"
-                                placeholder="0.0000"
-                                className="w-full bg-transparent text-2xl font-mono text-white placeholder:text-gray-600 outline-none"
-                              />
-                              <span className="pb-1 text-sm font-semibold text-gray-400">{swapFromToken}</span>
-                            </div>
-                          </div>
-
-                          <div className="flex flex-wrap gap-2">
-                            {['0.5', '1.0', '2.0'].map((value) => (
-                              <button
-                                key={value}
-                                onClick={() => setSwapSlippage(value)}
-                                className={`rounded-full px-3 py-1.5 text-xs font-semibold transition-all ${
-                                  swapSlippage === value
-                                    ? 'bg-white text-black'
-                                    : 'bg-white/5 text-gray-300 hover:bg-white/10'
-                                }`}
-                              >
-                                {value}% Slippage
-                              </button>
-                            ))}
-                          </div>
-
-                          {swapError && (
-                            <div className="rounded-2xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-300">
-                              {swapError}
-                            </div>
-                          )}
-
-                          {swapTxHash && (
-                            <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-3">
-                              <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-200">Latest Swap</div>
-                              <div className="mt-2 text-sm font-mono text-white">{truncateMiddle(swapTxHash, 10, 8)}</div>
-                            </div>
-                          )}
-                        </div>
-
-                        <div className="rounded-2xl border border-white/10 bg-black/25 p-4 flex flex-col">
-                          <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">Quote</div>
-                          <div className="mt-4 space-y-3">
-                            <div className="flex items-center justify-between gap-3 text-sm">
-                              <span className="text-gray-400">From</span>
-                              <span className="font-mono text-white">{swapAmount || '0.0000'} {swapFromToken}</span>
-                            </div>
-                            <div className="flex items-center justify-between gap-3 text-sm">
-                              <span className="text-gray-400">Expected Out</span>
-                              <span className="font-mono text-white">
-                                {swapQuoteLoading ? 'Quoting...' : swapQuoteAmount ? `${Number(swapQuoteAmount).toFixed(4)} ${swapToToken}` : 'Awaiting input'}
-                              </span>
-                            </div>
-                            <div className="flex items-center justify-between gap-3 text-sm">
-                              <span className="text-gray-400">Price Impact</span>
-                              <span className="text-white">{swapPriceImpact}%</span>
-                            </div>
-                            <div className="flex items-center justify-between gap-3 text-sm">
-                              <span className="text-gray-400">Available</span>
-                              <span className="font-mono text-white">{swapFromMeta.balance} {swapFromToken}</span>
-                            </div>
-                          </div>
-
-                          <div className="mt-auto pt-5">
-                            <button
-                              onClick={handleSwapAction}
-                              disabled={swapSubmitting || !swapAmount || swapFromToken === swapToToken}
-                              className="w-full rounded-2xl bg-white text-black font-bold py-3.5 hover:bg-gray-100 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-                            >
-                              {swapSubmitting ? 'Swapping...' : `Swap to ${swapToMeta.symbol}`}
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-
-                    {walletPanel === 'history' && (
-                      <div className="mt-5">
-                        <div className="flex flex-wrap gap-2">
-                          {(['all', 'send', 'receive', 'swap'] as DashboardHistoryFilter[]).map((filter) => (
-                            <button
-                              key={filter}
-                              onClick={() => setHistoryFilter(filter)}
-                              className={`rounded-full px-3 py-1.5 text-xs font-semibold transition-all ${
-                                historyFilter === filter
-                                  ? 'bg-white text-black'
-                                  : 'bg-white/5 text-gray-300 hover:bg-white/10'
-                              }`}
-                            >
-                              {filter === 'all' ? 'All' : filter.charAt(0).toUpperCase() + filter.slice(1)}
-                            </button>
-                          ))}
-                        </div>
-
-                        {historyError && (
-                          <div className="mt-4 rounded-2xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-300">
-                            {historyError}
-                          </div>
-                        )}
-
-                        {historyLoading ? (
-                          <div className="mt-5 flex items-center justify-center py-14">
-                            <div className="w-10 h-10 rounded-full border-4 border-white/10 border-t-white animate-spin" />
-                          </div>
-                        ) : filteredHistoryItems.length === 0 ? (
-                          <div className="mt-5 rounded-2xl border border-white/10 bg-white/5 px-4 py-10 text-center text-sm text-gray-400">
-                            No transactions yet. Your recent wallet activity will appear here.
-                          </div>
-                        ) : (
-                          <div className="mt-5 space-y-3">
-                            {filteredHistoryItems.map((item) => (
-                              <div
-                                key={item.id}
-                                className="rounded-2xl border border-white/10 bg-white/5 px-4 py-4"
-                              >
-                                <div className="flex items-start justify-between gap-4">
-                                  <div className="min-w-0">
-                                    <div className="flex items-center gap-2">
-                                      <span className="text-sm font-bold text-white capitalize">{item.type}</span>
-                                      <span className="rounded-full border border-white/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.16em] text-gray-400">
-                                        {item.chainType}
-                                      </span>
-                                    </div>
-                                    <div className="mt-1 text-sm text-gray-400">{item.address}</div>
-                                    <div className="mt-2 text-xs text-gray-500">{formatDashboardTimestamp(item.timestamp)}</div>
-                                  </div>
-                                  <div className="text-right">
-                                    <div className="text-sm font-mono text-white">{item.amount} {item.token}</div>
-                                    <div className={`mt-1 text-xs font-semibold ${
-                                      item.status === 'completed'
-                                        ? 'text-emerald-300'
-                                        : item.status === 'failed'
-                                          ? 'text-red-300'
-                                          : 'text-amber-300'
-                                    }`}>
-                                      {item.status}
-                                    </div>
-                                  </div>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                )}
               </div>
             </div>
 
