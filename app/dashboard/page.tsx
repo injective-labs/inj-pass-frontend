@@ -17,6 +17,8 @@ import LoadingSpinner from '@/components/LoadingSpinner';
 import NFTDetailModal from '@/components/NFTDetailModal';
 import { AGENT_CREDITS_STATS } from '@/config/agent-credits';
 
+type AssetTab = 'tokens' | 'nfts' | 'defi' | 'earn';
+
 export default function DashboardPage() {
   const router = useRouter();
   const { isUnlocked, address, isCheckingSession } = useWallet();
@@ -30,7 +32,7 @@ export default function DashboardPage() {
   const [balanceVisible, setBalanceVisible] = useState(true);
   const [copied, setCopied] = useState(false);
   const [activeTab, setActiveTab] = useState<'settings' | 'wallet' | 'discover' | 'agents'>('wallet');
-  const [assetTab, setAssetTab] = useState<'tokens' | 'nfts' | 'defi'>('tokens');
+  const [assetTab, setAssetTab] = useState<AssetTab>('tokens');
   const [tokenBalances, setTokenBalances] = useState<Record<string, string>>({
     INJ: '0.0000',
     USDT: '0.00',
@@ -177,6 +179,74 @@ export default function DashboardPage() {
       setTimeout(() => setCopied(false), 2000);
     }
   };
+
+  const assetTabOrder: AssetTab[] = ['tokens', 'nfts', 'defi', 'earn'];
+  const assetTabIndex = assetTabOrder.indexOf(assetTab);
+
+  const earnTasks = [
+    {
+      title: 'Daily Wallet Check-In',
+      subtitle: 'Refresh balances and keep your Passbits streak active.',
+      reward: '+25',
+      actionLabel: 'Check In',
+      badge: 'Daily',
+      onClick: handleRefresh,
+      iconShell: 'rounded-2xl bg-gradient-to-br from-[#4c3af9] to-blue-500 shadow-[0_10px_30px_rgba(76,58,249,0.24)]',
+      icon: (
+        <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.2} d="M12 6v6l3.5 2M12 3.5a8.5 8.5 0 11-8.5 8.5" />
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.2} d="M3.5 7.5V3.5h4" />
+        </svg>
+      ),
+    },
+    {
+      title: 'Complete an On-Chain Swap',
+      subtitle: 'Trade on Injective and unlock your first activity reward.',
+      reward: '+300',
+      actionLabel: 'Swap Now',
+      badge: 'On-Chain',
+      onClick: () => router.push('/swap'),
+      iconShell: 'rounded-2xl bg-gradient-to-br from-emerald-500 to-cyan-500 shadow-[0_10px_30px_rgba(16,185,129,0.22)]',
+      icon: (
+        <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.2} d="M7 7h11m0 0l-3-3m3 3l-3 3M17 17H6m0 0l3-3m-3 3l3 3" />
+        </svg>
+      ),
+    },
+    {
+      title: 'Invite One Activated Friend',
+      subtitle: 'Bring a verified user into INJ Pass for the biggest boost.',
+      reward: AGENT_CREDITS_STATS.inviteReward,
+      actionLabel: 'Invite',
+      badge: 'Social',
+      onClick: () => router.push('/agents'),
+      iconShell: 'rounded-2xl bg-gradient-to-br from-fuchsia-500 to-violet-500 shadow-[0_10px_30px_rgba(217,70,239,0.22)]',
+      icon: (
+        <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.1} d="M8 9.5l7-2.5M8.4 10.7l6.2 4.1M15.2 8.5v4.8" />
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.1} d="M17.2 7H20m0 0l-1.8-1.8M20 7l-1.8 1.8" />
+          <circle cx="6.5" cy="10" r="1.4" fill="currentColor" stroke="none" />
+          <circle cx="16" cy="6.7" r="1.4" fill="currentColor" stroke="none" />
+          <circle cx="16" cy="15.7" r="1.4" fill="currentColor" stroke="none" />
+        </svg>
+      ),
+    },
+    {
+      title: 'Explore Discover',
+      subtitle: 'Open the Discover hub and finish today’s exploration task.',
+      reward: '+120',
+      actionLabel: 'Open',
+      badge: 'Explore',
+      onClick: () => router.push('/discover'),
+      iconShell: 'rounded-2xl bg-gradient-to-br from-amber-500 to-orange-500 shadow-[0_10px_30px_rgba(245,158,11,0.22)]',
+      icon: (
+        <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <circle cx="12" cy="12" r="8" strokeWidth={2.2} />
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.2} d="M14.8 9.2l-1.9 5-5 1.9 1.9-5 5-1.9z" />
+        </svg>
+      ),
+    },
+  ];
 
   // QR Scanner handlers
   const openQRScanner = async () => {
@@ -485,18 +555,18 @@ export default function DashboardPage() {
         <div className="relative mb-6 p-1 bg-white/5 rounded-xl">
           {/* Sliding Background */}
           <div 
-            className={`absolute top-1 bottom-1 w-[calc(33.333%-0.333rem)] bg-white rounded-lg transition-all duration-300 ease-out shadow-lg ${
-              assetTab === 'tokens' ? 'left-1' : 
-              assetTab === 'nfts' ? 'left-[calc(33.333%+0.166rem)]' : 
-              'left-[calc(66.666%+0.333rem)]'
-            }`}
+            className="absolute top-1 bottom-1 bg-white rounded-lg transition-all duration-300 ease-out shadow-lg"
+            style={{
+              width: 'calc((100% - 1.5rem) / 4)',
+              left: `calc(0.25rem + ${assetTabIndex} * ((100% - 1.5rem) / 4 + 0.5rem))`,
+            }}
           />
           
           {/* Tab Buttons */}
           <div className="relative flex gap-2">
             <button 
               onClick={() => setAssetTab('tokens')}
-              className={`flex-1 flex items-center justify-center gap-2 py-3 px-4 rounded-lg font-bold text-sm transition-all duration-300 ${
+              className={`flex-1 flex items-center justify-center gap-1.5 py-3 px-2 sm:px-4 rounded-lg font-bold text-xs sm:text-sm transition-all duration-300 ${
                 assetTab === 'tokens' 
                   ? 'text-black' 
                   : 'text-gray-400 hover:text-white'
@@ -510,7 +580,7 @@ export default function DashboardPage() {
             </button>
             <button 
               onClick={() => setAssetTab('nfts')}
-              className={`flex-1 flex items-center justify-center gap-2 py-3 px-4 rounded-lg font-bold text-sm transition-all duration-300 ${
+              className={`flex-1 flex items-center justify-center gap-1.5 py-3 px-2 sm:px-4 rounded-lg font-bold text-xs sm:text-sm transition-all duration-300 ${
                 assetTab === 'nfts' 
                   ? 'text-black' 
                   : 'text-gray-400 hover:text-white'
@@ -524,7 +594,7 @@ export default function DashboardPage() {
             </button>
             <button 
               onClick={() => setAssetTab('defi')}
-              className={`flex-1 flex items-center justify-center gap-2 py-3 px-4 rounded-lg font-bold text-sm transition-all duration-300 ${
+              className={`flex-1 flex items-center justify-center gap-1.5 py-3 px-2 sm:px-4 rounded-lg font-bold text-xs sm:text-sm transition-all duration-300 ${
                 assetTab === 'defi' 
                   ? 'text-black' 
                   : 'text-gray-400 hover:text-white'
@@ -534,6 +604,19 @@ export default function DashboardPage() {
                 <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
               </svg>
               <span>DeFi</span>
+            </button>
+            <button 
+              onClick={() => setAssetTab('earn')}
+              className={`flex-1 flex items-center justify-center gap-1.5 py-3 px-2 sm:px-4 rounded-lg font-bold text-xs sm:text-sm transition-all duration-300 ${
+                assetTab === 'earn' 
+                  ? 'text-black' 
+                  : 'text-gray-400 hover:text-white'
+              }`}
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v18M7.5 7.5h5.25a2.75 2.75 0 010 5.5h-1.5a2.75 2.75 0 000 5.5H17" />
+              </svg>
+              <span>Earn</span>
             </button>
           </div>
         </div>
@@ -727,6 +810,35 @@ export default function DashboardPage() {
                   <p className="text-xs text-gray-500">Your DeFi positions and activities will appear here</p>
                 </div>
               )}
+            </>
+          )}
+
+          {assetTab === 'earn' && (
+            <>
+              {earnTasks.map((task) => (
+                <button
+                  key={task.title}
+                  onClick={task.onClick}
+                  className="w-full flex items-center gap-4 p-4 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10 transition-all text-left cursor-pointer"
+                >
+                  <div className={`w-12 h-12 flex items-center justify-center flex-shrink-0 ${task.iconShell}`}>
+                    {task.icon}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <div className="font-bold">{task.title}</div>
+                      <span className="px-2 py-1 rounded-full border border-blue-400/20 bg-blue-400/10 text-[10px] font-semibold uppercase tracking-[0.16em] text-blue-200">
+                        {task.badge}
+                      </span>
+                    </div>
+                    <div className="text-sm text-gray-400 mt-1">{task.subtitle}</div>
+                  </div>
+                  <div className="text-right flex-shrink-0">
+                    <div className="font-bold text-blue-300">{task.reward} Passbits</div>
+                    <div className="text-xs text-gray-500 mt-1">{task.actionLabel}</div>
+                  </div>
+                </button>
+              ))}
             </>
           )}
         </div>
