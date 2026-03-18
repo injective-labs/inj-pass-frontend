@@ -664,160 +664,159 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          {/* Total Balance Card - OKX Style */}
-          <div className="bg-black rounded-2xl p-6 border border-white/10 relative overflow-hidden">
-            {/* Subtle gradient accent */}
-            <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-green-500/5 to-transparent rounded-full blur-2xl"></div>
-            
-            <div className="relative">
-              {/* Header with Balance Label */}
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-2">
-                  <span className="text-gray-400 text-xs font-semibold uppercase tracking-wider">Total Balance</span>
+          <div className="grid gap-5 xl:grid-cols-[minmax(0,1.18fr)_minmax(360px,0.82fr)] xl:items-start">
+            {/* Total Balance Card - OKX Style */}
+            <div className="bg-black rounded-2xl p-6 border border-white/10 relative overflow-hidden">
+              {/* Subtle gradient accent */}
+              <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-green-500/5 to-transparent rounded-full blur-2xl"></div>
+              
+              <div className="relative">
+                {/* Header with Balance Label */}
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-2">
+                    <span className="text-gray-400 text-xs font-semibold uppercase tracking-wider">Total Balance</span>
+                    <button 
+                      onClick={() => setBalanceVisible(!balanceVisible)}
+                      className="p-1 rounded hover:bg-white/5 transition-colors"
+                    >
+                      {balanceVisible ? (
+                        <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                        </svg>
+                      ) : (
+                        <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
+                        </svg>
+                      )}
+                    </button>
+                  </div>
                   <button 
-                    onClick={() => setBalanceVisible(!balanceVisible)}
-                    className="p-1 rounded hover:bg-white/5 transition-colors"
+                    onClick={handleRefresh}
+                    disabled={refreshing}
+                    className="p-1 rounded hover:bg-white/5 transition-colors disabled:opacity-50"
                   >
-                    {balanceVisible ? (
-                      <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                      </svg>
-                    ) : (
-                      <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
-                      </svg>
-                    )}
+                    <svg className={`w-4 h-4 text-gray-400 ${refreshing ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
                   </button>
                 </div>
-                <button 
-                  onClick={handleRefresh}
-                  disabled={refreshing}
-                  className="p-1 rounded hover:bg-white/5 transition-colors disabled:opacity-50"
-                >
-                  <svg className={`w-4 h-4 text-gray-400 ${refreshing ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                  </svg>
-                </button>
-              </div>
 
-              <div className="flex flex-col gap-6 xl:flex-row xl:items-end">
-                <div className="min-w-0 flex-1">
-                  {/* Main Balance Display */}
-                  <div className="mb-5">
-                    <div className="flex items-end gap-3 md:gap-4 flex-wrap">
-                      <span className="text-4xl md:text-5xl font-bold text-white font-mono tracking-tight">
-                        {balanceVisible ? <RollingBalanceNumber value={formattedBalance} /> : '••••••'}
-                      </span>
-                      <span className="text-xl font-semibold text-gray-400">INJ</span>
-                      <div className="flex items-baseline gap-2 pb-1 md:pb-1.5">
-                        <span className="text-sm md:text-base font-semibold text-white/90 font-mono tracking-tight">
-                          {balanceVisible ? AGENT_CREDITS_STATS.available.toLocaleString() : '••••'}
+                <div className="flex flex-col gap-6 xl:flex-row xl:items-end">
+                  <div className="min-w-0 flex-1">
+                    {/* Main Balance Display */}
+                    <div className="mb-5">
+                      <div className="flex items-end gap-3 md:gap-4 flex-wrap">
+                        <span className="text-4xl md:text-5xl font-bold text-white font-mono tracking-tight">
+                          {balanceVisible ? <RollingBalanceNumber value={formattedBalance} /> : '••••••'}
                         </span>
-                        <span className="text-[11px] md:text-xs font-semibold uppercase tracking-[0.18em] text-gray-500">
-                          Passbits
-                        </span>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-4 mt-2">
-                      <div className="text-base text-gray-400 font-mono">
-                        ≈ ${balanceVisible ? totalUsdValue : '••••••'} USD
-                      </div>
-                      {/* 24h Change */}
-                      {balanceVisible && balance && (
-                        <div className="flex items-center gap-2">
-                          <span className={`text-sm font-semibold ${injPriceChange24h >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                            {injPriceChange24h >= 0 ? '+' : ''}${(parseFloat(balance.formatted) * injPrice * injPriceChange24h / 100).toFixed(2)}
+                        <span className="text-xl font-semibold text-gray-400">INJ</span>
+                        <div className="flex items-baseline gap-2 pb-1 md:pb-1.5">
+                          <span className="text-sm md:text-base font-semibold text-white/90 font-mono tracking-tight">
+                            {balanceVisible ? AGENT_CREDITS_STATS.available.toLocaleString() : '••••'}
                           </span>
-                          <span className={`text-sm ${injPriceChange24h >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                            {injPriceChange24h >= 0 ? '+' : ''}{injPriceChange24h.toFixed(2)}%
+                          <span className="text-[11px] md:text-xs font-semibold uppercase tracking-[0.18em] text-gray-500">
+                            Passbits
                           </span>
-                          <span className="text-gray-500 text-xs">24h</span>
                         </div>
-                      )}
+                      </div>
+                      <div className="flex items-center gap-4 mt-2">
+                        <div className="text-base text-gray-400 font-mono">
+                          ≈ ${balanceVisible ? totalUsdValue : '••••••'} USD
+                        </div>
+                        {/* 24h Change */}
+                        {balanceVisible && balance && (
+                          <div className="flex items-center gap-2">
+                            <span className={`text-sm font-semibold ${injPriceChange24h >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                              {injPriceChange24h >= 0 ? '+' : ''}${(parseFloat(balance.formatted) * injPrice * injPriceChange24h / 100).toFixed(2)}
+                            </span>
+                            <span className={`text-sm ${injPriceChange24h >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                              {injPriceChange24h >= 0 ? '+' : ''}{injPriceChange24h.toFixed(2)}%
+                            </span>
+                            <span className="text-gray-500 text-xs">24h</span>
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </div>
+
+                  <div className="xl:w-[320px] xl:flex-shrink-0">
+                    <PixelTrendChart
+                      values={assetTrendSeries}
+                      hidden={!balanceVisible}
+                      changePct={injPriceChange24h}
+                      currentValueLabel={totalUsdValue}
+                    />
+                  </div>
                 </div>
 
-                <div className="xl:w-[320px] xl:flex-shrink-0">
-                  <PixelTrendChart
-                    values={assetTrendSeries}
-                    hidden={!balanceVisible}
-                    changePct={injPriceChange24h}
-                    currentValueLabel={totalUsdValue}
-                  />
+                {/* Action Buttons - Circular White Style */}
+                <div className="grid grid-cols-4 gap-4 mt-1">
+                  {/* Send Button */}
+                  <button 
+                    onClick={() => router.push('/send')}
+                    className="flex flex-col items-center gap-2 group"
+                  >
+                    <div className="w-14 h-14 rounded-full bg-white hover:bg-gray-100 flex items-center justify-center shadow-lg transition-all group-hover:scale-105">
+                      <svg className="w-5 h-5 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <line x1="12" y1="19" x2="12" y2="5" strokeWidth={2.5} strokeLinecap="round" />
+                        <polyline points="5 12 12 5 19 12" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    </div>
+                    <span className="text-xs font-semibold text-gray-300">Send</span>
+                  </button>
+
+                  {/* Receive Button */}
+                  <button 
+                    onClick={() => router.push('/receive')}
+                    className="flex flex-col items-center gap-2 group"
+                  >
+                    <div className="w-14 h-14 rounded-full bg-white hover:bg-gray-100 flex items-center justify-center shadow-lg transition-all group-hover:scale-105">
+                      <svg className="w-5 h-5 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <line x1="12" y1="5" x2="12" y2="19" strokeWidth={2.5} strokeLinecap="round" />
+                        <polyline points="19 12 12 19 5 12" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    </div>
+                    <span className="text-xs font-semibold text-gray-300">Receive</span>
+                  </button>
+
+                  {/* Swap Button */}
+                  <button 
+                    onClick={() => router.push('/swap')}
+                    className="flex flex-col items-center gap-2 group"
+                  >
+                    <div className="w-14 h-14 rounded-full bg-white hover:bg-gray-100 flex items-center justify-center shadow-lg transition-all group-hover:scale-105">
+                      <svg className="w-5 h-5 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <polyline points="16 3 21 3 21 8" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />
+                        <line x1="4" y1="20" x2="21" y2="3" strokeWidth={2.5} strokeLinecap="round" />
+                        <polyline points="21 16 21 21 16 21" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />
+                        <line x1="15" y1="15" x2="21" y2="21" strokeWidth={2.5} strokeLinecap="round" />
+                        <line x1="4" y1="4" x2="9" y2="9" strokeWidth={2.5} strokeLinecap="round" />
+                      </svg>
+                    </div>
+                    <span className="text-xs font-semibold text-gray-300">Swap</span>
+                  </button>
+
+                  {/* History Button */}
+                  <button 
+                    onClick={() => router.push('/history')}
+                    className="flex flex-col items-center gap-2 group"
+                  >
+                    <div className="w-14 h-14 rounded-full bg-white hover:bg-gray-100 flex items-center justify-center shadow-lg transition-all group-hover:scale-105">
+                      <svg className="w-5 h-5 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <circle cx="12" cy="12" r="10" strokeWidth={2.5} strokeLinecap="round" />
+                        <polyline points="12 6 12 12 16 14" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    </div>
+                    <span className="text-xs font-semibold text-gray-300">History</span>
+                  </button>
                 </div>
-              </div>
-
-              {/* Action Buttons - Circular White Style */}
-              <div className="grid grid-cols-4 gap-4 mt-1">
-                {/* Send Button */}
-                <button 
-                  onClick={() => router.push('/send')}
-                  className="flex flex-col items-center gap-2 group"
-                >
-                  <div className="w-14 h-14 rounded-full bg-white hover:bg-gray-100 flex items-center justify-center shadow-lg transition-all group-hover:scale-105">
-                    <svg className="w-5 h-5 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <line x1="12" y1="19" x2="12" y2="5" strokeWidth={2.5} strokeLinecap="round" />
-                      <polyline points="5 12 12 5 19 12" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />
-                    </svg>
-                  </div>
-                  <span className="text-xs font-semibold text-gray-300">Send</span>
-                </button>
-
-                {/* Receive Button */}
-                <button 
-                  onClick={() => router.push('/receive')}
-                  className="flex flex-col items-center gap-2 group"
-                >
-                  <div className="w-14 h-14 rounded-full bg-white hover:bg-gray-100 flex items-center justify-center shadow-lg transition-all group-hover:scale-105">
-                    <svg className="w-5 h-5 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <line x1="12" y1="5" x2="12" y2="19" strokeWidth={2.5} strokeLinecap="round" />
-                      <polyline points="19 12 12 19 5 12" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />
-                    </svg>
-                  </div>
-                  <span className="text-xs font-semibold text-gray-300">Receive</span>
-                </button>
-
-                {/* Swap Button */}
-                <button 
-                  onClick={() => router.push('/swap')}
-                  className="flex flex-col items-center gap-2 group"
-                >
-                  <div className="w-14 h-14 rounded-full bg-white hover:bg-gray-100 flex items-center justify-center shadow-lg transition-all group-hover:scale-105">
-                    <svg className="w-5 h-5 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <polyline points="16 3 21 3 21 8" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />
-                      <line x1="4" y1="20" x2="21" y2="3" strokeWidth={2.5} strokeLinecap="round" />
-                      <polyline points="21 16 21 21 16 21" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />
-                      <line x1="15" y1="15" x2="21" y2="21" strokeWidth={2.5} strokeLinecap="round" />
-                      <line x1="4" y1="4" x2="9" y2="9" strokeWidth={2.5} strokeLinecap="round" />
-                    </svg>
-                  </div>
-                  <span className="text-xs font-semibold text-gray-300">Swap</span>
-                </button>
-
-                {/* History Button */}
-                <button 
-                  onClick={() => router.push('/history')}
-                  className="flex flex-col items-center gap-2 group"
-                >
-                  <div className="w-14 h-14 rounded-full bg-white hover:bg-gray-100 flex items-center justify-center shadow-lg transition-all group-hover:scale-105">
-                    <svg className="w-5 h-5 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <circle cx="12" cy="12" r="10" strokeWidth={2.5} strokeLinecap="round" />
-                      <polyline points="12 6 12 12 16 14" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />
-                    </svg>
-                  </div>
-                  <span className="text-xs font-semibold text-gray-300">History</span>
-                </button>
               </div>
             </div>
-          </div>
 
-        </div>
-      </div>
-
-      {/* Assets Section - No Container */}
-      <div className="max-w-7xl mx-auto px-4 pt-5 pb-6">
+            <div className="bg-black rounded-2xl border border-white/10 relative overflow-hidden p-4 sm:p-5 xl:min-h-[100%]">
+              <div className="absolute bottom-0 left-0 w-32 h-32 bg-gradient-to-tr from-cyan-500/5 to-transparent rounded-full blur-2xl"></div>
+              <div className="relative">
         {/* Asset Tabs - Smooth Sliding Background */}
         <div className="relative mb-6 p-1 bg-white/5 rounded-xl">
           {/* Sliding Background */}
@@ -889,7 +888,7 @@ export default function DashboardPage() {
         </div>
 
         {/* Asset List */}
-        <div className="space-y-3">
+        <div className="space-y-3 xl:max-h-[540px] xl:overflow-y-auto xl:pr-1">
           {assetTab === 'tokens' && (
             <>
               <div className="flex items-center gap-4 p-4 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10 transition-all cursor-pointer">
@@ -1108,6 +1107,10 @@ export default function DashboardPage() {
               ))}
             </>
           )}
+        </div>
+      </div>
+            </div>
+          </div>
         </div>
       </div>
 
