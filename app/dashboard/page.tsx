@@ -1100,7 +1100,7 @@ export default function DashboardPage() {
                         : 'opacity-0 translate-y-5 pointer-events-none'
                     }`}
                   >
-                    <div className="flex h-full flex-col justify-center">
+                    <div className="flex h-full flex-col">
                       <div className="flex flex-col gap-6 xl:flex-row xl:items-end">
                         <div className="min-w-0 flex-1">
                           <div className="mb-5">
@@ -1144,6 +1144,23 @@ export default function DashboardPage() {
                             changePct={injPriceChange24h}
                             currentValueLabel={totalUsdValue}
                           />
+                        </div>
+                      </div>
+
+                      <div className="pointer-events-none flex flex-1 items-center justify-center pt-2 xl:justify-start xl:pl-6">
+                        <div className="relative h-[188px] w-[188px] sm:h-[220px] sm:w-[220px] xl:h-[250px] xl:w-[250px]">
+                          <div className="absolute inset-4 rounded-[2rem] bg-[radial-gradient(circle_at_50%_38%,rgba(255,164,78,0.26),transparent_68%)] blur-3xl" />
+                          <div className="absolute inset-0 rounded-[2rem] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.035),rgba(255,255,255,0.015))] shadow-[0_22px_54px_rgba(0,0,0,0.36)]" />
+                          <div className="absolute inset-[1px] rounded-[calc(2rem-1px)] bg-[linear-gradient(180deg,rgba(255,255,255,0.03),rgba(0,0,0,0.04))]" />
+                          <div className="absolute inset-0 overflow-hidden rounded-[2rem]">
+                            <Image
+                              src="/N1NJ4DEMO.png"
+                              alt="N1NJ4 demo"
+                              fill
+                              priority
+                              className="object-cover object-center opacity-95"
+                            />
+                          </div>
                         </div>
                       </div>
                     </div>
