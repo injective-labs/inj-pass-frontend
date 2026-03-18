@@ -550,7 +550,7 @@ export default function DashboardPage() {
       </div>
 
       {/* Assets Section - No Container */}
-      <div className="max-w-7xl mx-auto px-4 pt-3 pb-6">
+      <div className="max-w-7xl mx-auto px-4 pt-5 pb-6">
         {/* Asset Tabs - Smooth Sliding Background */}
         <div className="relative mb-6 p-1 bg-white/5 rounded-xl">
           {/* Sliding Background */}
