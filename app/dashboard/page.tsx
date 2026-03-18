@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useWallet } from '@/contexts/WalletContext';
 import { getBalance } from '@/wallet/chain';
@@ -18,6 +18,82 @@ import NFTDetailModal from '@/components/NFTDetailModal';
 import { AGENT_CREDITS_STATS } from '@/config/agent-credits';
 
 type AssetTab = 'tokens' | 'nfts' | 'defi' | 'earn';
+
+const ROLLING_DIGIT_STACK = Array.from({ length: 20 }, (_, index) => String(index % 10));
+
+function RollingDigit({ digit, delayMs = 0 }: { digit: string; delayMs?: number }) {
+  const isNumeric = /^\d$/.test(digit);
+  const hasAnimatedRef = useRef(false);
+  const [position, setPosition] = useState(0);
+
+  useEffect(() => {
+    if (!isNumeric) return;
+
+    const nextDigit = Number(digit);
+
+    setPosition((current) => {
+      if (!hasAnimatedRef.current) {
+        hasAnimatedRef.current = true;
+        return nextDigit;
+      }
+
+      const currentDigit = ((current % 10) + 10) % 10;
+      let nextPosition = current - currentDigit + nextDigit;
+
+      if (nextPosition <= current) {
+        nextPosition += 10;
+      }
+
+      return nextPosition;
+    });
+  }, [digit, isNumeric]);
+
+  if (!isNumeric) {
+    return (
+      <span className="inline-flex h-[1em] items-center justify-center leading-none text-white/70">
+        {digit}
+      </span>
+    );
+  }
+
+  return (
+    <span className="relative inline-flex h-[1em] min-w-[0.62em] overflow-hidden leading-none tabular-nums">
+      <span
+        className="flex flex-col will-change-transform transition-transform duration-700 ease-[cubic-bezier(0.22,1,0.36,1)]"
+        style={{
+          transform: `translateY(-${position}em)`,
+          transitionDelay: `${delayMs}ms`,
+        }}
+      >
+        {ROLLING_DIGIT_STACK.map((value, index) => (
+          <span
+            key={`${value}-${index}`}
+            className="flex h-[1em] items-center justify-center leading-none"
+          >
+            {value}
+          </span>
+        ))}
+      </span>
+    </span>
+  );
+}
+
+function RollingBalanceNumber({ value }: { value: string }) {
+  return (
+    <span className="inline-flex items-end" aria-label={value}>
+      <span className="sr-only">{value}</span>
+      <span className="inline-flex items-end" aria-hidden="true">
+        {value.split('').map((character, index) => (
+          <RollingDigit
+            key={`${character}-${index}`}
+            digit={character}
+            delayMs={index * 45}
+          />
+        ))}
+      </span>
+    </span>
+  );
+}
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -451,7 +527,7 @@ export default function DashboardPage() {
               <div className="mb-5">
                 <div className="flex items-end gap-3 md:gap-4 flex-wrap">
                   <span className="text-4xl md:text-5xl font-bold text-white font-mono tracking-tight">
-                    {balanceVisible ? formattedBalance : '••••••'}
+                    {balanceVisible ? <RollingBalanceNumber value={formattedBalance} /> : '••••••'}
                   </span>
                   <span className="text-xl font-semibold text-gray-400">INJ</span>
                   <div className="flex items-baseline gap-2 pb-1 md:pb-1.5">
