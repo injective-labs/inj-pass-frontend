@@ -20,7 +20,7 @@ import TransactionAuthModal from '@/components/TransactionAuthModal';
 import ThemeToggleButton from '@/components/ThemeToggleButton';
 import CardCenterModal from '@/components/CardCenterModal';
 import NinjaMinerGame from '@/components/NinjaMinerGame';
-import { privateKeyToHex } from '@/utils/wallet';
+import { formatAddress, privateKeyToHex } from '@/utils/wallet';
 import { getInjectiveAddress, getEthereumAddress } from '@injectivelabs/sdk-ts';
 
 type AssetTab = 'tokens' | 'nfts' | 'defi' | 'earn';
@@ -981,37 +981,39 @@ export default function DashboardPage() {
             <div className="bg-gradient-to-b from-white/5 to-transparent border-b border-white/5 backdrop-blur-sm">
             <div className="max-w-7xl mx-auto px-4 py-6">
           {/* Header Top */}
-          <div className="flex items-center justify-between mb-6">
+          <div className="mb-6 flex items-center justify-between">
             {/* Account Info */}
-            <div className="flex items-center gap-3">
+            <div className="flex min-w-0 items-center gap-2.5">
               {/* Brand Logo */}
-              <div className="w-10 h-10 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center p-1.5">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[0.95rem] border border-white/10 bg-white/5 p-1.5">
                 <Image 
                   src="/lambdalogo.png" 
                   alt="Logo" 
-                  width={32} 
-                  height={32}
-                  className="w-full h-full object-contain"
+                  width={24} 
+                  height={24}
+                  className="h-6 w-6 object-contain"
                 />
               </div>
               
-              <div>
-                <div className="text-sm font-bold text-white mb-1">Account 1</div>
-                <div className="flex items-center gap-2">
-                  <span className="font-mono text-xs text-gray-400">
-                    {address?.slice(0, 6)}...{address?.slice(-4)}
-                  </span>
+              <div className="min-w-0">
+                <div className="flex items-center gap-2.5 whitespace-nowrap">
+                  <div className="text-sm font-bold text-white">Account 1</div>
+                  {address && (
+                    <span className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 font-mono text-[11px] text-gray-400">
+                      {formatAddress(address)}
+                    </span>
+                  )}
                   <button 
                     onClick={handleCopyAddress}
-                    className="p-1 rounded hover:bg-white/10 transition-all group"
+                    className="group flex h-7 w-7 items-center justify-center rounded-lg border border-white/10 bg-white/[0.04] transition-all hover:bg-white/10"
                     title="Copy address"
                   >
                     {copied ? (
-                      <svg className="w-3.5 h-3.5 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <svg className="h-3.5 w-3.5 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                       </svg>
                     ) : (
-                      <svg className="w-3.5 h-3.5 text-gray-400 group-hover:text-white transition-colors" fill="none" stroke="currentColor" viewBox="0 0 16 16">
+                      <svg className="h-3.5 w-3.5 text-gray-400 transition-colors group-hover:text-white" fill="none" stroke="currentColor" viewBox="0 0 16 16">
                         <rect width="11" height="11" x="4" y="4" rx="1" ry="1" strokeWidth="1.5" />
                         <path d="M2 10c-0.8 0-1.5-0.7-1.5-1.5V2c0-0.8 0.7-1.5 1.5-1.5h8.5c0.8 0 1.5 0.7 1.5 1.5" strokeWidth="1.5" />
                       </svg>
@@ -1022,23 +1024,23 @@ export default function DashboardPage() {
             </div>
 
             {/* Scan QR Code Button */}
-            <div className="flex items-center gap-3">
-              <ThemeToggleButton />
+            <div className="flex items-center gap-2">
+              <ThemeToggleButton compact />
               <button
                 onClick={() => setShowCardCenter(true)}
-                className="p-3 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 transition-all"
+                className="rounded-lg border border-white/10 bg-white/5 p-2.5 transition-all hover:bg-white/10"
                 title="Open Card Center"
               >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                <svg className="h-[18px] w-[18px]" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M3 10h18M7 15h1m4 0h5M5 6h14a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2Z" />
                 </svg>
               </button>
               <button 
                 onClick={openQRScanner}
-                className="p-3 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 transition-all"
+                className="rounded-lg border border-white/10 bg-white/5 p-2.5 transition-all hover:bg-white/10"
                 title="Scan QR Code"
               >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
+                <svg className="h-[18px] w-[18px]" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
                   {/* Top-left corner */}
                   <path d="M3 9V5a2 2 0 0 1 2-2h4" strokeLinecap="round" strokeLinejoin="round" />
                   {/* Top-right corner */}
