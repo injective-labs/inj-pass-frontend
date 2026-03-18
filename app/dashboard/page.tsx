@@ -148,6 +148,7 @@ function PixelTrendChart({
   const accentClass = changePct >= 0 ? 'text-emerald-300' : 'text-orange-300';
   const accentColor = changePct >= 0 ? '#6ee7b7' : '#fb923c';
   const accentFill = changePct >= 0 ? 'rgba(110,231,183,0.16)' : 'rgba(251,146,60,0.16)';
+  const chartAnimationKey = `${hidden ? 'hidden' : 'visible'}-${currentValueLabel}-${changePct.toFixed(2)}`;
   const gridDots = Array.from({ length: 11 }, (_, column) =>
     Array.from({ length: 6 }, (_, row) => ({
       x: paddingLeft + column * (chartWidth / 10),
@@ -180,8 +181,7 @@ function PixelTrendChart({
       : '';
 
   return (
-    <div className="relative h-full min-h-[220px] rounded-[1.75rem] border border-white/10 bg-gradient-to-br from-white/[0.06] via-white/[0.03] to-transparent px-4 py-4 overflow-hidden">
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.08),transparent_45%)]" />
+    <div className="relative h-full min-h-[220px] px-1 py-2 xl:pl-4">
       <div className="relative flex items-start justify-between gap-3">
         <div>
           <div className="text-[10px] font-semibold uppercase tracking-[0.28em] text-gray-500">24H Trend</div>
@@ -194,7 +194,7 @@ function PixelTrendChart({
       </div>
 
       {hidden ? (
-        <div className="relative mt-4 flex h-[184px] items-center justify-center rounded-2xl border border-white/5 bg-black/20">
+        <div className="relative mt-4 flex h-[184px] items-center justify-center">
           <div className="text-center">
             <div className="text-[10px] font-semibold uppercase tracking-[0.3em] text-gray-500">Trend Hidden</div>
             <div className="mt-2 text-sm text-gray-400">Unhide balance to view</div>
@@ -202,6 +202,7 @@ function PixelTrendChart({
         </div>
       ) : (
         <svg
+          key={chartAnimationKey}
           className="relative mt-4 h-[184px] w-full"
           viewBox={`0 0 ${width} ${height}`}
           fill="none"
@@ -219,14 +220,28 @@ function PixelTrendChart({
               shapeRendering="crispEdges"
             />
           ))}
-          <path d={areaPath} fill={accentFill} shapeRendering="crispEdges" />
+          <path
+            d={areaPath}
+            fill={accentFill}
+            shapeRendering="crispEdges"
+            style={{
+              opacity: 0,
+              animation: 'pixelTrendAreaFade 700ms cubic-bezier(0.22,1,0.36,1) 220ms forwards',
+            }}
+          />
           <path
             d={stepPath}
+            pathLength={1}
             stroke={accentColor}
             strokeWidth="3"
             strokeLinejoin="miter"
             strokeLinecap="square"
             shapeRendering="crispEdges"
+            style={{
+              strokeDasharray: 1,
+              strokeDashoffset: 1,
+              animation: 'pixelTrendDraw 1100ms cubic-bezier(0.22,1,0.36,1) forwards',
+            }}
           />
           {points.map((point, index) => (
             <rect
@@ -237,6 +252,10 @@ function PixelTrendChart({
               height="6"
               fill={accentColor}
               shapeRendering="crispEdges"
+              style={{
+                opacity: 0,
+                animation: `pixelTrendPointIn 240ms cubic-bezier(0.22,1,0.36,1) ${320 + index * 28}ms forwards`,
+              }}
             />
           ))}
         </svg>
