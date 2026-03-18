@@ -16,6 +16,7 @@ import Image from 'next/image';
 import LoadingSpinner from '@/components/LoadingSpinner';
 import NFTDetailModal from '@/components/NFTDetailModal';
 import { AGENT_CREDITS_STATS } from '@/config/agent-credits';
+import ThemeToggleButton from '@/components/ThemeToggleButton';
 
 type AssetTab = 'tokens' | 'nfts' | 'defi' | 'earn';
 
@@ -623,22 +624,25 @@ export default function DashboardPage() {
             </div>
 
             {/* Scan QR Code Button */}
-            <button 
-              onClick={openQRScanner}
-              className="p-3 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 transition-all"
-              title="Scan QR Code"
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
-                {/* Top-left corner */}
-                <path d="M3 9V5a2 2 0 0 1 2-2h4" strokeLinecap="round" strokeLinejoin="round" />
-                {/* Top-right corner */}
-                <path d="M21 9V5a2 2 0 0 0-2-2h-4" strokeLinecap="round" strokeLinejoin="round" />
-                {/* Bottom-left corner */}
-                <path d="M3 15v4a2 2 0 0 0 2 2h4" strokeLinecap="round" strokeLinejoin="round" />
-                {/* Bottom-right corner */}
-                <path d="M21 15v4a2 2 0 0 1-2 2h-4" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-            </button>
+            <div className="flex items-center gap-3">
+              <ThemeToggleButton />
+              <button 
+                onClick={openQRScanner}
+                className="p-3 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 transition-all"
+                title="Scan QR Code"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
+                  {/* Top-left corner */}
+                  <path d="M3 9V5a2 2 0 0 1 2-2h4" strokeLinecap="round" strokeLinejoin="round" />
+                  {/* Top-right corner */}
+                  <path d="M21 9V5a2 2 0 0 0-2-2h-4" strokeLinecap="round" strokeLinejoin="round" />
+                  {/* Bottom-left corner */}
+                  <path d="M3 15v4a2 2 0 0 0 2 2h4" strokeLinecap="round" strokeLinejoin="round" />
+                  {/* Bottom-right corner */}
+                  <path d="M21 15v4a2 2 0 0 1-2 2h-4" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </button>
+            </div>
           </div>
 
           {/* Total Balance Card - OKX Style */}
