@@ -2,7 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 import { useWallet } from '@/contexts/WalletContext';
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import AccountHeader from '../components/AccountHeader';
 import LoadingSpinner from '@/components/LoadingSpinner';
 
@@ -120,20 +120,19 @@ export default function DiscoverPage() {
     window.open(dapp.url, '_blank', 'noopener,noreferrer');
   };
 
-  if (isCheckingSession) {
-    return <LoadingSpinner />;
+  if (!isCheckingSession && !isUnlocked) {
+    router.push('/');
   }
 
-  if (!isUnlocked) {
-    router.push('/');
-    return null;
-  }
+  const isDiscoverReady = !isCheckingSession && isUnlocked;
 
   return (
-    <div className="min-h-screen pb-24 md:pb-8 bg-black">
-      <div>
-        {/* Header - OKX Style */}
-        <div className="bg-gradient-to-b from-white/5 to-transparent border-b border-white/5 backdrop-blur-sm">
+    <LoadingSpinner ready={isDiscoverReady}>
+      {isDiscoverReady ? (
+        <div className="min-h-screen pb-24 md:pb-8 bg-black">
+          <div>
+            {/* Header - OKX Style */}
+            <div className="bg-gradient-to-b from-white/5 to-transparent border-b border-white/5 backdrop-blur-sm">
           <div className="max-w-7xl mx-auto px-4 py-6">
             {/* Account Header with Scan Button */}
             <div className="mb-6">
@@ -362,7 +361,9 @@ export default function DiscoverPage() {
             </button>
           </div>
         </div>
-      </div>
-    </div>
+          </div>
+        </div>
+      ) : null}
+    </LoadingSpinner>
   );
 }

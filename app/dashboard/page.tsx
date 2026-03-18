@@ -564,10 +564,7 @@ export default function DashboardPage() {
     }, 350);
   };
 
-  if (isCheckingSession || loading) {
-    return <LoadingSpinner />;
-  }
-
+  const isDashboardReady = !isCheckingSession && !loading && isUnlocked && !!address;
   const formattedBalance = balance ? parseFloat(balance.formatted).toFixed(4) : '0.0000';
   const injUsdValue = balance ? (parseFloat(balance.formatted) * injPrice) : 0;
   const usdtValue = parseFloat(tokenBalances.USDT);
@@ -577,11 +574,13 @@ export default function DashboardPage() {
   const assetTrendSeries = buildPixelTrendSeries(totalUsdNumeric, injPriceChange24h);
 
   return (
-    <div className="min-h-screen pb-24 md:pb-8 bg-black">
-      <div>
-        {/* Modern Dashboard Header */}
-        <div className="bg-gradient-to-b from-white/5 to-transparent border-b border-white/5 backdrop-blur-sm">
-        <div className="max-w-7xl mx-auto px-4 py-6">
+    <LoadingSpinner ready={isDashboardReady}>
+      {isDashboardReady ? (
+        <div className="min-h-screen pb-24 md:pb-8 bg-black">
+          <div>
+            {/* Modern Dashboard Header */}
+            <div className="bg-gradient-to-b from-white/5 to-transparent border-b border-white/5 backdrop-blur-sm">
+            <div className="max-w-7xl mx-auto px-4 py-6">
           {/* Header Top */}
           <div className="flex items-center justify-between mb-6">
             {/* Account Info */}
@@ -1399,8 +1398,10 @@ export default function DashboardPage() {
             </button>
           </div>
         </div>
-      </div>
-      </div>
-    </div>
+          </div>
+          </div>
+        </div>
+      ) : null}
+    </LoadingSpinner>
   );
 }

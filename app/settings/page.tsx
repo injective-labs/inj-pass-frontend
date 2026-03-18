@@ -11,7 +11,7 @@ import LoadingSpinner from '@/components/LoadingSpinner';
 export default function SettingsPage() {
   const router = useRouter();
   const { isUnlocked, address, privateKey, keystore, lock, isCheckingSession } = useWallet();
-  const { hasPin, isPinLocked, autoLockMinutes, defaultAuthMethod, setPin, changePin, lockWallet, setAutoLockMinutes, setDefaultAuthMethod, verifyPin } = usePin();
+  const { hasPin, autoLockMinutes, defaultAuthMethod, setPin, changePin, lockWallet, setAutoLockMinutes, setDefaultAuthMethod } = usePin();
   
   const [showPrivateKey, setShowPrivateKey] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -46,17 +46,13 @@ export default function SettingsPage() {
   const [resettingPin, setResettingPin] = useState(false);
   const [pinResetSuccess, setPinResetSuccess] = useState(false);
 
-  // Wait for session check
-  if (isCheckingSession) {
-    return <LoadingSpinner />;
-  }
-
-  if (!isUnlocked || !address) {
+  if (!isCheckingSession && (!isUnlocked || !address)) {
     if (typeof window !== 'undefined') {
       router.push('/welcome');
     }
-    return null;
   }
+
+  const isSettingsReady = !isCheckingSession && isUnlocked && !!address;
 
   const privateKeyHex = privateKey ? toHex(privateKey) : '';
   const last6Chars = privateKeyHex.slice(-6);
@@ -247,10 +243,12 @@ export default function SettingsPage() {
   };
 
   return (
-    <div className="min-h-screen pb-24 md:pb-8 bg-black">
-      {/* Header - OKX Style */}
-      <div className="bg-gradient-to-b from-white/5 to-transparent border-b border-white/5 backdrop-blur-sm">
-        <div className="max-w-7xl mx-auto px-4 py-6">
+    <LoadingSpinner ready={isSettingsReady}>
+      {isSettingsReady ? (
+        <div className="min-h-screen pb-24 md:pb-8 bg-black">
+          {/* Header - OKX Style */}
+          <div className="bg-gradient-to-b from-white/5 to-transparent border-b border-white/5 backdrop-blur-sm">
+            <div className="max-w-7xl mx-auto px-4 py-6">
           {/* Account Header */}
           <div className="mb-6">
             <AccountHeader address={address} />
@@ -807,7 +805,7 @@ export default function SettingsPage() {
             
             <div className="p-5 space-y-4">
               <p className="text-sm text-gray-400 text-center">
-                Your wallet will be locked. You'll need your PIN to unlock it.
+                Your wallet will be locked. You&apos;ll need your PIN to unlock it.
               </p>
 
               <div>
@@ -1212,7 +1210,9 @@ export default function SettingsPage() {
             </button>
           </div>
         </div>
-      </div>
-    </div>
+          </div>
+        </div>
+      ) : null}
+    </LoadingSpinner>
   );
 }
