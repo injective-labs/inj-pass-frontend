@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useWallet } from '@/contexts/WalletContext';
 import { QRCodeSVG } from 'qrcode.react';
 import { isNFCSupported, readNFCCard, writeNFCCard } from '@/services/nfc';
@@ -18,7 +18,9 @@ interface BonjourCard {
 
 export default function CardsPage() {
   const router = useRouter();
-  const { isUnlocked, address, isCheckingSession } = useWallet();
+  const searchParams = useSearchParams();
+  const isEmbedded = searchParams.get('embed') === '1';
+  const { address, isCheckingSession } = useWallet();
   const [copied, setCopied] = useState(false);
   const [flippedCard, setFlippedCard] = useState<string | null>(null);
   const [showQRModal, setShowQRModal] = useState(false);
@@ -41,9 +43,9 @@ export default function CardsPage() {
     const saved = localStorage.getItem(storageKey);
     if (saved) {
       try {
-        const parsed = JSON.parse(saved);
+        const parsed = JSON.parse(saved) as Array<Omit<BonjourCard, 'boundAt'> & { boundAt: string }>;
         // Convert boundAt string back to Date
-        const cards = parsed.map((card: any) => ({
+        const cards = parsed.map((card) => ({
           ...card,
           boundAt: new Date(card.boundAt),
         }));
@@ -92,7 +94,7 @@ export default function CardsPage() {
     setFlippedCard(flippedCard === uid ? null : uid);
   };
 
-  const handleShowAddress = (uid: string) => {
+  const handleShowAddress = () => {
     setFlippedCard(null);
     setShowQRModal(true);
   };
@@ -308,53 +310,71 @@ export default function CardsPage() {
   const activeCards = boundCards.filter(card => card.isActive).length;
 
   return (
-    <div className="min-h-screen bg-black text-white pb-24 md:pb-8">
-      {/* Header - OKX Style */}
-      <div className="bg-gradient-to-b from-white/5 to-transparent border-b border-white/5 backdrop-blur-sm">
-        <div className="max-w-7xl mx-auto px-4 py-6">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <button
-                onClick={() => router.back()}
-                className="w-10 h-10 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 flex items-center justify-center transition-all"
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <polyline points="15 18 9 12 15 6" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              </button>
-              <div>
-                <h1 className="text-xl font-bold text-white">Cards</h1>
-                <p className="text-gray-400 text-xs">Manage your NFC cards</p>
+    <div className={`${isEmbedded ? 'bg-black text-white' : 'min-h-screen bg-black text-white pb-24 md:pb-8'}`}>
+      {!isEmbedded && (
+        <div className="bg-gradient-to-b from-white/5 to-transparent border-b border-white/5 backdrop-blur-sm">
+          <div className="max-w-7xl mx-auto px-4 py-6">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => router.back()}
+                  className="w-10 h-10 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 flex items-center justify-center transition-all"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <polyline points="15 18 9 12 15 6" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </button>
+                <div>
+                  <h1 className="text-xl font-bold text-white">Cards</h1>
+                  <p className="text-gray-400 text-xs">Manage your NFC cards</p>
+                </div>
               </div>
-            </div>
 
-            {/* Compact Stats */}
-            <div className="flex items-center gap-3 bg-white/5 border border-white/10 rounded-xl px-4 py-2">
-              <div className="flex items-center gap-1.5">
-                <span className="text-gray-400 text-xs">Total</span>
-                <span className="text-white font-bold text-sm">{boundCards.length}</span>
-              </div>
-              <div className="w-px h-4 bg-white/10"></div>
-              <div className="flex items-center gap-1.5">
-                <span className="text-gray-400 text-xs">Active</span>
-                <span className="text-green-400 font-bold text-sm">{activeCards}</span>
-              </div>
-              <div className="w-px h-4 bg-white/10"></div>
-              <div className="flex items-center gap-1.5">
-                <span className="text-gray-400 text-xs">Slots</span>
-                <span className="text-blue-400 font-bold text-sm">{5 - boundCards.length}</span>
+              <div className="flex items-center gap-3 bg-white/5 border border-white/10 rounded-xl px-4 py-2">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-gray-400 text-xs">Total</span>
+                  <span className="text-white font-bold text-sm">{boundCards.length}</span>
+                </div>
+                <div className="w-px h-4 bg-white/10"></div>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-gray-400 text-xs">Active</span>
+                  <span className="text-green-400 font-bold text-sm">{activeCards}</span>
+                </div>
+                <div className="w-px h-4 bg-white/10"></div>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-gray-400 text-xs">Slots</span>
+                  <span className="text-blue-400 font-bold text-sm">{5 - boundCards.length}</span>
+                </div>
               </div>
             </div>
           </div>
         </div>
-      </div>
+      )}
 
       {/* Main Content */}
-      <div className="max-w-2xl mx-auto px-4 py-6">
+      <div className={`max-w-2xl mx-auto px-4 ${isEmbedded ? 'py-5' : 'py-6'}`}>
+        {isEmbedded && (
+          <div className="mb-5 flex items-center gap-3 rounded-2xl border border-white/10 bg-white/5 px-4 py-3">
+            <div className="flex items-center gap-1.5">
+              <span className="text-gray-400 text-xs">Total</span>
+              <span className="text-white font-bold text-sm">{boundCards.length}</span>
+            </div>
+            <div className="w-px h-4 bg-white/10"></div>
+            <div className="flex items-center gap-1.5">
+              <span className="text-gray-400 text-xs">Active</span>
+              <span className="text-green-400 font-bold text-sm">{activeCards}</span>
+            </div>
+            <div className="w-px h-4 bg-white/10"></div>
+            <div className="flex items-center gap-1.5">
+              <span className="text-gray-400 text-xs">Slots</span>
+              <span className="text-blue-400 font-bold text-sm">{5 - boundCards.length}</span>
+            </div>
+          </div>
+        )}
 
         {/* Cards Stack - iOS Wallet Style with 3D Flip */}
         <div className="mb-6">
-          {boundCards.map((card, index) => (
+          {boundCards.map((card) => (
             <div
               key={card.uid}
               className="relative max-w-full mx-auto mb-6"
@@ -553,7 +573,7 @@ export default function CardsPage() {
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
-                            handleShowAddress(card.uid);
+                            handleShowAddress();
                           }}
                           className="w-14 h-14 sm:w-16 sm:h-16 md:w-20 md:h-20 rounded-full bg-black/20 hover:bg-black/30 border-2 border-black/40 text-black transition-all shadow-lg backdrop-blur-sm flex items-center justify-center"
                           title="Address"

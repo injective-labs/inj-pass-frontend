@@ -19,6 +19,7 @@ interface AddressBookEntry {
 function SendPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const isEmbedded = searchParams.get('embed') === '1';
   const { isUnlocked, privateKey, address, isCheckingSession } = useWallet();
   const { isPinLocked, autoLockMinutes } = usePin();
   const [recipient, setRecipient] = useState('');
@@ -43,7 +44,6 @@ function SendPageContent() {
   const [copied, setCopied] = useState(false);
   const [nfcError, setNfcError] = useState('');
   const [showAuthModal, setShowAuthModal] = useState(false);
-  const [nfcSupported, setNfcSupported] = useState(true);
 
   // Load address book from localStorage
   useEffect(() => {
@@ -115,11 +115,6 @@ function SendPageContent() {
     }, 200);
   };
 
-  // Check NFC support on mount
-  useEffect(() => {
-    setNfcSupported(isNFCSupported());
-  }, []);
-
   // Handle NFC Scanner
   const openNfcScanner = async () => {
     setShowNfcScanner(true);
@@ -174,11 +169,6 @@ function SendPageContent() {
       setNfcError('');
       setClosingNfcScanner(false);
     }, 350); // Match animation duration
-  };
-
-  const handleNfcTestOk = () => {
-    // Legacy test function - no longer needed
-    closeNfcScanner();
   };
 
   // Check if address is EVM format (0x...)
@@ -382,29 +372,30 @@ function SendPageContent() {
 
   if (txHash) {
     return (
-      <div className="min-h-screen pb-24 md:pb-8 bg-black">
-        {/* Header - Dashboard Style */}
-        <div className="bg-gradient-to-b from-white/5 to-transparent border-b border-white/5 backdrop-blur-sm">
-          <div className="max-w-7xl mx-auto px-4 py-6">
-            <div className="flex items-center gap-3">
-              <button
-                onClick={() => router.push('/dashboard')}
-                className="w-10 h-10 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 flex items-center justify-center transition-all"
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <polyline points="15 18 9 12 15 6" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              </button>
-              <div>
-                <h1 className="text-xl font-bold text-white">Transaction Complete</h1>
-                <p className="text-gray-400 text-xs">Your transaction has been sent</p>
+      <div className={`${isEmbedded ? 'bg-black' : 'min-h-screen pb-24 md:pb-8 bg-black'}`}>
+        {!isEmbedded && (
+          <div className="bg-gradient-to-b from-white/5 to-transparent border-b border-white/5 backdrop-blur-sm">
+            <div className="max-w-7xl mx-auto px-4 py-6">
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => router.push('/dashboard')}
+                  className="w-10 h-10 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 flex items-center justify-center transition-all"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <polyline points="15 18 9 12 15 6" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </button>
+                <div>
+                  <h1 className="text-xl font-bold text-white">Transaction Complete</h1>
+                  <p className="text-gray-400 text-xs">Your transaction has been sent</p>
+                </div>
               </div>
             </div>
           </div>
-        </div>
+        )}
 
         {/* Main Content */}
-        <div className="max-w-2xl mx-auto px-4 py-8">
+        <div className={`max-w-2xl mx-auto px-4 ${isEmbedded ? 'py-6' : 'py-8'}`}>
           {/* Success Message */}
           <div className="text-center mb-8">
             <h2 className="text-2xl font-bold text-white mb-2">Sent Successfully</h2>
@@ -500,43 +491,46 @@ function SendPageContent() {
           </div>
 
           {/* Back to Dashboard - Main Button */}
-          <button 
-            onClick={() => router.push('/dashboard')}
-            className="w-full py-4 rounded-2xl bg-white text-black font-bold hover:bg-gray-100 transition-all shadow-lg"
-          >
-            Back to Dashboard
-          </button>
+          {!isEmbedded && (
+            <button 
+              onClick={() => router.push('/dashboard')}
+              className="w-full py-4 rounded-2xl bg-white text-black font-bold hover:bg-gray-100 transition-all shadow-lg"
+            >
+              Back to Dashboard
+            </button>
+          )}
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen pb-24 md:pb-8 bg-black">
-      {/* Header - OKX Style */}
-      <div className="bg-gradient-to-b from-white/5 to-transparent border-b border-white/5 backdrop-blur-sm">
-        <div className="max-w-7xl mx-auto px-4 py-6">
-          <div className="flex items-center justify-between mb-6">
-            <div className="flex items-center gap-3">
-              <button
-                onClick={() => router.back()}
-                className="w-10 h-10 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 flex items-center justify-center transition-all"
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <polyline points="15 18 9 12 15 6" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              </button>
-              <div>
-                <h1 className="text-xl font-bold text-white">Send</h1>
-                <p className="text-gray-400 text-xs">Transfer tokens</p>
+    <div className={`${isEmbedded ? 'bg-black' : 'min-h-screen pb-24 md:pb-8 bg-black'}`}>
+      {!isEmbedded && (
+        <div className="bg-gradient-to-b from-white/5 to-transparent border-b border-white/5 backdrop-blur-sm">
+          <div className="max-w-7xl mx-auto px-4 py-6">
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => router.back()}
+                  className="w-10 h-10 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 flex items-center justify-center transition-all"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <polyline points="15 18 9 12 15 6" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </button>
+                <div>
+                  <h1 className="text-xl font-bold text-white">Send</h1>
+                  <p className="text-gray-400 text-xs">Transfer tokens</p>
+                </div>
               </div>
             </div>
           </div>
         </div>
-      </div>
+      )}
 
       {/* Main Content */}
-      <div className="max-w-2xl mx-auto px-4 py-6">
+      <div className={`max-w-2xl mx-auto px-4 ${isEmbedded ? 'py-5' : 'py-6'}`}>
         {error && (
           <div className="mb-6 p-4 rounded-2xl bg-red-500/10 border border-red-500/30 text-red-400 text-sm">
             <div className="flex items-start gap-3">

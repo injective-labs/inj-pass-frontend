@@ -18,6 +18,7 @@ import LoadingSpinner from '@/components/LoadingSpinner';
 import NFTDetailModal from '@/components/NFTDetailModal';
 import TransactionAuthModal from '@/components/TransactionAuthModal';
 import ThemeToggleButton from '@/components/ThemeToggleButton';
+import CardCenterModal from '@/components/CardCenterModal';
 import NinjaMinerGame from '@/components/NinjaMinerGame';
 import { privateKeyToHex } from '@/utils/wallet';
 import { getInjectiveAddress, getEthereumAddress } from '@injectivelabs/sdk-ts';
@@ -373,6 +374,7 @@ export default function DashboardPage() {
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [pendingAuthAction, setPendingAuthAction] = useState<'send' | 'swap' | null>(null);
   const [postAuthAction, setPostAuthAction] = useState<'send' | 'swap' | null>(null);
+  const [showCardCenter, setShowCardCenter] = useState(false);
 
   useEffect(() => {
     // Wait for session check to complete
@@ -1022,6 +1024,15 @@ export default function DashboardPage() {
             {/* Scan QR Code Button */}
             <div className="flex items-center gap-3">
               <ThemeToggleButton />
+              <button
+                onClick={() => setShowCardCenter(true)}
+                className="p-3 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 transition-all"
+                title="Open Card Center"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 10h18M7 15h1m4 0h5M5 6h14a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2Z" />
+                </svg>
+              </button>
               <button 
                 onClick={openQRScanner}
                 className="p-3 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 transition-all"
@@ -1938,6 +1949,11 @@ export default function DashboardPage() {
         }}
         onSuccess={handleTransactionAuthSuccess}
         transactionType={pendingAuthAction ?? 'send'}
+      />
+
+      <CardCenterModal
+        isOpen={showCardCenter}
+        onClose={() => setShowCardCenter(false)}
       />
 
       {/* NFT Detail Modal */}
