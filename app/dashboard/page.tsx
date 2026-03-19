@@ -1216,14 +1216,6 @@ export default function DashboardPage() {
                                 {balanceVisible ? <RollingBalanceNumber value={formattedBalance} /> : '••••••'}
                               </span>
                               <span className="text-xl font-semibold text-gray-400">INJ</span>
-                              <div className="flex items-baseline gap-2 pb-1 md:pb-1.5">
-                                <span className="text-sm md:text-base font-semibold text-white/90 font-mono tracking-tight">
-                                  {balanceVisible ? formattedNinjaBalance : '••••'}
-                                </span>
-                                <span className="text-[11px] md:text-xs font-semibold uppercase tracking-[0.18em] text-gray-500">
-                                  NINJA
-                                </span>
-                              </div>
                             </div>
                             <div className="flex items-center gap-4 mt-2">
                               <div className="text-base text-gray-400 font-mono">
