@@ -48,24 +48,24 @@ export default function AccountHeader({
         </div>
         
         <div className="min-w-0">
-          <div className="flex items-center gap-2.5 whitespace-nowrap">
-            <div className="text-sm font-bold text-white">{accountName}</div>
+          <div className="text-sm font-bold text-white">{accountName}</div>
+          <div className="mt-1.5 flex items-center gap-1.5 whitespace-nowrap">
             {address && (
-              <span className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 font-mono text-[11px] text-gray-400">
+              <span className="rounded-full border border-white/10 bg-white/[0.04] px-2 py-0.5 font-mono text-[10px] text-gray-400">
                 {formatAddress(address)}
               </span>
             )}
             <button 
               onClick={handleCopyAddress}
-              className="flex h-7 w-7 items-center justify-center rounded-lg border border-white/10 bg-white/[0.04] transition-all hover:bg-white/10 group"
+              className="flex h-6 w-6 items-center justify-center rounded-md border border-white/10 bg-white/[0.04] transition-all hover:bg-white/10 group"
               title="Copy address"
             >
               {copied ? (
-                <svg className="h-3.5 w-3.5 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="h-3 w-3 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                 </svg>
               ) : (
-                <svg className="h-3.5 w-3.5 text-gray-400 transition-colors group-hover:text-white" fill="none" stroke="currentColor" viewBox="0 0 16 16">
+                <svg className="h-3 w-3 text-gray-400 transition-colors group-hover:text-white" fill="none" stroke="currentColor" viewBox="0 0 16 16">
                   <rect width="11" height="11" x="4" y="4" rx="1" ry="1" strokeWidth="1.5" />
                   <path d="M2 10c-0.8 0-1.5-0.7-1.5-1.5V2c0-0.8 0.7-1.5 1.5-1.5h8.5c0.8 0 1.5 0.7 1.5 1.5" strokeWidth="1.5" />
                 </svg>

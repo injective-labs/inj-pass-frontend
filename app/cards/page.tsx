@@ -6,7 +6,6 @@ import { useWallet } from '@/contexts/WalletContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { QRCodeSVG } from 'qrcode.react';
 import { isNFCSupported, readNFCCard, writeNFCCard } from '@/services/nfc';
-import LoadingSpinner from '@/components/LoadingSpinner';
 
 interface BonjourCard {
   uid: string;
@@ -308,7 +307,11 @@ export default function CardsPage() {
   };
 
   if (isCheckingSession) {
-    return <LoadingSpinner />;
+    return (
+      <div className={`flex items-center justify-center ${isEmbedded ? 'h-full bg-black' : 'min-h-screen bg-black'}`}>
+        <div className="h-8 w-8 rounded-full border-2 border-white/15 border-t-white animate-spin" />
+      </div>
+    );
   }
 
   const activeCards = boundCards.filter(card => card.isActive).length;

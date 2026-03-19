@@ -26,7 +26,6 @@ import { getInjectiveAddress, getEthereumAddress } from '@injectivelabs/sdk-ts';
 
 type AssetTab = 'tokens' | 'nfts' | 'defi' | 'earn';
 type WalletPanel = 'overview' | 'send' | 'receive' | 'swap' | 'history' | 'settings';
-type DashboardSurface = 'discover' | 'agents';
 type AddressType = 'evm' | 'cosmos';
 type DashboardTransactionType = 'send' | 'receive' | 'swap';
 type DashboardTransactionStatus = 'completed' | 'pending' | 'failed';
@@ -367,7 +366,6 @@ export default function DashboardPage() {
   const [balanceVisible, setBalanceVisible] = useState(true);
   const [copied, setCopied] = useState(false);
   const [ninjaBalance, setNinjaBalance] = useState(DEFAULT_NINJA_BALANCE);
-  const [dashboardSurface, setDashboardSurface] = useState<DashboardSurface>('discover');
   const [assetTab, setAssetTab] = useState<AssetTab>('tokens');
   const [tokenBalances, setTokenBalances] = useState<Record<string, string>>({
     INJ: '0.0000',
@@ -423,6 +421,7 @@ export default function DashboardPage() {
   const [pendingAuthAction, setPendingAuthAction] = useState<'send' | 'swap' | null>(null);
   const [postAuthAction, setPostAuthAction] = useState<'send' | 'swap' | null>(null);
   const [showCardCenter, setShowCardCenter] = useState(false);
+  const [showFaucetSheet, setShowFaucetSheet] = useState(false);
 
   useEffect(() => {
     // Wait for session check to complete
@@ -1064,7 +1063,7 @@ export default function DashboardPage() {
   const isWalletOverview = walletPanel === 'overview';
   const activeWalletPanelMeta = walletPanel !== 'overview' ? walletPanelMeta[walletPanel] : null;
   const formattedNinjaBalance = ninjaBalance.toFixed(2);
-  const walletStageClassName = isWalletOverview ? 'h-[540px] md:h-[520px]' : 'h-[760px] md:h-[720px]';
+  const walletStageClassName = 'h-[540px] md:h-[520px]';
 
   return (
     <LoadingSpinner ready={isDashboardReady}>
@@ -1091,24 +1090,24 @@ export default function DashboardPage() {
               </div>
               
               <div className="min-w-0">
-                <div className="flex items-center gap-2.5 whitespace-nowrap">
-                  <div className="text-sm font-bold text-white">Account 1</div>
+                <div className="text-sm font-bold text-white">Account 1</div>
+                <div className="mt-1.5 flex items-center gap-1.5 whitespace-nowrap">
                   {address && (
-                    <span className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 font-mono text-[11px] text-gray-400">
+                    <span className="rounded-full border border-white/10 bg-white/[0.04] px-2 py-0.5 font-mono text-[10px] text-gray-400">
                       {formatAddress(address)}
                     </span>
                   )}
                   <button 
                     onClick={handleCopyAddress}
-                    className="group flex h-7 w-7 items-center justify-center rounded-lg border border-white/10 bg-white/[0.04] transition-all hover:bg-white/10"
+                    className="group flex h-6 w-6 items-center justify-center rounded-md border border-white/10 bg-white/[0.04] transition-all hover:bg-white/10"
                     title="Copy address"
                   >
                     {copied ? (
-                      <svg className="h-3.5 w-3.5 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <svg className="h-3 w-3 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                       </svg>
                     ) : (
-                      <svg className="h-3.5 w-3.5 text-gray-400 transition-colors group-hover:text-white" fill="none" stroke="currentColor" viewBox="0 0 16 16">
+                      <svg className="h-3 w-3 text-gray-400 transition-colors group-hover:text-white" fill="none" stroke="currentColor" viewBox="0 0 16 16">
                         <rect width="11" height="11" x="4" y="4" rx="1" ry="1" strokeWidth="1.5" />
                         <path d="M2 10c-0.8 0-1.5-0.7-1.5-1.5V2c0-0.8 0.7-1.5 1.5-1.5h8.5c0.8 0 1.5 0.7 1.5 1.5" strokeWidth="1.5" />
                       </svg>
@@ -1122,7 +1121,7 @@ export default function DashboardPage() {
             <div className="flex items-center gap-2">
               <ThemeToggleButton compact />
               <button
-                onClick={() => router.push('/faucet')}
+                onClick={() => setShowFaucetSheet(true)}
                 className="rounded-lg border border-white/10 bg-white/5 p-2.5 transition-all group hover:border-violet-500/40 hover:bg-violet-600/20"
                 title="Testnet Faucet"
               >
@@ -1179,23 +1178,27 @@ export default function DashboardPage() {
               <div className="relative flex flex-1 flex-col">
                 {/* Header with Balance Label */}
                 <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center gap-2">
-                    <span className="text-gray-400 text-xs font-semibold uppercase tracking-wider">Total Balance</span>
-                    <button 
-                      onClick={() => setBalanceVisible(!balanceVisible)}
-                      className="p-1 rounded hover:bg-white/5 transition-colors"
-                    >
-                      {balanceVisible ? (
-                        <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                        </svg>
-                      ) : (
-                        <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
-                        </svg>
-                      )}
-                    </button>
+                  <div className="flex min-h-[20px] items-center gap-2">
+                    {isWalletOverview && (
+                      <>
+                        <span className="text-gray-400 text-xs font-semibold uppercase tracking-wider">Total Balance</span>
+                        <button 
+                          onClick={() => setBalanceVisible(!balanceVisible)}
+                          className="p-1 rounded hover:bg-white/5 transition-colors"
+                        >
+                          {balanceVisible ? (
+                            <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                            </svg>
+                          ) : (
+                            <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
+                            </svg>
+                          )}
+                        </button>
+                      </>
+                    )}
                   </div>
                   <div className="flex items-center gap-1.5">
                     <button 
@@ -2117,46 +2120,47 @@ export default function DashboardPage() {
       </div>
             </div>
           </div>
-          <div className="mt-6 bg-black rounded-2xl border border-white/10 relative overflow-hidden p-4 sm:p-5">
-            <div className="absolute bottom-0 left-0 w-32 h-32 bg-gradient-to-tr from-cyan-500/5 to-transparent rounded-full blur-2xl"></div>
-            <div className="relative">
-              <div className="mb-5 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-                <div>
-                  <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-gray-500">Explore</div>
-                  <div className="mt-1 text-lg font-bold text-white">
-                    {dashboardSurface === 'discover' ? 'Discover' : 'Agents'} in Dashboard
-                  </div>
+          <div className="mt-6 grid gap-6 xl:grid-cols-2">
+            <div className="bg-black rounded-2xl border border-white/10 relative overflow-hidden p-4 sm:p-5">
+              <div className="absolute bottom-0 left-0 w-32 h-32 bg-gradient-to-tr from-cyan-500/5 to-transparent rounded-full blur-2xl"></div>
+              <div className="relative">
+                <div className="mb-5">
+                  <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-gray-500">Discover</div>
+                  <div className="mt-1 text-lg font-bold text-white">Explore dApps</div>
                   <div className="mt-1 text-sm text-gray-400">
-                    Discover and agent workflows now live directly under the main wallet stage instead of replacing it.
+                    Search, filter, and launch Injective apps in a fixed left-right workspace.
                   </div>
                 </div>
 
-                <div className="inline-flex rounded-2xl border border-white/10 bg-white/[0.04] p-1">
-                  {[
-                    { key: 'discover' as const, label: 'Discover' },
-                    { key: 'agents' as const, label: 'Agents' },
-                  ].map((item) => (
-                    <button
-                      key={item.key}
-                      onClick={() => setDashboardSurface(item.key)}
-                      className={`rounded-[0.95rem] px-4 py-2.5 text-sm font-semibold transition-all ${
-                        dashboardSurface === item.key
-                          ? 'bg-white text-black shadow-[0_8px_24px_rgba(255,255,255,0.08)]'
-                          : 'text-gray-400 hover:text-white'
-                      }`}
-                    >
-                      {item.label}
-                    </button>
-                  ))}
+                <div className="overflow-hidden rounded-[1.5rem] border border-white/10 bg-black/30">
+                  <div className="h-[720px] overflow-hidden rounded-[1.35rem] bg-black">
+                    <DashboardSurfaceFrame
+                      src="/discover?embed=1"
+                      title="Embedded discover"
+                    />
+                  </div>
                 </div>
               </div>
+            </div>
 
-              <div className="overflow-hidden rounded-[1.5rem] border border-white/10 bg-black/30">
-                <div className="h-[720px] overflow-hidden rounded-[1.35rem] bg-black md:h-[780px]">
-                <DashboardSurfaceFrame
-                  src={dashboardSurface === 'discover' ? '/discover?embed=1' : '/agents?embed=1'}
-                  title={dashboardSurface === 'discover' ? 'Embedded discover' : 'Embedded agents'}
-                />
+            <div className="bg-black rounded-2xl border border-white/10 relative overflow-hidden p-4 sm:p-5">
+              <div className="absolute bottom-0 right-0 w-32 h-32 bg-gradient-to-tl from-violet-500/5 to-transparent rounded-full blur-2xl"></div>
+              <div className="relative">
+                <div className="mb-5">
+                  <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-gray-500">Agents</div>
+                  <div className="mt-1 text-lg font-bold text-white">Wallet copilots</div>
+                  <div className="mt-1 text-sm text-gray-400">
+                    Conversations, invite flows, and agent controls stay visible beside the chat workspace.
+                  </div>
+                </div>
+
+                <div className="overflow-hidden rounded-[1.5rem] border border-white/10 bg-black/30">
+                  <div className="h-[720px] overflow-hidden rounded-[1.35rem] bg-black">
+                    <DashboardSurfaceFrame
+                      src="/agents?embed=1"
+                      title="Embedded agents"
+                    />
+                  </div>
                 </div>
               </div>
             </div>
@@ -2187,6 +2191,38 @@ export default function DashboardPage() {
           setSendError('');
         }}
       />
+
+      {showFaucetSheet && (
+        <div className="fixed inset-0 z-[120] flex items-end bg-black/45 backdrop-blur-sm" onClick={() => setShowFaucetSheet(false)}>
+          <div
+            className="w-full rounded-t-[2rem] border-t border-white/10 bg-black/95 shadow-[0_-20px_60px_rgba(0,0,0,0.45)]"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-4">
+              <div>
+                <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-gray-500">Faucet</div>
+                <div className="mt-1 text-base font-bold text-white">Testnet faucet</div>
+              </div>
+              <button
+                onClick={() => setShowFaucetSheet(false)}
+                className="flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-white/5 transition-all hover:bg-white/10"
+                title="Close faucet"
+              >
+                <svg className="h-4 w-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="mx-auto max-w-7xl px-4 pb-4">
+              <div className="overflow-hidden rounded-[1.75rem] border border-white/10 bg-black/70">
+                <div className="h-[58vh] min-h-[420px] overflow-hidden rounded-[1.55rem] bg-black">
+                  <DashboardSurfaceFrame src="/faucet?embed=1" title="Embedded faucet" />
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* NFT Detail Modal */}
       {selectedNFT && (

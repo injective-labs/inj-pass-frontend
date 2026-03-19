@@ -43,6 +43,10 @@ const CHAIN_LOGO: Record<string, string> = {
 export default function FaucetPage() {
   const router = useRouter();
   const { isUnlocked, address, isCheckingSession } = useWallet();
+  const [isEmbedded] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return new URLSearchParams(window.location.search).get('embed') === '1';
+  });
 
   const [balances, setBalances] = useState<NetworkBalance[]>([]);
   const [selectedCompanion, setSelectedCompanion] = useState<string | null>(null);
@@ -99,42 +103,42 @@ export default function FaucetPage() {
 
   if (isCheckingSession) {
     return (
-      <div className="min-h-screen bg-black flex items-center justify-center">
+      <div className={`${isEmbedded ? 'h-full' : 'min-h-screen'} bg-black flex items-center justify-center`}>
         <div className="w-6 h-6 border-2 border-white/20 border-t-white rounded-full animate-spin" />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen pb-24 md:pb-8 bg-black text-white">
-      {/* Header — same pattern as dashboard */}
-      <div className="bg-gradient-to-b from-white/5 to-transparent border-b border-white/5 backdrop-blur-sm">
-        <div className="max-w-7xl mx-auto px-4 py-6">
-          <div className="flex items-center gap-4">
-            <button
-              onClick={() => router.back()}
-              className="p-2.5 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 transition-all flex-shrink-0"
-              aria-label="Go back"
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-              </svg>
-            </button>
+    <div className={`${isEmbedded ? 'h-full overflow-y-auto' : 'min-h-screen pb-24 md:pb-8'} bg-black text-white`}>
+      {!isEmbedded && (
+        <div className="bg-gradient-to-b from-white/5 to-transparent border-b border-white/5 backdrop-blur-sm">
+          <div className="max-w-7xl mx-auto px-4 py-6">
+            <div className="flex items-center gap-4">
+              <button
+                onClick={() => router.back()}
+                className="p-2.5 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 transition-all flex-shrink-0"
+                aria-label="Go back"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+                </svg>
+              </button>
 
-            <div className="w-10 h-10 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center p-1.5 flex-shrink-0">
-              <Image src="/lambdalogo.png" alt="Logo" width={32} height={32} className="w-full h-full object-contain" />
-            </div>
+              <div className="w-10 h-10 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center p-1.5 flex-shrink-0">
+                <Image src="/lambdalogo.png" alt="Logo" width={32} height={32} className="w-full h-full object-contain" />
+              </div>
 
-            <div>
-              <h1 className="text-sm font-bold">Testnet Faucet</h1>
-              <p className="text-xs text-gray-400">1 claim per account per day</p>
+              <div>
+                <h1 className="text-sm font-bold">Testnet Faucet</h1>
+                <p className="text-xs text-gray-400">1 claim per account per day</p>
+              </div>
             </div>
           </div>
         </div>
-      </div>
+      )}
 
-      {/* Main content — full-width like dashboard */}
-      <div className="max-w-7xl mx-auto px-4 pt-6 pb-6">
+      <div className={`${isEmbedded ? 'px-4 py-4' : 'max-w-7xl mx-auto px-4 pt-6 pb-6'}`}>
 
         {/* Info banner */}
         <div className="rounded-2xl bg-violet-500/10 border border-violet-500/20 px-4 py-3 flex gap-3 items-start mb-6">
