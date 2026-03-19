@@ -2,10 +2,11 @@
 
 import { useRouter } from 'next/navigation';
 import { useWallet } from '@/contexts/WalletContext';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import AccountHeader from '../components/AccountHeader';
 
 type DAppCategory = 'all' | 'defi' | 'nft' | 'game' | 'social' | 'dao';
+type DiscoverCategory = DAppCategory | 'ai';
 
 interface DApp {
   id: string;
@@ -15,6 +16,7 @@ interface DApp {
   category: DAppCategory;
   url: string;
   featured?: boolean;
+  aiDriven?: boolean;
 }
 
 const DAPPS: DApp[] = [
@@ -26,6 +28,7 @@ const DAPPS: DApp[] = [
     category: 'social',
     url: 'https://omisper-front.pages.dev/',
     featured: true,
+    aiDriven: true,
   },
   {
     id: '10',
@@ -35,6 +38,7 @@ const DAPPS: DApp[] = [
     category: 'game',
     url: 'https://hash-mahjong-two.vercel.app/',
     featured: true,
+    aiDriven: true,
   },
   {
     id: '1',
@@ -112,6 +116,8 @@ const CATEGORIES = [
   { id: 'social', name: 'Social' },
 ] as const;
 
+const AI_CATEGORY = [{ id: 'ai', name: 'AI-Driven' }] as const;
+
 function SearchBox({
   value,
   onChange,
@@ -152,12 +158,28 @@ function SearchBox({
 export default function DiscoverPage() {
   const router = useRouter();
   const { isUnlocked, address, isCheckingSession } = useWallet();
-  const [activeCategory, setActiveCategory] = useState<DAppCategory>('all');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [isEmbedded] = useState(() => {
-    if (typeof window === 'undefined') return false;
-    return new URLSearchParams(window.location.search).get('embed') === '1';
+  const [routeContext] = useState(() => {
+    if (typeof window === 'undefined') {
+      return { embedded: false, aiMode: false };
+    }
+
+    const params = new URLSearchParams(window.location.search);
+    return {
+      embedded: params.get('embed') === '1',
+      aiMode: params.get('mode') === 'ai',
+    };
   });
+  const isEmbedded = routeContext.embedded;
+  const isAiMode = routeContext.aiMode;
+  const [activeCategory, setActiveCategory] = useState<DiscoverCategory>(isAiMode ? 'ai' : 'all');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [surfaceReady, setSurfaceReady] = useState(false);
+
+  useEffect(() => {
+    let frame = 0;
+    frame = window.requestAnimationFrame(() => setSurfaceReady(true));
+    return () => window.cancelAnimationFrame(frame);
+  }, []);
 
   const navigateApp = (path: string) => {
     if (typeof window !== 'undefined' && isEmbedded && window.top) {
@@ -184,8 +206,10 @@ export default function DiscoverPage() {
     return null;
   }
 
-  const filteredDapps = DAPPS.filter((dapp) => {
-    const matchesCategory = activeCategory === 'all' || dapp.category === activeCategory;
+  const categoryTabs = isAiMode ? AI_CATEGORY : CATEGORIES;
+  const visibleDapps = isAiMode ? DAPPS.filter((dapp) => dapp.aiDriven) : DAPPS;
+  const filteredDapps = visibleDapps.filter((dapp) => {
+    const matchesCategory = activeCategory === 'all' || activeCategory === 'ai' || dapp.category === activeCategory;
     const matchesSearch =
       dapp.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       dapp.description.toLowerCase().includes(searchQuery.toLowerCase());
@@ -194,7 +218,7 @@ export default function DiscoverPage() {
 
   const featuredDapps = DAPPS.filter((dapp) => dapp.featured);
   const activeCategoryIndex = Math.max(
-    CATEGORIES.findIndex((category) => category.id === activeCategory),
+    categoryTabs.findIndex((category) => category.id === activeCategory),
     0
   );
 
@@ -221,20 +245,24 @@ export default function DiscoverPage() {
 
       {isEmbedded ? (
         <div className="flex h-full flex-col gap-4 px-4 py-3">
-          <div className="flex items-center gap-3">
+          <div
+            className={`flex items-center gap-3 transition-all duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] ${
+              surfaceReady ? 'translate-y-0 opacity-100' : 'translate-y-3 opacity-0'
+            }`}
+          >
             <div className="relative min-w-0 flex-1 max-w-[560px] rounded-xl bg-white/5 p-1">
               <div
                 className="pointer-events-none absolute bottom-1 top-1 rounded-lg bg-white shadow-lg transition-all duration-300 ease-out"
                 style={{
-                  width: 'calc((100% - 2rem) / 5)',
-                  left: `calc(0.25rem + ${activeCategoryIndex} * ((100% - 2rem) / 5 + 0.5rem))`,
+                  width: `calc((100% - ${(categoryTabs.length - 1) * 0.5}rem) / ${categoryTabs.length})`,
+                  left: `calc(0.25rem + ${activeCategoryIndex} * ((100% - ${(categoryTabs.length - 1) * 0.5}rem) / ${categoryTabs.length} + 0.5rem))`,
                 }}
               />
               <div className="relative flex gap-2">
-                {CATEGORIES.map((category) => (
+                {categoryTabs.map((category) => (
                   <button
                     key={category.id}
-                    onClick={() => setActiveCategory(category.id as DAppCategory)}
+                    onClick={() => setActiveCategory(category.id as DiscoverCategory)}
                     className={`flex-1 whitespace-nowrap rounded-lg px-3 py-2.5 text-xs font-bold transition-all duration-300 ${
                       activeCategory === category.id
                         ? 'text-black'
@@ -256,7 +284,11 @@ export default function DiscoverPage() {
               Try adjusting your search or filters.
             </div>
           ) : (
-            <div className="flex min-h-0 flex-1 gap-4 overflow-x-auto scrollbar-hide">
+            <div
+              className={`flex min-h-0 flex-1 gap-4 overflow-x-auto scrollbar-hide transition-all duration-500 delay-75 ease-[cubic-bezier(0.22,1,0.36,1)] ${
+                surfaceReady ? 'translate-y-0 opacity-100' : 'translate-y-4 opacity-0'
+              }`}
+            >
               {filteredDapps.map((dapp) => (
                 <button
                   key={dapp.id}
