@@ -217,11 +217,8 @@ export default function DiscoverPage() {
 
       {isEmbedded ? (
         <div className="flex h-full flex-col gap-4 px-4 py-3">
-          <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-            <div className="w-full xl:max-w-[420px]">
-              <SearchBox value={searchQuery} onChange={setSearchQuery} onClear={() => setSearchQuery('')} />
-            </div>
-            <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
+          <div className="flex items-center gap-3">
+            <div className="flex min-w-0 flex-1 gap-2 overflow-x-auto pb-1 scrollbar-hide">
               {CATEGORIES.map((category) => (
                 <button
                   key={category.id}
@@ -235,6 +232,9 @@ export default function DiscoverPage() {
                   {category.name}
                 </button>
               ))}
+            </div>
+            <div className="ml-auto w-[168px] flex-shrink-0 sm:w-[196px] md:w-[220px]">
+              <SearchBox value={searchQuery} onChange={setSearchQuery} onClear={() => setSearchQuery('')} />
             </div>
           </div>
 
