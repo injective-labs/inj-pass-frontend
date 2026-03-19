@@ -42,7 +42,7 @@ const CHAIN_LOGO: Record<string, string> = {
 
 export default function FaucetPage() {
   const router = useRouter();
-  const { isUnlocked, address, isCheckingSession } = useWallet();
+  const { address, isCheckingSession } = useWallet();
   const [isEmbedded] = useState(() => {
     if (typeof window === 'undefined') return false;
     return new URLSearchParams(window.location.search).get('embed') === '1';
@@ -56,13 +56,8 @@ export default function FaucetPage() {
 
   useEffect(() => {
     if (isCheckingSession) return;
-    if (!isUnlocked) router.push('/');
-  }, [isUnlocked, isCheckingSession, router]);
-
-  useEffect(() => {
-    if (isCheckingSession || !isUnlocked) return;
     fetchBalances();
-  }, [isCheckingSession, isUnlocked]);
+  }, [isCheckingSession]);
 
   const fetchBalances = async () => {
     setPageState('loading-balances');
@@ -78,7 +73,11 @@ export default function FaucetPage() {
   };
 
   const handleClaim = async () => {
-    if (!address) return;
+    if (!address) {
+      setErrorMsg('Set up or sign in to INJ Pass first so the faucet knows where to send testnet assets.');
+      setPageState('error');
+      return;
+    }
     setPageState('claiming');
     setErrorMsg('');
     try {
@@ -100,6 +99,7 @@ export default function FaucetPage() {
   const injBalance = balances.find((b) => b.isBase);
   const companionBalances = balances.filter((b) => !b.isBase);
   const loadingBals = pageState === 'loading-balances';
+  const canClaim = !!address && pageState !== 'claiming' && pageState !== 'loading-balances';
 
   if (isCheckingSession) {
     return (
@@ -138,7 +138,20 @@ export default function FaucetPage() {
         </div>
       )}
 
-      <div className={`${isEmbedded ? 'px-4 py-4' : 'max-w-7xl mx-auto px-4 pt-6 pb-6'}`}>
+        <div className={`${isEmbedded ? 'px-4 py-4' : 'max-w-7xl mx-auto px-4 pt-6 pb-6'}`}>
+        {!address && (
+          <div className="mb-6 flex gap-3 rounded-2xl border border-amber-500/25 bg-amber-500/10 px-4 py-3">
+            <svg className="mt-0.5 h-4 w-4 flex-shrink-0 text-amber-300" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v4m0 4h.01M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z" />
+            </svg>
+            <div>
+              <div className="text-sm font-semibold text-amber-200">Wallet required</div>
+              <div className="mt-1 text-xs leading-relaxed text-amber-100/80">
+                The faucet page can open directly, but claiming still needs an INJ Pass wallet address on this device.
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Info banner */}
         <div className="rounded-2xl bg-violet-500/10 border border-violet-500/20 px-4 py-3 flex gap-3 items-start mb-6">
@@ -309,9 +322,9 @@ export default function FaucetPage() {
         {pageState !== 'success' ? (
           <button
             onClick={handleClaim}
-            disabled={pageState === 'claiming' || pageState === 'loading-balances'}
+            disabled={!canClaim}
             className={`w-full py-4 rounded-2xl font-bold text-base transition-all duration-200 flex items-center justify-center gap-2.5 ${
-              pageState === 'claiming' || pageState === 'loading-balances'
+              !canClaim
                 ? 'bg-white/10 text-gray-500 cursor-not-allowed'
                 : 'bg-white text-black hover:bg-gray-100 active:scale-98 shadow-lg shadow-white/5'
             }`}
@@ -326,6 +339,8 @@ export default function FaucetPage() {
                 <div className="w-4 h-4 border-2 border-gray-600 border-t-gray-400 rounded-full animate-spin" />
                 Verifying you are human
               </>
+            ) : !address ? (
+              'Set Up INJ Pass to Claim'
             ) : (
               'Claim Tokens'
             )}
