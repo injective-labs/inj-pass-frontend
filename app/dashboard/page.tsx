@@ -1966,7 +1966,7 @@ export default function DashboardPage() {
                                 <div className="w-10 h-10 rounded-full border-4 border-white/10 border-t-white animate-spin" />
                               </div>
                             ) : filteredHistoryItems.length === 0 ? (
-                              <div className="mt-5 rounded-2xl border border-white/10 bg-white/5 px-4 py-10 text-center text-sm text-gray-400">
+                              <div className="mt-10 text-center text-sm text-gray-400">
                                 No transactions yet. Your recent wallet activity will appear here.
                               </div>
                             ) : (
