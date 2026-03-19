@@ -1270,60 +1270,6 @@ export default function AgentsPage() {
                       </button>
                     ))}
                   </div>
-
-                  <div className="mt-4 flex flex-wrap gap-2">
-                    <div className={`rounded-full border px-3 py-2 text-[11px] ${
-                      isLight
-                        ? 'border-slate-200/80 bg-slate-900/[0.03] text-slate-600'
-                        : 'border-white/10 bg-white/[0.04] text-gray-300'
-                    }`}>
-                      {address?.slice(0, 8)}...{address?.slice(-6)}
-                    </div>
-                    <div className={`rounded-full border px-3 py-2 text-[11px] ${
-                      isLight
-                        ? 'border-slate-200/80 bg-slate-900/[0.03] text-slate-500'
-                        : 'border-white/10 bg-white/[0.04] text-gray-400'
-                    }`}>
-                      Injective Mainnet
-                    </div>
-                    <button
-                      onClick={() => { setShowInviteManager(true); setSidebarOpen(false); }}
-                      className="rounded-full border border-[#6e5dff]/25 bg-gradient-to-r from-[#4c3af9]/18 via-white/[0.04] to-transparent px-3 py-2 text-[11px] font-semibold transition-all hover:border-[#8b7bff]/40 hover:bg-[#4c3af9]/20"
-                    >
-                      Invite +1,000
-                    </button>
-                    {activeConv?.sandboxAddress && (
-                      <button
-                        onClick={() => setShowSandboxPanel((p) => !p)}
-                        className={`rounded-full border px-3 py-2 text-[11px] font-semibold transition-colors ${
-                          isSandboxEnabled()
-                            ? 'border-emerald-400/25 bg-emerald-400/10 text-emerald-300 hover:bg-emerald-400/20'
-                            : 'border-amber-400/25 bg-amber-400/10 text-amber-300 hover:bg-amber-400/20'
-                        }`}
-                      >
-                        {isSandboxEnabled() ? 'Sandbox' : 'Takeover'} · {activeConv.sandboxAddress.slice(0, 8)}…{activeConv.sandboxAddress.slice(-6)}
-                      </button>
-                    )}
-                  </div>
-
-                  <div className="mt-4 grid grid-cols-3 gap-2">
-                    {['Start chat', 'Inspect action', 'Review tx'].map((step) => (
-                      <div
-                        key={step}
-                        className={`rounded-[0.95rem] border px-3 py-2 text-center text-[11px] font-medium ${
-                          isLight
-                            ? 'border-slate-200/80 bg-slate-900/[0.03] text-slate-500'
-                            : 'border-white/10 bg-white/[0.03] text-gray-400'
-                        }`}
-                      >
-                        {step}
-                      </div>
-                    ))}
-                  </div>
-
-                  <div className={`mt-auto pt-4 text-[11px] ${isLight ? 'text-slate-400' : 'text-gray-500'}`}>
-                    AI can make mistakes. Always verify transactions before confirming.
-                  </div>
               </div>
             ) : isEmbedded ? (
               <div className="h-full p-5 md:p-6">
@@ -1901,6 +1847,46 @@ export default function AgentsPage() {
         {/* Input area */}
         <div className={`flex-shrink-0 border-t ${isLight ? 'border-slate-200/80' : 'border-white/10'} ${isCompactStage ? 'bg-transparent p-3' : isEmbedded ? (isLight ? 'bg-white/70 p-5' : 'bg-white/[0.02] p-5') : (isLight ? 'bg-white/72 backdrop-blur-xl p-4' : 'bg-black/80 backdrop-blur-sm p-4')}`}>
           <div className={`${isCompactStage ? 'max-w-none' : isEmbedded ? 'max-w-4xl' : 'max-w-3xl'} mx-auto`}>
+            {isCompactStage && (
+              <div className="mb-2.5 flex flex-wrap items-center justify-center gap-1.5">
+                <div className={`rounded-full border px-2.5 py-1 text-[10px] font-medium ${
+                  isLight
+                    ? 'border-slate-200/80 bg-white/70 text-slate-500'
+                    : 'border-white/10 bg-white/[0.04] text-gray-300'
+                }`}>
+                  {address?.slice(0, 8)}...{address?.slice(-6)}
+                </div>
+                <div className={`rounded-full border px-2.5 py-1 text-[10px] ${
+                  isLight
+                    ? 'border-slate-200/80 bg-white/70 text-slate-500'
+                    : 'border-white/10 bg-white/[0.04] text-gray-400'
+                }`}>
+                  Injective Mainnet
+                </div>
+                <button
+                  onClick={() => { setShowInviteManager(true); setSidebarOpen(false); }}
+                  className={`rounded-full border px-2.5 py-1 text-[10px] font-semibold transition-all ${
+                    isLight
+                      ? 'border-violet-200/90 bg-[linear-gradient(135deg,rgba(139,92,246,0.10),rgba(59,130,246,0.06))] text-violet-700 hover:border-violet-300 hover:bg-[linear-gradient(135deg,rgba(139,92,246,0.14),rgba(59,130,246,0.10))]'
+                      : 'border-[#6e5dff]/25 bg-gradient-to-r from-[#4c3af9]/18 via-white/[0.04] to-transparent text-white hover:border-[#8b7bff]/40 hover:bg-[#4c3af9]/20'
+                  }`}
+                >
+                  Invite +1,000
+                </button>
+                {activeConv?.sandboxAddress && (
+                  <button
+                    onClick={() => setShowSandboxPanel((p) => !p)}
+                    className={`rounded-full border px-2.5 py-1 text-[10px] font-semibold transition-colors ${
+                      isSandboxEnabled()
+                        ? 'border-emerald-400/25 bg-emerald-400/10 text-emerald-300 hover:bg-emerald-400/20'
+                        : 'border-amber-400/25 bg-amber-400/10 text-amber-300 hover:bg-amber-400/20'
+                    }`}
+                  >
+                    {isSandboxEnabled() ? 'Sandbox' : 'Takeover'} · {activeConv.sandboxAddress.slice(0, 8)}…{activeConv.sandboxAddress.slice(-6)}
+                  </button>
+                )}
+              </div>
+            )}
 
             {/* Sandbox / takeover address badge — click to flip card */}
             {activeConv?.sandboxAddress && !isCompactStage && (
@@ -2066,11 +2052,9 @@ export default function AgentsPage() {
               </div>
             </div>
 
-            {!isCompactStage && (
-              <p className="text-center text-xs text-gray-600 mt-2">
+            <p className={`mt-2 text-center ${isCompactStage ? 'text-[10px]' : 'text-xs'} ${isLight ? 'text-slate-400' : 'text-gray-600'}`}>
                 AI can make mistakes. Always verify transactions before confirming.
-              </p>
-            )}
+            </p>
           </div>
         </div>
       </div>

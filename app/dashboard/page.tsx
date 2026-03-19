@@ -2443,7 +2443,7 @@ export default function DashboardPage() {
                     : 'pointer-events-none translate-x-10 scale-[0.98] opacity-0'
                 }`}
               >
-                <div className="bg-black rounded-2xl border border-white/10 relative overflow-hidden h-full">
+                <div className="bg-black rounded-2xl relative overflow-hidden h-full">
                   <div className="absolute bottom-0 right-0 h-32 w-32 rounded-full bg-gradient-to-tl from-fuchsia-500/10 to-transparent blur-2xl" />
                   <div className="absolute top-0 left-0 h-32 w-32 rounded-full bg-gradient-to-br from-cyan-500/8 to-transparent blur-2xl" />
                   <div className="relative h-full overflow-hidden">
