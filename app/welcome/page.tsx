@@ -4,6 +4,8 @@ import { useEffect, useRef, useState } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import TunnelBackground from '@/components/TunnelBackground';
+import ThemeToggleButton from '@/components/ThemeToggleButton';
+import { useTheme } from '@/contexts/ThemeContext';
 import { useWallet } from '@/contexts/WalletContext';
 import { encryptKey, hasWallet, saveWallet } from '@/wallet/keystore';
 import { createByPasskey, importPrivateKey } from '@/wallet/key-management';
@@ -64,6 +66,7 @@ const heroSignals = [
 
 export default function WelcomePage() {
   const router = useRouter();
+  const { theme } = useTheme();
   const { unlock } = useWallet();
   const [busyRoute, setBusyRoute] = useState<'create' | 'recover' | null>(null);
   const [error, setError] = useState('');
@@ -82,6 +85,7 @@ export default function WelcomePage() {
   const [importLoading, setImportLoading] = useState(false);
   const privateKeyRef = useRef<HTMLInputElement>(null);
   const importPasswordRef = useRef<HTMLInputElement>(null);
+  const isLight = theme === 'light';
 
   const isBusy = busyRoute !== null;
 
@@ -253,22 +257,42 @@ export default function WelcomePage() {
   };
 
   return (
-    <div className="relative min-h-screen overflow-hidden bg-[#03060d] text-white">
+    <div className={`relative min-h-screen overflow-hidden text-white ${isLight ? 'bg-[#eef4fb]' : 'bg-[#03060d]'}`}>
       <TunnelBackground />
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_12%_18%,rgba(57,92,255,0.22),transparent_24%),radial-gradient(circle_at_84%_16%,rgba(90,214,255,0.16),transparent_26%),radial-gradient(circle_at_50%_100%,rgba(72,53,235,0.12),transparent_45%),linear-gradient(180deg,rgba(3,6,13,0.18),rgba(3,6,13,0.92))]" />
+      <div
+        className={`absolute inset-0 ${
+          isLight
+            ? 'bg-[radial-gradient(circle_at_12%_18%,rgba(59,130,246,0.12),transparent_24%),radial-gradient(circle_at_84%_16%,rgba(245,158,11,0.10),transparent_26%),radial-gradient(circle_at_50%_100%,rgba(148,163,184,0.10),transparent_45%),linear-gradient(180deg,rgba(255,255,255,0.18),rgba(238,244,251,0.94))]'
+            : 'bg-[radial-gradient(circle_at_12%_18%,rgba(57,92,255,0.22),transparent_24%),radial-gradient(circle_at_84%_16%,rgba(90,214,255,0.16),transparent_26%),radial-gradient(circle_at_50%_100%,rgba(72,53,235,0.12),transparent_45%),linear-gradient(180deg,rgba(3,6,13,0.18),rgba(3,6,13,0.92))]'
+        }`}
+      />
       <div
         className="absolute inset-0 opacity-30"
         style={{
           backgroundImage:
-            'linear-gradient(rgba(255,255,255,0.045) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.045) 1px, transparent 1px)',
+            isLight
+              ? 'linear-gradient(rgba(71,85,105,0.065) 1px, transparent 1px), linear-gradient(90deg, rgba(71,85,105,0.065) 1px, transparent 1px)'
+              : 'linear-gradient(rgba(255,255,255,0.045) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.045) 1px, transparent 1px)',
           backgroundSize: '42px 42px',
           maskImage: 'linear-gradient(180deg, rgba(0,0,0,0.92), transparent)',
         }}
       />
-      <div className="absolute inset-0 bg-[linear-gradient(110deg,rgba(255,255,255,0.035),transparent_18%,transparent_82%,rgba(255,255,255,0.02))] opacity-60" />
+      <div
+        className={`absolute inset-0 opacity-60 ${
+          isLight
+            ? 'bg-[linear-gradient(110deg,rgba(255,255,255,0.3),transparent_18%,transparent_82%,rgba(255,255,255,0.18))]'
+            : 'bg-[linear-gradient(110deg,rgba(255,255,255,0.035),transparent_18%,transparent_82%,rgba(255,255,255,0.02))]'
+        }`}
+      />
 
       <div className="relative z-10 mx-auto flex min-h-screen max-w-[1480px] flex-col px-4 pb-6 pt-4 md:px-8 md:pb-8 md:pt-6">
-        <header className="rounded-[1.75rem] border border-white/10 bg-black/30 px-4 py-4 backdrop-blur-2xl md:px-6">
+        <header
+          className={`rounded-[1.75rem] border px-4 py-4 backdrop-blur-2xl md:px-6 ${
+            isLight
+              ? 'border-slate-200/80 bg-white/72 shadow-[0_18px_50px_rgba(148,163,184,0.18)]'
+              : 'border-white/10 bg-black/30'
+          }`}
+        >
           <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
             <div className="flex items-center gap-4">
               <div className="flex h-12 w-12 items-center justify-center rounded-[1.2rem] border border-white/10 bg-white/[0.05] p-2">
@@ -281,6 +305,7 @@ export default function WelcomePage() {
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
+              <ThemeToggleButton compact />
               <div className="rounded-full border border-cyan-400/20 bg-cyan-400/10 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.22em] text-cyan-100">
                 Passkey Native
               </div>
@@ -300,7 +325,13 @@ export default function WelcomePage() {
         </header>
 
         <main className="mt-6 grid flex-1 gap-5 xl:grid-cols-[minmax(0,1.15fr)_minmax(390px,0.85fr)]">
-          <section className="relative overflow-hidden rounded-[2.25rem] border border-white/10 bg-[linear-gradient(180deg,rgba(11,16,27,0.88),rgba(7,10,18,0.92))] p-6 shadow-[0_20px_80px_rgba(0,0,0,0.34)] backdrop-blur-2xl md:p-8 xl:min-h-[820px]">
+          <section
+            className={`relative overflow-hidden rounded-[2.25rem] border p-6 backdrop-blur-2xl md:p-8 xl:min-h-[820px] ${
+              isLight
+                ? 'border-slate-200/80 bg-[linear-gradient(180deg,rgba(255,255,255,0.9),rgba(241,245,249,0.94))] shadow-[0_24px_80px_rgba(148,163,184,0.18)]'
+                : 'border-white/10 bg-[linear-gradient(180deg,rgba(11,16,27,0.88),rgba(7,10,18,0.92))] shadow-[0_20px_80px_rgba(0,0,0,0.34)]'
+            }`}
+          >
             <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_16%,rgba(255,255,255,0.07),transparent_18%),radial-gradient(circle_at_82%_12%,rgba(68,90,255,0.18),transparent_28%),linear-gradient(180deg,rgba(255,255,255,0.03),transparent_62%)]" />
             <div className="relative z-10 flex h-full flex-col">
               <div className="flex flex-wrap items-center gap-2">
@@ -338,7 +369,13 @@ export default function WelcomePage() {
                     ))}
                   </div>
 
-                  <div className="mt-6 rounded-[1.9rem] border border-white/10 bg-[#0b111e]/90 p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)] md:p-6">
+                  <div
+                    className={`mt-6 rounded-[1.9rem] border p-5 md:p-6 ${
+                      isLight
+                        ? 'border-slate-200/80 bg-white/78 shadow-[inset_0_1px_0_rgba(255,255,255,0.75)]'
+                        : 'border-white/10 bg-[#0b111e]/90 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]'
+                    }`}
+                  >
                     <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
                       <div>
                         <div className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-500">Device Condition</div>
@@ -374,7 +411,13 @@ export default function WelcomePage() {
                 </div>
 
                 <div className="grid gap-4">
-                  <div className="welcome-stage rounded-[2rem] border border-white/10 bg-[linear-gradient(180deg,rgba(10,15,25,0.96),rgba(7,11,20,0.98))] p-5">
+                  <div
+                    className={`welcome-stage rounded-[2rem] border p-5 ${
+                      isLight
+                        ? 'border-slate-200/80 bg-[linear-gradient(180deg,rgba(255,255,255,0.95),rgba(241,245,249,0.96))]'
+                        : 'border-white/10 bg-[linear-gradient(180deg,rgba(10,15,25,0.96),rgba(7,11,20,0.98))]'
+                    }`}
+                  >
                     <div className="welcome-stage__grid" />
                     <div className="welcome-stage__glow welcome-stage__glow--one" />
                     <div className="welcome-stage__glow welcome-stage__glow--two" />
@@ -429,7 +472,13 @@ export default function WelcomePage() {
             </div>
           </section>
 
-          <section className="relative overflow-hidden rounded-[2.25rem] border border-white/10 bg-[linear-gradient(180deg,rgba(8,11,18,0.94),rgba(5,8,14,0.98))] p-6 shadow-[0_20px_80px_rgba(0,0,0,0.34)] backdrop-blur-2xl md:p-8 xl:min-h-[820px]">
+          <section
+            className={`relative overflow-hidden rounded-[2.25rem] border p-6 backdrop-blur-2xl md:p-8 xl:min-h-[820px] ${
+              isLight
+                ? 'border-slate-200/80 bg-[linear-gradient(180deg,rgba(255,255,255,0.94),rgba(247,250,255,0.98))] shadow-[0_24px_80px_rgba(148,163,184,0.18)]'
+                : 'border-white/10 bg-[linear-gradient(180deg,rgba(8,11,18,0.94),rgba(5,8,14,0.98))] shadow-[0_20px_80px_rgba(0,0,0,0.34)]'
+            }`}
+          >
             <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.06),transparent_18%),linear-gradient(180deg,rgba(255,255,255,0.025),transparent_56%)]" />
             <div className="relative z-10 flex h-full flex-col">
               <div className="flex items-start justify-between gap-4">
@@ -499,7 +548,13 @@ export default function WelcomePage() {
                       showCreateModal ? 'translate-y-0 opacity-100' : 'pointer-events-none -translate-y-3 opacity-0'
                     }`}
                   >
-                    <div className="rounded-[1.5rem] border border-white/10 bg-[#0c1321] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.025)]">
+                    <div
+                      className={`rounded-[1.5rem] border p-4 ${
+                        isLight
+                          ? 'border-slate-200/80 bg-slate-50/92 shadow-[inset_0_1px_0_rgba(255,255,255,0.92)]'
+                          : 'border-white/10 bg-[#0c1321] shadow-[inset_0_1px_0_rgba(255,255,255,0.025)]'
+                      }`}
+                    >
                       <div className="flex items-center justify-between gap-3">
                         <label className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-500">Account Name</label>
                         <button
@@ -568,7 +623,13 @@ export default function WelcomePage() {
                   </div>
                 </div>
 
-                <div className="mt-5 rounded-[1.45rem] border border-white/10 bg-[#0b1220] p-4">
+                <div
+                  className={`mt-5 rounded-[1.45rem] border p-4 ${
+                    isLight
+                      ? 'border-slate-200/80 bg-slate-50/92'
+                      : 'border-white/10 bg-[#0b1220]'
+                  }`}
+                >
                   <div className="flex items-center justify-between gap-4">
                     <div>
                       <div className="text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-500">Local Status</div>
@@ -657,8 +718,18 @@ export default function WelcomePage() {
       </div>
 
       {showImportModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[rgba(3,6,13,0.82)] p-4 backdrop-blur-xl">
-          <div className="relative w-full max-w-4xl overflow-hidden rounded-[2.2rem] border border-white/10 bg-[#060a12]/95 shadow-[0_28px_90px_rgba(0,0,0,0.55)]">
+        <div
+          className={`fixed inset-0 z-50 flex items-center justify-center p-4 backdrop-blur-xl ${
+            isLight ? 'bg-[rgba(236,244,251,0.82)]' : 'bg-[rgba(3,6,13,0.82)]'
+          }`}
+        >
+          <div
+            className={`relative w-full max-w-4xl overflow-hidden rounded-[2.2rem] border shadow-[0_28px_90px_rgba(0,0,0,0.55)] ${
+              isLight
+                ? 'border-slate-200/80 bg-[rgba(255,255,255,0.96)] shadow-[0_28px_90px_rgba(148,163,184,0.26)]'
+                : 'border-white/10 bg-[#060a12]/95'
+            }`}
+          >
             <div className="absolute inset-0 bg-[radial-gradient(circle_at_18%_18%,rgba(77,101,255,0.18),transparent_24%),radial-gradient(circle_at_84%_12%,rgba(61,215,255,0.12),transparent_20%),linear-gradient(180deg,rgba(255,255,255,0.03),transparent_60%)]" />
             <button
               onClick={handleCloseImport}
@@ -670,7 +741,11 @@ export default function WelcomePage() {
             </button>
 
             <div className="relative z-10 grid md:grid-cols-[320px_minmax(0,1fr)]">
-              <div className="border-b border-white/10 bg-white/[0.03] p-6 md:border-b-0 md:border-r md:p-7">
+              <div
+                className={`border-b p-6 md:border-b-0 md:border-r md:p-7 ${
+                  isLight ? 'border-slate-200/80 bg-slate-50/80' : 'border-white/10 bg-white/[0.03]'
+                }`}
+              >
                 <div className="flex items-center gap-3">
                   <div className="flex h-11 w-11 items-center justify-center rounded-[1rem] border border-white/10 bg-white/[0.06] p-2">
                     <Image src="/lambdalogo.png" alt="INJ Pass" width={28} height={28} className="h-7 w-7 object-contain" />
@@ -1125,6 +1200,61 @@ export default function WelcomePage() {
             right: 12px;
             bottom: 16px;
           }
+        }
+      `}</style>
+      <style jsx global>{`
+        html[data-theme='light'] .welcome-stage__grid {
+          background-image:
+            linear-gradient(rgba(71, 85, 105, 0.08) 1px, transparent 1px),
+            linear-gradient(90deg, rgba(71, 85, 105, 0.08) 1px, transparent 1px);
+          opacity: 0.34;
+        }
+
+        html[data-theme='light'] .welcome-stage__beam {
+          background: linear-gradient(90deg, transparent, rgba(148, 163, 184, 0.55), transparent);
+          opacity: 0.48;
+        }
+
+        html[data-theme='light'] .welcome-stage__core {
+          border-color: rgba(148, 163, 184, 0.24);
+          background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(241, 245, 249, 0.98));
+          box-shadow:
+            0 24px 60px rgba(148, 163, 184, 0.26),
+            0 0 36px rgba(59, 130, 246, 0.08),
+            inset 0 1px 0 rgba(255, 255, 255, 0.92);
+        }
+
+        html[data-theme='light'] .welcome-stage__core-label {
+          border-color: rgba(148, 163, 184, 0.2);
+          background: rgba(148, 163, 184, 0.08);
+          color: rgba(71, 85, 105, 0.92);
+        }
+
+        html[data-theme='light'] .welcome-stage__core-mark {
+          color: #0f172a;
+          text-shadow: 0 0 18px rgba(59, 130, 246, 0.14);
+        }
+
+        html[data-theme='light'] .welcome-stage__core-copy {
+          color: rgba(100, 116, 139, 0.92);
+        }
+
+        html[data-theme='light'] .welcome-stage__panel {
+          border-color: rgba(148, 163, 184, 0.22);
+          background: linear-gradient(180deg, rgba(255, 255, 255, 0.95), rgba(241, 245, 249, 0.95));
+          box-shadow: 0 18px 44px rgba(148, 163, 184, 0.16);
+        }
+
+        html[data-theme='light'] .welcome-stage__panel-label {
+          color: rgba(100, 116, 139, 0.84);
+        }
+
+        html[data-theme='light'] .welcome-stage__panel-title {
+          color: #0f172a;
+        }
+
+        html[data-theme='light'] .welcome-stage__panel-copy {
+          color: rgba(71, 85, 105, 0.88);
         }
       `}</style>
     </div>
