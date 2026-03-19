@@ -458,6 +458,7 @@ export default function DashboardPage() {
   const [historyError, setHistoryError] = useState('');
   const [historyItems, setHistoryItems] = useState<DashboardTransaction[]>([]);
   const [showAuthModal, setShowAuthModal] = useState(false);
+  const [showInlineSendAuth, setShowInlineSendAuth] = useState(false);
   const [pendingAuthAction, setPendingAuthAction] = useState<'send' | 'swap' | null>(null);
   const [postAuthAction, setPostAuthAction] = useState<'send' | 'swap' | null>(null);
   const [showCardCenter, setShowCardCenter] = useState(false);
@@ -909,7 +910,7 @@ export default function DashboardPage() {
   const handleSendAction = () => {
     if (isPinLocked || autoLockMinutes === 0 || !privateKey) {
       setPendingAuthAction('send');
-      setShowAuthModal(true);
+      setShowInlineSendAuth(true);
       return;
     }
 
@@ -934,6 +935,19 @@ export default function DashboardPage() {
     }
   };
 
+  const handleInlineSendAuthClose = () => {
+    setShowInlineSendAuth(false);
+    if (pendingAuthAction === 'send') {
+      setPendingAuthAction(null);
+    }
+  };
+
+  const handleInlineSendAuthSuccess = () => {
+    setShowInlineSendAuth(false);
+    setPostAuthAction('send');
+    setPendingAuthAction(null);
+  };
+
   useEffect(() => {
     if (!postAuthAction || !privateKey) return;
 
@@ -950,6 +964,15 @@ export default function DashboardPage() {
     if (walletPanel !== 'history') return;
     void loadHistory();
   }, [loadHistory, walletPanel]);
+
+  useEffect(() => {
+    if (walletPanel !== 'send' && showInlineSendAuth) {
+      setShowInlineSendAuth(false);
+      if (pendingAuthAction === 'send') {
+        setPendingAuthAction(null);
+      }
+    }
+  }, [pendingAuthAction, showInlineSendAuth, walletPanel]);
 
   useEffect(() => {
     if (walletPanel !== 'send') return;
@@ -1505,7 +1528,12 @@ export default function DashboardPage() {
                         : 'opacity-100 translate-y-0'
                     }`}
                   >
-                    <div className="h-full flex flex-col overflow-hidden">
+                    <div className="relative h-full">
+                    <div className={`h-full flex flex-col overflow-hidden transition-all duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${
+                      walletPanel === 'send' && showInlineSendAuth
+                        ? 'scale-[0.985] blur-[10px] opacity-25'
+                        : 'scale-100 blur-0 opacity-100'
+                    }`}>
                       <div className="flex items-start justify-between gap-4 border-b border-white/6 pb-4">
                         <div>
                           <div className="text-sm font-bold text-white">{activeWalletPanelMeta?.title}</div>
@@ -2023,6 +2051,17 @@ export default function DashboardPage() {
                           </div>
                         )}
                       </div>
+                    </div>
+
+                    {walletPanel === 'send' && (
+                      <TransactionAuthModal
+                        isOpen={showInlineSendAuth}
+                        onClose={handleInlineSendAuthClose}
+                        onSuccess={handleInlineSendAuthSuccess}
+                        transactionType="send"
+                        variant="inline"
+                      />
+                    )}
                     </div>
                   </div>
                 </div>

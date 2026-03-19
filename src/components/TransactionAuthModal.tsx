@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { usePin } from '@/contexts/PinContext';
 import { useWallet } from '@/contexts/WalletContext';
 import { decryptKey } from '@/wallet/keystore';
@@ -10,6 +10,7 @@ interface TransactionAuthModalProps {
   onClose: () => void;
   onSuccess: () => void;
   transactionType: 'send' | 'swap';
+  variant?: 'modal' | 'inline';
 }
 
 export default function TransactionAuthModal({
@@ -17,15 +18,32 @@ export default function TransactionAuthModal({
   onClose,
   onSuccess,
   transactionType,
+  variant = 'modal',
 }: TransactionAuthModalProps) {
   const { defaultAuthMethod, verifyPin, resetActivity } = usePin();
   const { keystore, privateKey, unlock } = useWallet();
   const [pin, setPin] = useState('');
   const [error, setError] = useState('');
   const [verifying, setVerifying] = useState(false);
+  const pinInputRef = useRef<HTMLInputElement>(null);
   const requiresPasskeyUnlock = !privateKey;
 
-  if (!isOpen) return null;
+  useEffect(() => {
+    if (!isOpen) {
+      setPin('');
+      setError('');
+      setVerifying(false);
+      return;
+    }
+
+    if (!requiresPasskeyUnlock && defaultAuthMethod === 'pin') {
+      window.requestAnimationFrame(() => {
+        pinInputRef.current?.focus();
+      });
+    }
+  }, [defaultAuthMethod, isOpen, requiresPasskeyUnlock]);
+
+  if (!isOpen && variant === 'modal') return null;
 
   const handlePinVerify = async () => {
     if (pin.length !== 6) {
@@ -83,12 +101,8 @@ export default function TransactionAuthModal({
     }
   };
 
-  return (
-    <div 
-      className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4"
-      onClick={onClose}
-    >
-      <div 
+  const authCard = (
+      <div
         className="bg-black border border-white/10 rounded-2xl max-w-md w-full shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
@@ -120,6 +134,7 @@ export default function TransactionAuthModal({
                 Enter PIN
               </label>
               <input
+                ref={pinInputRef}
                 type="password"
                 inputMode="numeric"
                 maxLength={6}
@@ -168,6 +183,38 @@ export default function TransactionAuthModal({
           </div>
         </div>
       </div>
+  );
+
+  if (variant === 'inline') {
+    return (
+      <div
+        className={`absolute inset-0 z-20 flex items-center justify-center p-4 transition-all duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${
+          isOpen ? 'opacity-100' : 'pointer-events-none opacity-0'
+        }`}
+      >
+        <div
+          className={`absolute inset-0 bg-black/30 transition-opacity duration-300 ${
+            isOpen ? 'opacity-100' : 'opacity-0'
+          }`}
+          onClick={onClose}
+        />
+        <div
+          className={`relative w-full max-w-md transition-all duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${
+            isOpen ? 'translate-y-0 scale-100' : 'translate-y-4 scale-[0.97]'
+          }`}
+        >
+          {authCard}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div 
+      className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+      onClick={onClose}
+    >
+      {authCard}
     </div>
   );
 }
