@@ -1116,16 +1116,8 @@ export default function DashboardPage() {
   };
 
   const openAiAssetSurface = () => {
-    if (assetSurfaceMode === 'ai') {
-      return;
-    }
-
     setFlippedTokenCard(null);
-    setAssetSurfaceMode('ai');
-  };
-
-  const closeAiAssetSurface = () => {
-    setAssetSurfaceMode('assets');
+    setAssetSurfaceMode((current) => (current === 'ai' ? 'assets' : 'ai'));
   };
 
   const isDashboardReady = !isCheckingSession && !loading && isUnlocked && !!address;
@@ -1300,7 +1292,14 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          <div className="grid gap-5 xl:grid-cols-[minmax(0,1.18fr)_minmax(360px,0.82fr)]">
+          <div
+            className="grid gap-5 transition-[grid-template-columns] duration-500 xl:[grid-template-columns:var(--dashboard-columns)]"
+            style={{
+              ['--dashboard-columns' as string]: isAiStage
+                ? 'minmax(232px,0.38fr) minmax(0,1.62fr)'
+                : 'minmax(0,1.18fr) minmax(360px,0.82fr)',
+            }}
+          >
             <div className={`relative ${walletStageClassName}`}>
               <div
                 className={`absolute inset-0 transition-all duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] ${
@@ -1424,7 +1423,7 @@ export default function DashboardPage() {
                         : 'opacity-100 translate-y-0'
                     }`}
                   >
-                    <div className="h-full rounded-[1.5rem] border border-white/10 bg-white/[0.03] px-4 py-4 sm:px-5 sm:py-5 flex flex-col overflow-hidden">
+                    <div className="h-full flex flex-col overflow-hidden">
                       <div className="flex items-start justify-between gap-4 border-b border-white/6 pb-4">
                         <div>
                           <div className="text-sm font-bold text-white">{activeWalletPanelMeta?.title}</div>
@@ -1441,9 +1440,9 @@ export default function DashboardPage() {
                         </button>
                       </div>
 
-                      <div className={`min-h-0 flex-1 ${walletPanel === 'settings' ? 'overflow-hidden pr-0 pt-3' : 'overflow-y-auto pr-1'}`}>
+                      <div className={`min-h-0 flex-1 ${walletPanel === 'settings' ? 'overflow-hidden pr-0 pt-3' : 'overflow-y-auto pt-4 pr-1'}`}>
                         {walletPanel === 'send' && (
-                          <div className="space-y-4 pt-5">
+                          <div className="space-y-4">
                             <div className="space-y-4">
                               <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
                                 <div className="flex items-center justify-between mb-2">
@@ -1815,7 +1814,7 @@ export default function DashboardPage() {
                         )}
 
                         {walletPanel === 'history' && (
-                          <div className="pt-5">
+                          <div>
                             <div className="flex flex-wrap gap-2">
                               {(['all', 'send', 'receive', 'swap'] as DashboardHistoryFilter[]).map((filter) => (
                                 <button
@@ -2327,7 +2326,7 @@ export default function DashboardPage() {
                   <div className="absolute top-0 left-0 h-32 w-32 rounded-full bg-gradient-to-br from-cyan-500/8 to-transparent blur-2xl" />
 
                   <div className="relative flex min-h-0 flex-1 flex-col">
-                    <div className="mb-4 flex items-start justify-between gap-4">
+                    <div className="mb-4">
                       <div className="min-w-0">
                         <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-gray-500">AI Workspace</div>
                         <div className="mt-1 flex flex-wrap items-center gap-2">
@@ -2340,13 +2339,6 @@ export default function DashboardPage() {
                           Wallet copilot, transactions, invite flows, and settings now live in this stage.
                         </div>
                       </div>
-
-                      <button
-                        onClick={closeAiAssetSurface}
-                        className="rounded-full border border-white/10 bg-white/[0.05] px-3 py-2 text-xs font-semibold text-gray-300 transition-colors hover:bg-white/10 hover:text-white"
-                      >
-                        Back to assets
-                      </button>
                     </div>
 
                     <div className="min-h-0 flex-1 overflow-hidden rounded-[1.6rem] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.04),rgba(255,255,255,0.02))] p-1.5 shadow-[0_20px_70px_rgba(99,102,241,0.14)]">
