@@ -1272,7 +1272,10 @@ export default function DashboardPage() {
   const isAiStage = assetSurfaceMode === 'ai';
   const activeWalletPanelMeta = walletPanel !== 'overview' ? walletPanelMeta[walletPanel] : null;
   const formattedNinjaBalance = ninjaBalance.toFixed(2);
-  const walletStageClassName = 'h-[540px] md:h-[520px]';
+  const overviewStageClassName = 'h-[510px] md:h-[482px]';
+  const detailStageClassName = 'h-[540px] md:h-[520px]';
+  const walletStageClassName = isAiStage ? detailStageClassName : isWalletOverview ? overviewStageClassName : detailStageClassName;
+  const assetStageClassName = isAiStage ? detailStageClassName : overviewStageClassName;
   const dashboardTokenCards = [
     {
       symbol: 'INJ',
@@ -1547,7 +1550,7 @@ export default function DashboardPage() {
                         </div>
                       </div>
 
-                      <div className="pointer-events-none relative flex flex-1 items-center justify-center">
+                      <div className="pointer-events-none relative flex min-h-[56px] flex-[0.62] items-center justify-center">
                         <div className="absolute inset-x-12 top-1/2 h-40 -translate-y-1/2 rounded-full bg-[radial-gradient(circle_at_center,rgba(255,255,255,0.07),transparent_70%)] blur-3xl" />
                       </div>
                     </div>
@@ -2112,7 +2115,7 @@ export default function DashboardPage() {
                 </div>
 
                 {isWalletOverview && (
-                <div className="mt-auto grid grid-cols-4 gap-4 pt-5">
+                <div className="mt-auto grid grid-cols-4 gap-3 pt-4">
                   {/* Send Button */}
                   <button 
                     onClick={() => toggleWalletPanel('send')}
@@ -2221,7 +2224,7 @@ export default function DashboardPage() {
               </div>
             </div>
 
-            <div className={`relative ${walletStageClassName}`}>
+            <div className={`relative ${assetStageClassName}`}>
               <div
                 className={`absolute inset-0 transition-all duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] ${
                   isAiStage
@@ -2233,7 +2236,7 @@ export default function DashboardPage() {
               <div className="absolute bottom-0 left-0 w-32 h-32 bg-gradient-to-tr from-cyan-500/5 to-transparent rounded-full blur-2xl"></div>
               <div className="relative flex flex-1 flex-col">
         {/* Asset Tabs - Smooth Sliding Background */}
-        <div className="relative mb-6 p-1 bg-white/5 rounded-xl">
+        <div className="relative mb-4 p-1 bg-white/5 rounded-xl">
           {/* Sliding Background */}
           <div 
             className="absolute top-1 bottom-1 bg-white rounded-lg transition-all duration-300 ease-out shadow-lg"
