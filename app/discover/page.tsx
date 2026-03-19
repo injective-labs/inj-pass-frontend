@@ -238,6 +238,27 @@ export default function DiscoverPage() {
             </div>
           </div>
 
+          {!searchQuery && featuredDapps.length > 0 && (
+            <div className="flex flex-col gap-2">
+              <div className="px-1 text-[11px] font-bold uppercase tracking-[0.24em] text-gray-500">Featured</div>
+              <div className="flex gap-3 overflow-x-auto pb-1 scrollbar-hide">
+                {featuredDapps.map((dapp) => (
+                  <button
+                    key={dapp.id}
+                    onClick={() => handleDAppClick(dapp)}
+                    className="flex min-w-[106px] flex-col items-center justify-center gap-2 rounded-[1.4rem] border border-white/10 bg-white/[0.05] px-3 py-4 text-center transition-all hover:bg-white/10 hover:-translate-y-[1px]"
+                  >
+                    <div className="flex h-11 w-11 items-center justify-center overflow-hidden rounded-full bg-white p-2 shadow-lg">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={dapp.icon} alt={dapp.name} className="h-full w-full object-contain" />
+                    </div>
+                    <div className="w-full truncate text-xs font-bold text-white">{dapp.name}</div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
           {filteredDapps.length === 0 ? (
             <div className="flex min-h-0 flex-1 items-center justify-center px-6 text-center text-sm text-gray-400">
               Try adjusting your search or filters.
