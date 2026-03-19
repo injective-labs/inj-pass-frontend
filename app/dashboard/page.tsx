@@ -2566,19 +2566,7 @@ export default function DashboardPage() {
               <div className="absolute top-0 right-0 h-32 w-32 rounded-full bg-gradient-to-bl from-violet-500/5 to-transparent blur-2xl" />
 
               <div className="relative">
-                <div className="mb-5 flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-                  <div className="min-w-0">
-                    <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-gray-500">Workspace</div>
-                    <div className="mt-1 text-lg font-bold text-white">
-                      {workspaceTab === 'discover' ? 'Explore dApps' : 'Wallet copilots'}
-                    </div>
-                    <div className="mt-1 text-sm text-gray-400">
-                      {workspaceTab === 'discover'
-                        ? 'Browse Injective apps in a horizontal rail without leaving this workspace.'
-                        : 'Conversations, invite flows, and agent controls stay in this same dashboard stage.'}
-                    </div>
-                  </div>
-
+                <div className="mb-4 flex justify-end">
                   <div className="flex items-center gap-2 self-start rounded-full border border-white/10 bg-white/[0.03] p-1">
                     {([
                       { id: 'discover', label: 'Discover' },
