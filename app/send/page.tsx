@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect, useCallback, Suspense } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useState, useEffect, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import { useWallet } from '@/contexts/WalletContext';
 import { usePin } from '@/contexts/PinContext';
 import { estimateGas, sendTransaction } from '@/wallet/chain';
@@ -18,10 +18,9 @@ interface AddressBookEntry {
 
 function SendPageContent() {
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const isEmbedded = searchParams.get('embed') === '1';
   const { isUnlocked, privateKey, address, isCheckingSession } = useWallet();
   const { isPinLocked, autoLockMinutes } = usePin();
+  const [isEmbedded, setIsEmbedded] = useState(false);
   const [recipient, setRecipient] = useState('');
   const [amount, setAmount] = useState('');
   const [gasEstimate, setGasEstimate] = useState<GasEstimate | null>(null);
@@ -59,12 +58,15 @@ function SendPageContent() {
 
   // Check for address in URL params (from QR scanner)
   useEffect(() => {
-    const addressParam = searchParams.get('address');
+    const params = new URLSearchParams(window.location.search);
+    setIsEmbedded(params.get('embed') === '1');
+
+    const addressParam = params.get('address');
     if (addressParam) {
       console.log('[Send] Setting address from URL:', addressParam);
       setRecipient(addressParam);
     }
-  }, [searchParams]);
+  }, []);
 
   // Save address to address book
   const saveToAddressBook = () => {
@@ -955,13 +957,5 @@ function SendPageContent() {
 }
 
 export default function SendPage() {
-  return (
-    <Suspense fallback={
-      <div className="min-h-screen pb-24 md:pb-8 bg-black flex items-center justify-center">
-        <p className="text-white">Loading...</p>
-      </div>
-    }>
-      <SendPageContent />
-    </Suspense>
-  );
+  return <SendPageContent />;
 }

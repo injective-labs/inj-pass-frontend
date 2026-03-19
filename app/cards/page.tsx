@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { useWallet } from '@/contexts/WalletContext';
 import { QRCodeSVG } from 'qrcode.react';
 import { isNFCSupported, readNFCCard, writeNFCCard } from '@/services/nfc';
@@ -18,8 +18,10 @@ interface BonjourCard {
 
 export default function CardsPage() {
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const isEmbedded = searchParams.get('embed') === '1';
+  const [isEmbedded] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return new URLSearchParams(window.location.search).get('embed') === '1';
+  });
   const { address, isCheckingSession } = useWallet();
   const [copied, setCopied] = useState(false);
   const [flippedCard, setFlippedCard] = useState<string | null>(null);
