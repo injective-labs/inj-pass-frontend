@@ -1515,12 +1515,18 @@ export default function DashboardPage() {
                         </button>
                       </div>
 
-                      <div className={`min-h-0 flex-1 ${walletPanel === 'settings' ? 'overflow-hidden pr-0 pt-3' : 'overflow-y-auto pt-4 pr-1'}`}>
+                      <div className={`min-h-0 flex-1 ${
+                        walletPanel === 'settings'
+                          ? 'overflow-hidden pr-0 pt-3'
+                          : walletPanel === 'send'
+                            ? 'overflow-hidden pt-4'
+                            : 'overflow-y-auto pt-4 pr-1'
+                      }`}>
                         {walletPanel === 'send' && (
-                          <div className="space-y-4">
-                            <div className="space-y-4">
+                          <div className="grid h-full gap-4 md:grid-cols-[minmax(0,1.12fr)_280px]">
+                            <div className="flex min-h-0 flex-col gap-4">
                               <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
-                                <div className="flex items-center justify-between mb-2">
+                                <div className="mb-2 flex items-center justify-between">
                                   <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">Recipient</span>
                                   <button
                                     onClick={async () => {
@@ -1532,7 +1538,7 @@ export default function DashboardPage() {
                                         console.error('Failed to read clipboard:', error);
                                       }
                                     }}
-                                    className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-400 hover:text-white transition-colors"
+                                    className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-400 transition-colors hover:text-white"
                                   >
                                     Paste
                                   </button>
@@ -1548,67 +1554,73 @@ export default function DashboardPage() {
                                 />
                               </div>
 
-                              <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
-                                <div className="flex items-center justify-between mb-2">
+                              <div className="flex-1 rounded-2xl border border-white/10 bg-black/20 p-4">
+                                <div className="mb-3 flex items-center justify-between">
                                   <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">Amount</span>
                                   <button
                                     onClick={() => {
                                       setSendAmount(tokenBalances.INJ);
                                       setSendError('');
                                     }}
-                                    className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-400 hover:text-white transition-colors"
+                                    className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-400 transition-colors hover:text-white"
                                   >
                                     Max
                                   </button>
                                 </div>
-                                <div className="flex items-end gap-3">
-                                  <input
-                                    value={sendAmount}
-                                    onChange={(event) => {
-                                      setSendAmount(event.target.value);
-                                      setSendError('');
-                                    }}
-                                    inputMode="decimal"
-                                    placeholder="0.0000"
-                                    className="w-full bg-transparent text-2xl font-mono text-white placeholder:text-gray-600 outline-none"
-                                  />
-                                  <span className="pb-1 text-sm font-semibold text-gray-400">INJ</span>
-                                </div>
-                              </div>
+                                <div className="flex h-full flex-col justify-between">
+                                  <div className="flex items-end gap-3">
+                                    <input
+                                      value={sendAmount}
+                                      onChange={(event) => {
+                                        setSendAmount(event.target.value);
+                                        setSendError('');
+                                      }}
+                                      inputMode="decimal"
+                                      placeholder="0.0000"
+                                      className="w-full bg-transparent text-3xl font-mono text-white placeholder:text-gray-600 outline-none md:text-[2.35rem]"
+                                    />
+                                    <span className="pb-1.5 text-sm font-semibold text-gray-400">INJ</span>
+                                  </div>
 
-                              <div className="grid gap-3 sm:grid-cols-2">
-                                <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3">
-                                  <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">Estimated Gas</div>
-                                  <div className="mt-2 text-sm font-mono text-white">
-                                    {sendEstimating ? 'Estimating...' : sendGasEstimate ? `${Number(sendGasCost).toFixed(6)} INJ` : 'Awaiting input'}
+                                  <div className="grid gap-3 pt-4 sm:grid-cols-2">
+                                    <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3">
+                                      <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">Estimated Gas</div>
+                                      <div className="mt-2 text-sm font-mono text-white">
+                                        {sendEstimating ? 'Estimating...' : sendGasEstimate ? `${Number(sendGasCost).toFixed(6)} INJ` : 'Awaiting input'}
+                                      </div>
+                                    </div>
+                                    <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3">
+                                      <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">Available</div>
+                                      <div className="mt-2 text-sm font-mono text-white">{tokenBalances.INJ} INJ</div>
+                                    </div>
                                   </div>
                                 </div>
-                                <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3">
-                                  <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">Available</div>
-                                  <div className="mt-2 text-sm font-mono text-white">{tokenBalances.INJ} INJ</div>
-                                </div>
                               </div>
 
-                              {sendError && (
-                                <div className="rounded-2xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-300">
-                                  {sendError}
-                                </div>
-                              )}
-
-                              {sendTxHash && (
-                                <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-3">
-                                  <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-200">Latest Transfer</div>
-                                  <div className="mt-2 text-sm font-mono text-white">{truncateMiddle(sendTxHash, 10, 8)}</div>
-                                </div>
-                              )}
+                              <div className="min-h-[56px]">
+                                {sendError ? (
+                                  <div className="rounded-2xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-300">
+                                    {sendError}
+                                  </div>
+                                ) : sendTxHash ? (
+                                  <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-3">
+                                    <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-200">Latest Transfer</div>
+                                    <div className="mt-2 text-sm font-mono text-white">{truncateMiddle(sendTxHash, 10, 8)}</div>
+                                  </div>
+                                ) : (
+                                  <div className="rounded-2xl border border-white/8 bg-white/[0.03] px-4 py-3 text-sm text-gray-500">
+                                    Review the destination and amount, then confirm the transfer from this card.
+                                  </div>
+                                )}
+                              </div>
                             </div>
 
-                            <div className="rounded-2xl border border-white/10 bg-black/25 p-4 flex flex-col">
+                            <div className="flex min-h-0 flex-col rounded-2xl border border-white/10 bg-black/25 p-4">
                               <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">Summary</div>
                               <div className="mt-4 space-y-3">
                                 <div className="flex items-center justify-between gap-3 text-sm">
                                   <span className="text-gray-400">To</span>
-                                  <span className="font-mono text-white text-right">{sendRecipient ? truncateMiddle(sendRecipient, 8, 6) : 'Not set'}</span>
+                                  <span className="font-mono text-right text-white">{sendRecipient ? truncateMiddle(sendRecipient, 8, 6) : 'Not set'}</span>
                                 </div>
                                 <div className="flex items-center justify-between gap-3 text-sm">
                                   <span className="text-gray-400">Amount</span>
@@ -1620,11 +1632,20 @@ export default function DashboardPage() {
                                 </div>
                               </div>
 
-                              <div className="mt-auto pt-5">
+                              <div className="mt-5 rounded-2xl border border-white/8 bg-white/[0.03] px-4 py-3">
+                                <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">Flow</div>
+                                <div className="mt-3 space-y-2 text-sm text-gray-300">
+                                  <p>1. Enter the recipient address.</p>
+                                  <p>2. Set the amount you want to transfer.</p>
+                                  <p>3. Confirm the transaction after review.</p>
+                                </div>
+                              </div>
+
+                              <div className="mt-auto pt-4">
                                 <button
                                   onClick={handleSendAction}
                                   disabled={sendSubmitting || !sendRecipient || !sendAmount}
-                                  className="w-full rounded-2xl bg-white text-black font-bold py-3.5 hover:bg-gray-100 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                                  className="w-full rounded-2xl bg-white py-3.5 font-bold text-black transition-all hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-40"
                                 >
                                   {sendSubmitting ? 'Sending...' : 'Send INJ'}
                                 </button>
