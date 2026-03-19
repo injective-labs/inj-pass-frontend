@@ -1274,8 +1274,9 @@ export default function DashboardPage() {
   const formattedNinjaBalance = ninjaBalance.toFixed(2);
   const overviewStageClassName = 'h-[510px] md:h-[482px]';
   const detailStageClassName = 'h-[540px] md:h-[520px]';
-  const walletStageClassName = isAiStage ? detailStageClassName : isWalletOverview ? overviewStageClassName : detailStageClassName;
-  const assetStageClassName = isAiStage ? detailStageClassName : overviewStageClassName;
+  const aiStageClassName = overviewStageClassName;
+  const walletStageClassName = isAiStage ? aiStageClassName : isWalletOverview ? overviewStageClassName : detailStageClassName;
+  const assetStageClassName = isAiStage ? aiStageClassName : overviewStageClassName;
   const dashboardTokenCards = [
     {
       symbol: 'INJ',
