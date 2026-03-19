@@ -32,6 +32,7 @@ type DashboardTransactionType = 'send' | 'receive' | 'swap';
 type DashboardTransactionStatus = 'completed' | 'pending' | 'failed';
 type DashboardHistoryFilter = 'all' | DashboardTransactionType;
 type DashboardChainType = 'EVM' | 'Cosmos';
+type SwapToken = 'INJ' | 'USDT' | 'USDC' | 'NINJA';
 
 const NINJA_STORAGE_PREFIX = 'inj-pass:ninja-miner:';
 const DEFAULT_NINJA_BALANCE = 22;
@@ -404,8 +405,8 @@ export default function DashboardPage() {
   const [sendSubmitting, setSendSubmitting] = useState(false);
   const [sendError, setSendError] = useState('');
   const [sendTxHash, setSendTxHash] = useState('');
-  const [swapFromToken, setSwapFromToken] = useState<'INJ' | 'USDT' | 'USDC'>('INJ');
-  const [swapToToken, setSwapToToken] = useState<'INJ' | 'USDT' | 'USDC'>('USDT');
+  const [swapFromToken, setSwapFromToken] = useState<SwapToken>('INJ');
+  const [swapToToken, setSwapToToken] = useState<SwapToken>('USDT');
   const [swapAmount, setSwapAmount] = useState('');
   const [swapQuoteAmount, setSwapQuoteAmount] = useState('');
   const [swapSlippage, setSwapSlippage] = useState('0.5');
@@ -598,12 +599,16 @@ export default function DashboardPage() {
   const sendGasCost = sendGasEstimate ? formatEther(sendGasEstimate.totalCost) : '';
   const sendBalanceValue = parseFloat(tokenBalances.INJ || '0');
   const swapTokenOptions = [
-    { symbol: 'INJ' as const, name: 'Injective', icon: '/injswap.png', balance: tokenBalances.INJ },
-    { symbol: 'USDT' as const, name: 'Tether', icon: '/USDT_Logo.png', balance: tokenBalances.USDT },
-    { symbol: 'USDC' as const, name: 'USD Coin', icon: '/USDC_Logo.png', balance: tokenBalances.USDC },
+    { symbol: 'INJ' as const, name: 'Injective', icon: '/injswap.png', balance: tokenBalances.INJ, enabled: true },
+    { symbol: 'USDT' as const, name: 'Tether', icon: '/USDT_Logo.png', balance: tokenBalances.USDT, enabled: true },
+    { symbol: 'USDC' as const, name: 'USD Coin', icon: '/USDC_Logo.png', balance: tokenBalances.USDC, enabled: true },
+    { symbol: 'NINJA' as const, name: 'Ninja', icon: '/NIJIA.png', balance: ninjaBalance.toFixed(2), enabled: false },
   ];
   const swapFromMeta = swapTokenOptions.find((token) => token.symbol === swapFromToken) || swapTokenOptions[0];
   const swapToMeta = swapTokenOptions.find((token) => token.symbol === swapToToken) || swapTokenOptions[1];
+  const getAlternateSwapToken = (current: SwapToken) => (
+    swapTokenOptions.find((token) => token.symbol !== current)?.symbol || 'INJ'
+  );
   const filteredHistoryItems = historyFilter === 'all'
     ? historyItems
     : historyItems.filter((item) => item.type === historyFilter);
@@ -775,6 +780,11 @@ export default function DashboardPage() {
       return;
     }
 
+    if (!swapFromMeta.enabled || !swapToMeta.enabled) {
+      setSwapError('NINJA swap is coming soon.');
+      return;
+    }
+
     if (!Number.isFinite(numericAmount) || numericAmount <= 0) {
       setSwapError('Enter a valid amount to swap.');
       return;
@@ -812,7 +822,7 @@ export default function DashboardPage() {
     } finally {
       setSwapSubmitting(false);
     }
-  }, [address, loadData, loadHistory, privateKey, resetTxAuth, swapAmount, swapFromMeta.balance, swapFromToken, swapSlippage, swapToToken]);
+  }, [address, loadData, loadHistory, privateKey, resetTxAuth, swapAmount, swapFromMeta.balance, swapFromMeta.enabled, swapFromToken, swapSlippage, swapToMeta.enabled, swapToToken]);
 
   const handleSendAction = () => {
     if (isPinLocked || autoLockMinutes === 0 || !privateKey) {
@@ -914,6 +924,13 @@ export default function DashboardPage() {
       return;
     }
 
+    if (!swapFromMeta.enabled || !swapToMeta.enabled) {
+      setSwapQuoteAmount('');
+      setSwapQuoteLoading(false);
+      setSwapPriceImpact('0.00');
+      return;
+    }
+
     let ignore = false;
     const timer = window.setTimeout(async () => {
       try {
@@ -945,7 +962,7 @@ export default function DashboardPage() {
       ignore = true;
       window.clearTimeout(timer);
     };
-  }, [swapAmount, swapFromToken, swapSlippage, swapToToken, walletPanel]);
+  }, [swapAmount, swapFromMeta.enabled, swapFromToken, swapSlippage, swapToMeta.enabled, swapToToken, walletPanel]);
 
   const assetTabOrder: AssetTab[] = ['tokens', 'nfts', 'defi', 'earn'];
   const assetTabIndex = assetTabOrder.indexOf(assetTab);
@@ -1462,55 +1479,83 @@ export default function DashboardPage() {
                         {walletPanel === 'swap' && (
                           <div className="grid gap-4 pt-5 lg:grid-cols-[minmax(0,1.15fr)_minmax(260px,0.85fr)]">
                             <div className="space-y-4">
-                              <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
-                                <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">From</div>
-                                <div className="mt-3 grid grid-cols-3 gap-2">
-                                  {swapTokenOptions.map((token) => (
-                                    <button
-                                      key={`from-${token.symbol}`}
-                                      onClick={() => {
-                                        setSwapFromToken(token.symbol);
-                                        if (token.symbol === swapToToken) {
-                                          setSwapToToken(token.symbol === 'INJ' ? 'USDT' : 'INJ');
+                              <div className="grid gap-4 sm:grid-cols-2">
+                                <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                                  <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">From</div>
+                                  <div className="mt-3 rounded-2xl border border-white/10 bg-white/5 px-3 py-3">
+                                    <select
+                                      value={swapFromToken}
+                                      onChange={(event) => {
+                                        const nextToken = event.target.value as SwapToken;
+                                        setSwapFromToken(nextToken);
+                                        if (nextToken === swapToToken) {
+                                          setSwapToToken(getAlternateSwapToken(nextToken));
                                         }
                                         setSwapError('');
                                       }}
-                                      className={`rounded-2xl border px-3 py-3 text-left transition-all ${
-                                        swapFromToken === token.symbol
-                                          ? 'border-white/20 bg-white text-black'
-                                          : 'border-white/10 bg-white/5 hover:bg-white/10'
-                                      }`}
+                                      className="w-full bg-transparent text-sm font-semibold text-white outline-none"
                                     >
-                                      <div className="font-bold text-sm">{token.symbol}</div>
-                                      <div className={`mt-1 text-xs ${swapFromToken === token.symbol ? 'text-black/70' : 'text-gray-400'}`}>{token.balance}</div>
-                                    </button>
-                                  ))}
+                                      {swapTokenOptions.map((token) => (
+                                        <option key={`from-${token.symbol}`} value={token.symbol} className="bg-[#0b0b0f] text-white">
+                                          {token.symbol} · {token.name}
+                                        </option>
+                                      ))}
+                                    </select>
+                                  </div>
+                                  <div className="mt-3 flex items-center justify-between rounded-2xl border border-white/5 bg-white/[0.03] px-3 py-2.5">
+                                    <div className="flex items-center gap-2.5">
+                                      <div className="relative h-9 w-9 overflow-hidden rounded-full border border-white/10 bg-white/5">
+                                        <Image src={swapFromMeta.icon} alt={swapFromMeta.symbol} fill className="object-cover" />
+                                      </div>
+                                      <div>
+                                        <div className="text-sm font-semibold text-white">{swapFromMeta.symbol}</div>
+                                        <div className="text-xs text-gray-400">{swapFromMeta.name}</div>
+                                      </div>
+                                    </div>
+                                    <div className="text-right">
+                                      <div className="text-sm font-mono text-white">{swapFromMeta.balance}</div>
+                                      <div className="text-[11px] text-gray-500">Available</div>
+                                    </div>
+                                  </div>
                                 </div>
-                              </div>
 
-                              <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
-                                <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">To</div>
-                                <div className="mt-3 grid grid-cols-3 gap-2">
-                                  {swapTokenOptions.map((token) => (
-                                    <button
-                                      key={`to-${token.symbol}`}
-                                      onClick={() => {
-                                        setSwapToToken(token.symbol);
-                                        if (token.symbol === swapFromToken) {
-                                          setSwapFromToken(token.symbol === 'INJ' ? 'USDT' : 'INJ');
+                                <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                                  <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">To</div>
+                                  <div className="mt-3 rounded-2xl border border-white/10 bg-white/5 px-3 py-3">
+                                    <select
+                                      value={swapToToken}
+                                      onChange={(event) => {
+                                        const nextToken = event.target.value as SwapToken;
+                                        setSwapToToken(nextToken);
+                                        if (nextToken === swapFromToken) {
+                                          setSwapFromToken(getAlternateSwapToken(nextToken));
                                         }
                                         setSwapError('');
                                       }}
-                                      className={`rounded-2xl border px-3 py-3 text-left transition-all ${
-                                        swapToToken === token.symbol
-                                          ? 'border-white/20 bg-white text-black'
-                                          : 'border-white/10 bg-white/5 hover:bg-white/10'
-                                      }`}
+                                      className="w-full bg-transparent text-sm font-semibold text-white outline-none"
                                     >
-                                      <div className="font-bold text-sm">{token.symbol}</div>
-                                      <div className={`mt-1 text-xs ${swapToToken === token.symbol ? 'text-black/70' : 'text-gray-400'}`}>{token.balance}</div>
-                                    </button>
-                                  ))}
+                                      {swapTokenOptions.map((token) => (
+                                        <option key={`to-${token.symbol}`} value={token.symbol} className="bg-[#0b0b0f] text-white">
+                                          {token.symbol} · {token.name}
+                                        </option>
+                                      ))}
+                                    </select>
+                                  </div>
+                                  <div className="mt-3 flex items-center justify-between rounded-2xl border border-white/5 bg-white/[0.03] px-3 py-2.5">
+                                    <div className="flex items-center gap-2.5">
+                                      <div className="relative h-9 w-9 overflow-hidden rounded-full border border-white/10 bg-white/5">
+                                        <Image src={swapToMeta.icon} alt={swapToMeta.symbol} fill className="object-cover" />
+                                      </div>
+                                      <div>
+                                        <div className="text-sm font-semibold text-white">{swapToMeta.symbol}</div>
+                                        <div className="text-xs text-gray-400">{swapToMeta.name}</div>
+                                      </div>
+                                    </div>
+                                    <div className="text-right">
+                                      <div className="text-sm font-mono text-white">{swapToMeta.balance}</div>
+                                      <div className="text-[11px] text-gray-500">Wallet</div>
+                                    </div>
+                                  </div>
                                 </div>
                               </div>
 
@@ -1582,7 +1627,13 @@ export default function DashboardPage() {
                                 <div className="flex items-center justify-between gap-3 text-sm">
                                   <span className="text-gray-400">Expected Out</span>
                                   <span className="font-mono text-white">
-                                    {swapQuoteLoading ? 'Quoting...' : swapQuoteAmount ? `${Number(swapQuoteAmount).toFixed(4)} ${swapToToken}` : 'Awaiting input'}
+                                    {!swapFromMeta.enabled || !swapToMeta.enabled
+                                      ? 'Coming soon'
+                                      : swapQuoteLoading
+                                        ? 'Quoting...'
+                                        : swapQuoteAmount
+                                          ? `${Number(swapQuoteAmount).toFixed(4)} ${swapToToken}`
+                                          : 'Awaiting input'}
                                   </span>
                                 </div>
                                 <div className="flex items-center justify-between gap-3 text-sm">
@@ -1598,10 +1649,10 @@ export default function DashboardPage() {
                               <div className="mt-auto pt-5">
                                 <button
                                   onClick={handleSwapAction}
-                                  disabled={swapSubmitting || !swapAmount || swapFromToken === swapToToken}
+                                  disabled={swapSubmitting || !swapAmount || swapFromToken === swapToToken || !swapFromMeta.enabled || !swapToMeta.enabled}
                                   className="w-full rounded-2xl bg-white text-black font-bold py-3.5 hover:bg-gray-100 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
                                 >
-                                  {swapSubmitting ? 'Swapping...' : `Swap to ${swapToMeta.symbol}`}
+                                  {swapSubmitting ? 'Swapping...' : !swapFromMeta.enabled || !swapToMeta.enabled ? 'NINJA Swap Coming Soon' : `Swap to ${swapToMeta.symbol}`}
                                 </button>
                               </div>
                             </div>
