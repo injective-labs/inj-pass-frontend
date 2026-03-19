@@ -294,8 +294,10 @@ export default function AgentsPage() {
   const inviteLink = `https://injpass.com/welcome?invite=${inviteCode}`;
   const totalInviteCredits = INVITED_FRIENDS.reduce((sum, friend) => sum + friend.credits, 0);
   const isLight = theme === 'light';
+  const isCompactStage = isCompactEmbedded && isEmbedded;
+  const activeModelLabel = MODEL_OPTIONS.find((option) => option.value === model)?.label ?? model;
   const rootShellClass = `overflow-hidden ${isLight ? 'text-slate-900' : 'text-white'} ${
-    isCompactEmbedded && isEmbedded
+    isCompactStage
       ? isLight
         ? 'relative h-full min-h-0 bg-[radial-gradient(circle_at_top,rgba(56,189,248,0.08),transparent_34%),linear-gradient(180deg,#f8fbff,#eef4ff)] p-3'
         : 'relative h-full min-h-0 bg-[radial-gradient(circle_at_top,rgba(76,58,249,0.08),transparent_34%),linear-gradient(180deg,#040811,#060b14)] p-3'
@@ -983,7 +985,7 @@ export default function AgentsPage() {
     <div className={rootShellClass}>
 
       {/* Sidebar overlay (mobile) */}
-      {sidebarOpen && (!isEmbedded || isCompactEmbedded) && (
+      {sidebarOpen && !isCompactStage && (!isEmbedded || isCompactEmbedded) && (
         <div
           className={`${isCompactEmbedded ? 'absolute' : 'fixed'} inset-0 bg-black/60 z-20 md:hidden`}
           onClick={() => setSidebarOpen(false)}
@@ -991,6 +993,7 @@ export default function AgentsPage() {
       )}
 
       {/* Sidebar */}
+      {!isCompactStage && (
       <aside className={sidebarShellClass}>
         <div className={`${isEmbedded ? 'p-5' : 'p-4'} border-b ${isLight ? 'border-slate-200/80' : 'border-white/10'}`}>
           <div className="flex items-start justify-between gap-3">
@@ -1135,20 +1138,23 @@ export default function AgentsPage() {
           </div>
         </div>
       </aside>
+      )}
 
       {/* Main chat area */}
       <div className={mainShellClass}>
 
         {/* Top bar */}
         <header className={headerShellClass}>
-          <button
-            onClick={() => setSidebarOpen(true)}
-            className={`p-2 rounded-lg hover:bg-white/10 transition-colors ${isCompactEmbedded ? '' : 'md:hidden'}`}
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-            </svg>
-          </button>
+          {!isCompactStage && (
+            <button
+              onClick={() => setSidebarOpen(true)}
+              className={`p-2 rounded-lg hover:bg-white/10 transition-colors ${isCompactEmbedded ? '' : 'md:hidden'}`}
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+              </svg>
+            </button>
+          )}
           {!isEmbedded && (
             <button onClick={() => navigateApp('/dashboard')} className="p-2 rounded-lg hover:bg-white/10 transition-colors">
               <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1161,14 +1167,25 @@ export default function AgentsPage() {
               <div className="min-w-0 flex-1">
                 <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-gray-500">Agent Workspace</div>
                 <div className="mt-1 flex flex-wrap items-center gap-2">
-                  <span className="font-semibold text-sm text-white">{activeConv?.title ?? 'New chat'}</span>
-                  <span className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[11px] text-gray-400">
-                    {MODEL_OPTIONS.find((option) => option.value === model)?.label ?? model}
+                  <span className={`font-semibold text-sm ${isLight ? 'text-slate-900' : 'text-white'}`}>{activeConv?.title ?? 'New chat'}</span>
+                  <span className={`rounded-full border px-2.5 py-1 text-[11px] ${
+                    isLight
+                      ? 'border-slate-200/80 bg-slate-900/[0.03] text-slate-500'
+                      : 'border-white/10 bg-white/[0.04] text-gray-400'
+                  }`}>
+                    {activeModelLabel}
                   </span>
                 </div>
               </div>
-              <button onClick={newConversation} className="p-2 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 transition-colors">
-                <svg className="w-5 h-5 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <button
+                onClick={newConversation}
+                className={`p-2 rounded-xl border transition-colors ${
+                  isLight
+                    ? 'border-slate-200/80 bg-slate-900/[0.03] hover:bg-slate-900/[0.06]'
+                    : 'border-white/10 bg-white/5 hover:bg-white/10'
+                }`}
+              >
+                <svg className={`w-5 h-5 ${isLight ? 'text-slate-600' : 'text-gray-300'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
                 </svg>
               </button>
@@ -1188,9 +1205,86 @@ export default function AgentsPage() {
         </header>
 
         {/* Messages */}
-          <div className={`flex-1 overflow-y-auto ${isEmbedded ? (isLight ? 'bg-[radial-gradient(circle_at_top,rgba(56,189,248,0.05),transparent_36%)]' : 'bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.04),transparent_36%)]') : ''}`}>
+          <div className={`flex-1 ${isCompactStage ? 'overflow-y-auto scrollbar-hide' : 'overflow-y-auto'} ${isEmbedded ? (isLight ? 'bg-[radial-gradient(circle_at_top,rgba(56,189,248,0.05),transparent_36%)]' : 'bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.04),transparent_36%)]') : ''}`}>
           {messages.length === 0 ? (
-            isEmbedded ? (
+            isCompactStage ? (
+              <div className="h-full p-4">
+                <div className="grid h-full min-h-0 gap-3 xl:grid-cols-[minmax(0,1.04fr)_276px]">
+                  <section className={`min-h-0 rounded-[1.6rem] border p-5 flex flex-col ${isLight ? 'border-slate-200/80 bg-white/80 shadow-[0_18px_50px_rgba(148,163,184,0.14)]' : 'border-white/10 bg-white/[0.03]'}`}>
+                    <div className={`inline-flex w-fit items-center rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] ${
+                      isLight
+                        ? 'border-slate-200/80 bg-slate-900/[0.03] text-slate-500'
+                        : 'border-white/10 bg-white/[0.04] text-gray-400'
+                    }`}>
+                      No conversations yet
+                    </div>
+
+                    <div className={`mt-4 flex h-14 w-14 items-center justify-center rounded-2xl ${isLight ? 'border border-slate-200/80 bg-slate-900/[0.03]' : 'border border-white/10 bg-white/5'}`}>
+                      <svg className="w-7 h-7 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17H3a2 2 0 01-2-2V5a2 2 0 012-2h14a2 2 0 012 2v10a2 2 0 01-2 2h-2" />
+                      </svg>
+                    </div>
+
+                    <h2 className={`mt-4 text-[28px] font-bold tracking-tight ${isLight ? 'text-slate-900' : 'text-white'}`}>
+                      <span className="lambda-gradient">λ</span> Agent
+                    </h2>
+                    <p className={`mt-2 max-w-xl text-sm leading-6 ${isLight ? 'text-slate-500' : 'text-gray-400'}`}>
+                      AI-powered wallet assistant. Ask it to check balances, swap tokens, send INJ, or explain anything on Injective without leaving this dashboard stage.
+                    </p>
+
+                    <div className="mt-5 grid gap-2.5 sm:grid-cols-2">
+                      {[
+                        'What is my wallet address?',
+                        'Show my balances',
+                        'Swap all INJ to USDT',
+                        'Show my recent transactions',
+                      ].map((s) => (
+                        <button
+                          key={s}
+                          onClick={() => { setInput(s); textareaRef.current?.focus(); }}
+                          className={`text-left rounded-[1.2rem] border px-4 py-3 text-sm transition-colors ${
+                            isLight
+                              ? 'border-slate-200/80 bg-slate-900/[0.03] text-slate-600 hover:bg-slate-900/[0.05]'
+                              : 'border-white/10 bg-white/5 text-gray-300 hover:bg-white/10'
+                          }`}
+                        >
+                          {s}
+                        </button>
+                      ))}
+                    </div>
+
+                    <div className={`mt-auto pt-5 text-xs ${isLight ? 'text-slate-400' : 'text-gray-500'}`}>
+                      AI can make mistakes. Always verify transactions before confirming.
+                    </div>
+                  </section>
+
+                  <aside className="grid min-h-0 content-start gap-3">
+                    <div className={`rounded-[1.5rem] border p-4 ${isLight ? 'border-slate-200/80 bg-white/80 shadow-[0_18px_50px_rgba(148,163,184,0.14)]' : 'border-white/10 bg-white/[0.03]'}`}>
+                      <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-gray-500">Session</div>
+                      <div className={`mt-2 text-sm font-semibold ${isLight ? 'text-slate-900' : 'text-white'}`}>{address?.slice(0, 8)}...{address?.slice(-6)}</div>
+                      <div className={`mt-1 text-xs ${isLight ? 'text-slate-500' : 'text-gray-400'}`}>Injective Mainnet</div>
+                    </div>
+
+                    <div className={`rounded-[1.5rem] border p-4 ${isLight ? 'border-slate-200/80 bg-white/80 shadow-[0_18px_50px_rgba(148,163,184,0.14)]' : 'border-white/10 bg-white/[0.03]'}`}>
+                      <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-gray-500">Suggested Flow</div>
+                      <div className={`mt-3 space-y-2 text-sm ${isLight ? 'text-slate-600' : 'text-gray-300'}`}>
+                        <p>1. Start a new chat.</p>
+                        <p>2. Ask the agent to inspect or simulate a wallet action.</p>
+                        <p>3. Review the transaction before confirming.</p>
+                      </div>
+                    </div>
+
+                    <button
+                      onClick={() => { setShowInviteManager(true); setSidebarOpen(false); }}
+                      className="rounded-[1.5rem] border border-[#6e5dff]/25 bg-gradient-to-br from-[#4c3af9]/18 via-white/[0.04] to-transparent px-4 py-4 text-left transition-all hover:border-[#8b7bff]/40 hover:bg-[#4c3af9]/20"
+                    >
+                      <div className={`text-sm font-semibold ${isLight ? 'text-slate-900' : 'text-white'}`}>Share INJ Pass with Friends</div>
+                      <div className={`mt-1 text-xs ${isLight ? 'text-slate-500' : 'text-blue-200/80'}`}>Open the referral panel and track reward activations.</div>
+                    </button>
+                  </aside>
+                </div>
+              </div>
+            ) : isEmbedded ? (
               <div className="h-full p-5 md:p-6">
                 <div className="grid h-full min-h-[420px] gap-4 xl:grid-cols-[minmax(0,1.12fr)_340px]">
                   <section className={`rounded-[1.75rem] border p-6 md:p-7 flex flex-col ${isLight ? 'border-slate-200/80 bg-white/78 shadow-[0_18px_50px_rgba(148,163,184,0.14)]' : 'border-white/10 bg-white/[0.03]'}`}>
@@ -1281,8 +1375,8 @@ export default function AgentsPage() {
                 </div>
               </div>
             )
-          ) : (
-            <div className={`${isEmbedded ? 'max-w-4xl' : 'max-w-3xl'} mx-auto px-4 py-6 space-y-6`}>
+            ) : (
+            <div className={`${isCompactStage ? 'max-w-none' : isEmbedded ? 'max-w-4xl' : 'max-w-3xl'} mx-auto px-4 py-6 space-y-6`}>
               {messages.filter((msg) => msg.role !== 'tool').map((msg) => (
                 <div key={msg.id} className={`flex gap-3 ${msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
                   <div className={`w-8 h-8 rounded-full flex-shrink-0 flex items-center justify-center text-sm font-bold ${
@@ -1764,8 +1858,8 @@ export default function AgentsPage() {
         )}
 
         {/* Input area */}
-        <div className={`flex-shrink-0 border-t ${isLight ? 'border-slate-200/80' : 'border-white/10'} ${isEmbedded ? (isLight ? 'bg-white/70 p-5' : 'bg-white/[0.02] p-5') : (isLight ? 'bg-white/72 backdrop-blur-xl p-4' : 'bg-black/80 backdrop-blur-sm p-4')}`}>
-          <div className={`${isEmbedded ? 'max-w-4xl' : 'max-w-3xl'} mx-auto`}>
+        <div className={`flex-shrink-0 border-t ${isLight ? 'border-slate-200/80' : 'border-white/10'} ${isCompactStage ? (isLight ? 'bg-white/70 p-4' : 'bg-white/[0.02] p-4') : isEmbedded ? (isLight ? 'bg-white/70 p-5' : 'bg-white/[0.02] p-5') : (isLight ? 'bg-white/72 backdrop-blur-xl p-4' : 'bg-black/80 backdrop-blur-sm p-4')}`}>
+          <div className={`${isCompactStage ? 'max-w-none' : isEmbedded ? 'max-w-4xl' : 'max-w-3xl'} mx-auto`}>
 
             {/* Sandbox / takeover address badge — click to flip card */}
             {activeConv?.sandboxAddress && (

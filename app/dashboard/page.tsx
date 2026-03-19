@@ -2396,34 +2396,14 @@ export default function DashboardPage() {
                     : 'pointer-events-none translate-x-10 scale-[0.98] opacity-0'
                 }`}
               >
-                <div className="bg-black rounded-2xl border border-white/10 relative overflow-hidden p-4 sm:p-5 h-full flex flex-col">
+                <div className="bg-black rounded-2xl border border-white/10 relative overflow-hidden h-full">
                   <div className="absolute bottom-0 right-0 h-32 w-32 rounded-full bg-gradient-to-tl from-fuchsia-500/10 to-transparent blur-2xl" />
                   <div className="absolute top-0 left-0 h-32 w-32 rounded-full bg-gradient-to-br from-cyan-500/8 to-transparent blur-2xl" />
-
-                  <div className="relative flex min-h-0 flex-1 flex-col">
-                    <div className="mb-4">
-                      <div className="min-w-0">
-                        <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-gray-500">AI Workspace</div>
-                        <div className="mt-1 flex flex-wrap items-center gap-2">
-                          <span className="text-lg font-bold text-white">Lambda Agent</span>
-                          <span className="rounded-full border border-fuchsia-400/20 bg-fuchsia-500/10 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-fuchsia-200">
-                            Embedded
-                          </span>
-                        </div>
-                        <div className="mt-1 max-w-md text-sm text-gray-400">
-                          Wallet copilot, transactions, invite flows, and settings now live in this stage.
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="min-h-0 flex-1 overflow-hidden rounded-[1.6rem] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.04),rgba(255,255,255,0.02))] p-1.5 shadow-[0_20px_70px_rgba(99,102,241,0.14)]">
-                      <div className="h-full overflow-hidden rounded-[1.4rem] bg-black">
-                        <DashboardSurfaceFrame
-                          src="/agents?embed=1&compact=1"
-                          title="Embedded asset agent"
-                        />
-                      </div>
-                    </div>
+                  <div className="relative h-full overflow-hidden">
+                    <DashboardSurfaceFrame
+                      src="/agents?embed=1&compact=1"
+                      title="Embedded asset agent"
+                    />
                   </div>
                 </div>
               </div>
