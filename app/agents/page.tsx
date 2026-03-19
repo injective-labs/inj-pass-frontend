@@ -1850,7 +1850,7 @@ export default function AgentsPage() {
         <div className={`flex-shrink-0 border-t ${isLight ? 'border-slate-200/80' : 'border-white/10'} ${isCompactStage ? 'bg-transparent px-3 pt-2.5 pb-1.5' : isEmbedded ? (isLight ? 'bg-white/70 p-5' : 'bg-white/[0.02] p-5') : (isLight ? 'bg-white/72 backdrop-blur-xl p-4' : 'bg-black/80 backdrop-blur-sm p-4')}`}>
           <div className={`${isCompactStage ? 'max-w-none' : isEmbedded ? 'max-w-4xl' : 'max-w-3xl'} mx-auto`}>
             {isCompactStage && (
-              <div className="mb-2.5 flex flex-wrap items-center justify-center gap-1.5">
+              <div className="mb-2.5 flex flex-wrap items-center justify-start gap-1.5">
                 <div className={`rounded-full border px-2.5 py-1 text-[10px] font-medium ${
                   isLight
                     ? 'border-slate-200/80 bg-white/70 text-slate-500'
