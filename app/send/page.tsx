@@ -347,7 +347,7 @@ function SendPageContent() {
   };
 
   if (isCheckingSession) {
-    return <LoadingSpinner />;
+    return <LoadingSpinner progress={44} statusLabel="Checking wallet session" />;
   }
 
   if (!isUnlocked) {

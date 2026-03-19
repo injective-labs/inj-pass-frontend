@@ -1253,6 +1253,14 @@ export default function DashboardPage() {
   };
 
   const isDashboardReady = !isCheckingSession && !loading && isUnlocked && !!address;
+  const dashboardLoadProgress = isCheckingSession ? 32 : !isUnlocked || !address ? 58 : loading ? 82 : 100;
+  const dashboardLoadStatus = isCheckingSession
+    ? 'Checking wallet session'
+    : !isUnlocked || !address
+      ? 'Restoring wallet identity'
+      : loading
+        ? 'Loading wallet surface'
+        : 'Wallet surface ready';
   const formattedBalance = balance ? parseFloat(balance.formatted).toFixed(4) : '0.0000';
   const injUsdValue = balance ? (parseFloat(balance.formatted) * injPrice) : 0;
   const usdtValue = parseFloat(tokenBalances.USDT);
@@ -1309,7 +1317,7 @@ export default function DashboardPage() {
   ] as const;
 
   return (
-    <LoadingSpinner ready={isDashboardReady}>
+    <LoadingSpinner ready={isDashboardReady} progress={dashboardLoadProgress} statusLabel={dashboardLoadStatus}>
       {isDashboardReady ? (
         <>
         <div className="min-h-screen bg-black">

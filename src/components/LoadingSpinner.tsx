@@ -3,11 +3,8 @@
 import type { ReactNode } from 'react';
 import { useEffect, useMemo, useState } from 'react';
 import { usePathname } from 'next/navigation';
+import Image from 'next/image';
 
-/**
- * Reusable loading spinner component
- * Used for page transitions and loading states
- */
 function getDestinationLabel(pathname: string | null) {
   if (!pathname || pathname === '/') return 'INJ Pass';
 
@@ -38,60 +35,125 @@ function getDestinationLabel(pathname: string | null) {
     .join(' ');
 }
 
+function getDefaultStatus(pathname: string | null) {
+  if (!pathname || pathname === '/') return 'Checking local session';
+
+  const statusMap: Record<string, string> = {
+    '/dashboard': 'Loading wallet surface',
+    '/discover': 'Loading discovery workspace',
+    '/settings': 'Loading wallet settings',
+    '/agents': 'Loading agent workspace',
+    '/history': 'Loading recent activity',
+    '/send': 'Loading send surface',
+    '/receive': 'Loading receive surface',
+    '/swap': 'Loading swap surface',
+    '/cards': 'Loading card center',
+    '/welcome': 'Preparing INJ Pass',
+    '/unlock': 'Loading wallet relay',
+  };
+
+  return statusMap[pathname] ?? `Loading ${getDestinationLabel(pathname)}`;
+}
+
+function clampProgress(value: number) {
+  return Math.max(0, Math.min(100, value));
+}
+
 interface LoadingSpinnerProps {
   ready?: boolean;
   children?: ReactNode;
+  progress?: number;
+  statusLabel?: string;
 }
 
-export default function LoadingSpinner({ ready = false, children }: LoadingSpinnerProps) {
+export default function LoadingSpinner({ ready = false, children, progress, statusLabel }: LoadingSpinnerProps) {
   const pathname = usePathname();
   const destinationLabel = useMemo(() => getDestinationLabel(pathname), [pathname]);
+  const resolvedStatusLabel = useMemo(() => statusLabel ?? getDefaultStatus(pathname), [pathname, statusLabel]);
+  const isWrapped = children !== undefined;
+  const targetProgress = clampProgress(progress ?? (ready ? 100 : isWrapped ? 84 : 68));
+
   const [overlayVisible, setOverlayVisible] = useState(true);
   const [isLeaving, setIsLeaving] = useState(false);
-  const isWrapped = children !== undefined;
+  const [displayProgress, setDisplayProgress] = useState(0);
 
   useEffect(() => {
-    if (!isWrapped || !ready) {
+    const interval = window.setInterval(() => {
+      setDisplayProgress((current) => {
+        if (Math.abs(current - targetProgress) < 0.2) {
+          return targetProgress;
+        }
+
+        if (current < targetProgress) {
+          const delta = targetProgress - current;
+          const step = targetProgress >= 100 ? Math.max(delta * 0.22, 1.6) : Math.max(delta * 0.1, 0.32);
+          return Math.min(targetProgress, current + step);
+        }
+
+        return targetProgress;
+      });
+    }, 16);
+
+    return () => {
+      window.clearInterval(interval);
+    };
+  }, [targetProgress]);
+
+  useEffect(() => {
+    if (!isWrapped || !ready || displayProgress < 99.8) {
       return;
     }
 
     const startExit = window.setTimeout(() => {
       setIsLeaving(true);
-    }, 0);
-    const timeout = window.setTimeout(() => {
+    }, 120);
+
+    const endExit = window.setTimeout(() => {
       setOverlayVisible(false);
-    }, 320);
+    }, 420);
 
     return () => {
       window.clearTimeout(startExit);
-      window.clearTimeout(timeout);
+      window.clearTimeout(endExit);
     };
-  }, [isWrapped, ready]);
+  }, [displayProgress, isWrapped, ready]);
 
   return (
-    <div className="relative min-h-screen bg-black overflow-hidden">
+    <div className="relative min-h-screen overflow-hidden bg-black">
       {children ? <>{children}</> : null}
 
       {overlayVisible && (
         <div
-          className={`fixed inset-0 z-[140] flex items-center justify-center bg-black transition-opacity duration-300 ${
+          className={`fixed inset-0 z-[140] flex items-center justify-center bg-[#020202] transition-opacity duration-300 ${
             isLeaving ? 'opacity-0' : 'opacity-100'
           }`}
         >
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(94,234,212,0.08),transparent_38%),radial-gradient(circle_at_top,rgba(139,123,255,0.16),transparent_44%),linear-gradient(180deg,#040404_0%,#000000_100%)]" />
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_22%,rgba(255,255,255,0.08),transparent_24%),linear-gradient(180deg,#050505_0%,#020202_48%,#000000_100%)]" />
+          <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(255,255,255,0.02),transparent_18%,transparent_82%,rgba(255,255,255,0.015))]" />
 
           <div
-            className={`relative px-6 text-center transition-all duration-500 ${
-              isLeaving ? 'translate-y-2 scale-[0.985] opacity-0 blur-[3px]' : 'translate-y-0 scale-100 opacity-100'
+            className={`relative w-full max-w-[360px] px-6 text-center transition-all duration-500 ${
+              isLeaving ? 'translate-y-2 scale-[0.992] opacity-0 blur-[2px]' : 'translate-y-0 scale-100 opacity-100'
             }`}
           >
-            <div className="text-[11px] font-semibold uppercase tracking-[0.32em] text-gray-500">
-              INJ Pass
+            <div className="mx-auto mb-8 flex h-14 w-14 items-center justify-center rounded-[1.15rem] border border-white/10 bg-white/[0.04] shadow-[0_0_0_1px_rgba(255,255,255,0.02),0_18px_44px_rgba(0,0,0,0.42)]">
+              <Image src="/lambdalogo.png" alt="INJ Pass" width={30} height={30} className="h-[30px] w-[30px] object-contain opacity-95" />
             </div>
-            <div className="mt-4 text-3xl font-semibold tracking-tight md:text-5xl">
-              <span className="bg-gradient-to-r from-white via-cyan-200 to-[#8b7bff] bg-clip-text text-transparent animate-pulse">
-                Welcome to {destinationLabel}
-              </span>
+
+            <div className="text-[10px] font-semibold uppercase tracking-[0.34em] text-gray-500">{destinationLabel}</div>
+
+            <div className="mt-5 overflow-hidden rounded-full border border-white/10 bg-white/[0.06] p-[3px] shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
+              <div className="h-[6px] rounded-full bg-black/70">
+                <div
+                  className="h-full rounded-full bg-[linear-gradient(180deg,#f4f4f5_0%,#d4d4d8_100%)] transition-[width] duration-200 ease-out"
+                  style={{ width: `${displayProgress}%` }}
+                />
+              </div>
+            </div>
+
+            <div className="mt-3 flex items-center justify-between text-[11px] text-gray-500">
+              <span>{resolvedStatusLabel}</span>
+              <span className="font-mono text-gray-400">{Math.round(displayProgress)}%</span>
             </div>
           </div>
         </div>

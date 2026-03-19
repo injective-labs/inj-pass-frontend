@@ -185,7 +185,7 @@ export default function UnlockPage() {
   }
 
   if (!keystore) {
-    return <LoadingSpinner />;
+    return <LoadingSpinner progress={56} statusLabel="Loading wallet relay" />;
   }
 
   return (

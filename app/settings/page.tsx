@@ -69,6 +69,12 @@ export default function SettingsPage({ embeddedOverride }: SettingsPageProps = {
   }
 
   const isSettingsReady = !isCheckingSession && isUnlocked && !!address;
+  const settingsLoadProgress = isCheckingSession ? 36 : !isUnlocked || !address ? 62 : 100;
+  const settingsLoadStatus = isCheckingSession
+    ? 'Checking wallet session'
+    : !isUnlocked || !address
+      ? 'Restoring wallet identity'
+      : 'Loading wallet settings';
 
   const privateKeyHex = privateKey ? toHex(privateKey) : '';
   const last6Chars = privateKeyHex.slice(-6);
@@ -259,7 +265,7 @@ export default function SettingsPage({ embeddedOverride }: SettingsPageProps = {
   };
 
   return (
-    <LoadingSpinner ready={isSettingsReady}>
+    <LoadingSpinner ready={isSettingsReady} progress={settingsLoadProgress} statusLabel={settingsLoadStatus}>
       {isSettingsReady ? (
         <div className={embedded ? 'h-full bg-transparent' : 'min-h-screen bg-black'}>
           {!embedded && (

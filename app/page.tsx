@@ -8,6 +8,7 @@ import LoadingSpinner from '@/components/LoadingSpinner';
 export default function HomePage() {
   const router = useRouter();
   const { checkExistingWallet, isUnlocked, isCheckingSession, keystore } = useWallet();
+  const hasExistingWallet = checkExistingWallet();
 
   useEffect(() => {
     // Wait for session checking to complete
@@ -31,5 +32,18 @@ export default function HomePage() {
     }
   }, [isUnlocked, isCheckingSession, keystore, router]);
 
-  return <LoadingSpinner />;
+  return (
+    <LoadingSpinner
+      progress={isCheckingSession ? 42 : 100}
+      statusLabel={
+        isCheckingSession
+          ? 'Checking local session'
+          : hasExistingWallet
+            ? isUnlocked
+              ? 'Opening wallet surface'
+              : 'Preparing unlock surface'
+            : 'Opening INJ Pass'
+      }
+    />
+  );
 }
