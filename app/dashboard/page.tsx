@@ -26,7 +26,7 @@ import { getInjectiveAddress, getEthereumAddress } from '@injectivelabs/sdk-ts';
 
 type AssetTab = 'tokens' | 'nfts' | 'defi' | 'earn';
 type WalletPanel = 'overview' | 'send' | 'receive' | 'swap' | 'history' | 'settings';
-type DashboardSurface = 'wallet' | 'discover' | 'agents';
+type DashboardSurface = 'discover' | 'agents';
 type AddressType = 'evm' | 'cosmos';
 type DashboardTransactionType = 'send' | 'receive' | 'swap';
 type DashboardTransactionStatus = 'completed' | 'pending' | 'failed';
@@ -339,7 +339,7 @@ export default function DashboardPage() {
   const [usdcPriceChange24h, setUsdcPriceChange24h] = useState<number>(0);
   const [balanceVisible, setBalanceVisible] = useState(true);
   const [copied, setCopied] = useState(false);
-  const [dashboardSurface, setDashboardSurface] = useState<DashboardSurface>('wallet');
+  const [dashboardSurface, setDashboardSurface] = useState<DashboardSurface>('discover');
   const [assetTab, setAssetTab] = useState<AssetTab>('tokens');
   const [tokenBalances, setTokenBalances] = useState<Record<string, string>>({
     INJ: '0.0000',
@@ -1080,29 +1080,6 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          <div className="mb-6">
-            <div className="inline-flex rounded-2xl border border-white/10 bg-white/[0.04] p-1">
-              {[
-                { key: 'wallet' as const, label: 'Wallet' },
-                { key: 'discover' as const, label: 'Discover' },
-                { key: 'agents' as const, label: 'Agents' },
-              ].map((item) => (
-                <button
-                  key={item.key}
-                  onClick={() => setDashboardSurface(item.key)}
-                  className={`rounded-[0.95rem] px-4 py-2.5 text-sm font-semibold transition-all ${
-                    dashboardSurface === item.key
-                      ? 'bg-white text-black shadow-[0_8px_24px_rgba(255,255,255,0.08)]'
-                      : 'text-gray-400 hover:text-white'
-                  }`}
-                >
-                  {item.label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {dashboardSurface === 'wallet' ? (
           <div className="grid gap-5 xl:grid-cols-[minmax(0,1.18fr)_minmax(360px,0.82fr)] xl:items-start">
             {/* Total Balance Card - OKX Style */}
             <div className="bg-black rounded-2xl p-6 border border-white/10 relative overflow-hidden flex flex-col h-[760px] md:h-[720px]">
@@ -1741,7 +1718,7 @@ export default function DashboardPage() {
               </div>
             </div>
 
-            <div className="bg-black rounded-2xl border border-white/10 relative overflow-hidden p-4 sm:p-5 xl:min-h-[100%]">
+            <div className="bg-black rounded-2xl border border-white/10 relative overflow-hidden p-4 sm:p-5">
               <div className="absolute bottom-0 left-0 w-32 h-32 bg-gradient-to-tr from-cyan-500/5 to-transparent rounded-full blur-2xl"></div>
               <div className="relative">
         {/* Asset Tabs - Smooth Sliding Background */}
@@ -2039,14 +2016,49 @@ export default function DashboardPage() {
       </div>
             </div>
           </div>
-          ) : (
-          <div className="h-[760px] overflow-hidden rounded-[1.75rem] border border-white/10 bg-black/90 shadow-[0_24px_80px_rgba(0,0,0,0.34)] md:h-[820px]">
-            <DashboardSurfaceFrame
-              src={dashboardSurface === 'discover' ? '/discover?embed=1' : '/agents?embed=1'}
-              title={dashboardSurface === 'discover' ? 'Embedded discover' : 'Embedded agents'}
-            />
+          <div className="mt-6 overflow-hidden rounded-[1.75rem] border border-white/10 bg-black/90 shadow-[0_24px_80px_rgba(0,0,0,0.34)]">
+            <div className="border-b border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0))] px-5 py-4 sm:px-6">
+              <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                <div>
+                  <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-gray-500">Explore</div>
+                  <div className="mt-1 text-lg font-bold text-white">
+                    {dashboardSurface === 'discover' ? 'Discover' : 'Agents'} in Dashboard
+                  </div>
+                  <div className="mt-1 text-sm text-gray-400">
+                    Discover and agent workflows now live directly under the main wallet stage instead of replacing it.
+                  </div>
+                </div>
+
+                <div className="inline-flex rounded-2xl border border-white/10 bg-white/[0.04] p-1">
+                  {[
+                    { key: 'discover' as const, label: 'Discover' },
+                    { key: 'agents' as const, label: 'Agents' },
+                  ].map((item) => (
+                    <button
+                      key={item.key}
+                      onClick={() => setDashboardSurface(item.key)}
+                      className={`rounded-[0.95rem] px-4 py-2.5 text-sm font-semibold transition-all ${
+                        dashboardSurface === item.key
+                          ? 'bg-white text-black shadow-[0_8px_24px_rgba(255,255,255,0.08)]'
+                          : 'text-gray-400 hover:text-white'
+                      }`}
+                    >
+                      {item.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div className="h-[760px] bg-[#050913] p-2 sm:p-3 md:h-[820px]">
+              <div className="h-full overflow-hidden rounded-[1.5rem] border border-white/8 bg-black">
+                <DashboardSurfaceFrame
+                  src={dashboardSurface === 'discover' ? '/discover?embed=1' : '/agents?embed=1'}
+                  title={dashboardSurface === 'discover' ? 'Embedded discover' : 'Embedded agents'}
+                />
+              </div>
+            </div>
           </div>
-          )}
         </div>
       </div>
         </div>
@@ -2068,7 +2080,6 @@ export default function DashboardPage() {
         onClose={() => setShowCardCenter(false)}
         onUseCardAddress={(nextAddress) => {
           setShowCardCenter(false);
-          setDashboardSurface('wallet');
           setWalletPanel('send');
           setSendRecipient(nextAddress);
           setSendError('');
