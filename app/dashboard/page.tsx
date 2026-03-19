@@ -1878,9 +1878,9 @@ export default function DashboardPage() {
         </div>
 
         {/* Asset List */}
-        <div className="space-y-3 xl:flex-1 xl:overflow-y-auto xl:pr-1">
+        <div className="min-h-0 flex-1 overflow-y-auto pr-1">
           {assetTab === 'tokens' && (
-            <>
+            <div className="space-y-3">
               <div className="flex items-center gap-4 p-4 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10 transition-all cursor-pointer">
                 <div className="w-12 h-12 rounded-full flex items-center justify-center overflow-hidden">
                   <Image 
@@ -1968,11 +1968,11 @@ export default function DashboardPage() {
                   </div>
                 </div>
               </div>
-            </>
+            </div>
           )}
 
           {assetTab === 'nfts' && (
-            <>
+            <div className="space-y-3">
               {nftsLoading ? (
                 <div className="flex items-center justify-center py-16">
                   <div className="w-12 h-12 border-4 border-white/20 border-t-white rounded-full animate-spin"></div>
@@ -2025,11 +2025,11 @@ export default function DashboardPage() {
                   ))}
                 </>
               )}
-            </>
+            </div>
           )}
 
           {assetTab === 'defi' && (
-            <>
+            <div className="space-y-3">
               {stakingLoading ? (
                 <div className="flex items-center justify-center py-16">
                   <div className="w-12 h-12 border-4 border-white/20 border-t-white rounded-full animate-spin"></div>
@@ -2088,13 +2088,15 @@ export default function DashboardPage() {
                   <p className="text-xs text-gray-500">Your DeFi positions and activities will appear here</p>
                 </div>
               )}
-            </>
+            </div>
           )}
 
           {assetTab === 'earn' && (
-            <div className="mx-auto w-full max-w-[760px]">
-              <div className="max-h-[560px] overflow-y-auto rounded-[30px] border border-white/8 bg-black/20 p-2">
+            <div className="flex h-full items-start justify-center">
+              <div className="h-full w-full max-w-[760px] overflow-hidden rounded-[30px] border border-white/8 bg-black/20 p-2">
+                <div className="h-full overflow-y-auto rounded-[26px]">
                 <NinjaMinerGame walletAddress={address} />
+                </div>
               </div>
             </div>
           )}
