@@ -8,7 +8,6 @@ import LoadingSpinner from '@/components/LoadingSpinner';
 export default function HomePage() {
   const router = useRouter();
   const { checkExistingWallet, isUnlocked, isCheckingSession, keystore } = useWallet();
-  const hasExistingWallet = checkExistingWallet();
 
   useEffect(() => {
     // Wait for session checking to complete
@@ -30,7 +29,7 @@ export default function HomePage() {
       console.log('[HomePage] Redirecting to /welcome');
       router.push('/welcome');
     }
-  }, [isUnlocked, isCheckingSession, keystore, router]);
+  }, [checkExistingWallet, isUnlocked, isCheckingSession, keystore, router]);
 
   return (
     <LoadingSpinner
@@ -38,11 +37,9 @@ export default function HomePage() {
       statusLabel={
         isCheckingSession
           ? 'Checking local session'
-          : hasExistingWallet
-            ? isUnlocked
-              ? 'Opening wallet surface'
-              : 'Preparing unlock surface'
-            : 'Opening INJ Pass'
+          : isUnlocked
+            ? 'Opening wallet surface'
+            : 'Preparing route'
       }
     />
   );
