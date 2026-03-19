@@ -244,6 +244,9 @@ export default function AgentsPage() {
   const router = useRouter();
   const { isUnlocked, address, privateKey, keystore, isCheckingSession, unlock, resetTxAuth } = useWallet();
 
+  const [isEmbedded] = useState(
+    () => typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('embed') === '1'
+  );
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [input, setInput] = useState('');
@@ -258,6 +261,15 @@ export default function AgentsPage() {
   const [authPassword, setAuthPassword] = useState('');
   const [showInviteManager, setShowInviteManager] = useState(false);
   const [showAgentSettings, setShowAgentSettings] = useState(false);
+
+  const navigateApp = useCallback((path: string) => {
+    if (typeof window !== 'undefined' && isEmbedded && window.top) {
+      window.top.location.assign(path);
+      return;
+    }
+
+    router.push(path);
+  }, [isEmbedded, router]);
   const [activeSettingsTab, setActiveSettingsTab] = useState<SettingsTab>('credits');
   const [inviteCopied, setInviteCopied] = useState(false);
   const [inviteLinkCopied, setInviteLinkCopied] = useState(false);
@@ -292,9 +304,9 @@ export default function AgentsPage() {
   // ── Auth guard ──────────────────────────────────────────────────────────
   useEffect(() => {
     if (!isCheckingSession && (!isUnlocked || !address)) {
-      router.push('/welcome');
+      navigateApp('/welcome');
     }
-  }, [isUnlocked, address, isCheckingSession, router]);
+  }, [isUnlocked, address, isCheckingSession, navigateApp]);
 
   // ── Load persisted history ──────────────────────────────────────────────
   useEffect(() => {
@@ -902,7 +914,7 @@ export default function AgentsPage() {
   // ─── UI ─────────────────────────────────────────────────────────────────
 
   return (
-    <div className="flex h-screen bg-black text-white overflow-hidden">
+    <div className={`flex bg-black text-white overflow-hidden ${isEmbedded ? 'h-full' : 'h-screen'}`}>
 
       {/* Sidebar overlay (mobile) */}
       {sidebarOpen && (
@@ -1029,11 +1041,13 @@ export default function AgentsPage() {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
             </svg>
           </button>
-          <button onClick={() => router.push('/dashboard')} className="p-2 rounded-lg hover:bg-white/10 transition-colors">
-            <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-            </svg>
-          </button>
+          {!isEmbedded && (
+            <button onClick={() => navigateApp('/dashboard')} className="p-2 rounded-lg hover:bg-white/10 transition-colors">
+              <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+              </svg>
+            </button>
+          )}
           <div className="flex-1 text-center">
             <span className="font-semibold text-sm">{activeConv?.title ?? 'New chat'}</span>
           </div>

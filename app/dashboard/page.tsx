@@ -25,7 +25,8 @@ import { formatAddress, privateKeyToHex } from '@/utils/wallet';
 import { getInjectiveAddress, getEthereumAddress } from '@injectivelabs/sdk-ts';
 
 type AssetTab = 'tokens' | 'nfts' | 'defi' | 'earn';
-type WalletPanel = 'overview' | 'send' | 'receive' | 'swap' | 'history';
+type WalletPanel = 'overview' | 'send' | 'receive' | 'swap' | 'history' | 'settings';
+type DashboardSurface = 'wallet' | 'discover' | 'agents';
 type AddressType = 'evm' | 'cosmos';
 type DashboardTransactionType = 'send' | 'receive' | 'swap';
 type DashboardTransactionStatus = 'completed' | 'pending' | 'failed';
@@ -308,6 +309,23 @@ function PixelTrendChart({
   );
 }
 
+function DashboardSurfaceFrame({
+  src,
+  title,
+}: {
+  src: string;
+  title: string;
+}) {
+  return (
+    <iframe
+      src={src}
+      title={title}
+      className="h-full w-full border-0 bg-black"
+      loading="lazy"
+    />
+  );
+}
+
 export default function DashboardPage() {
   const router = useRouter();
   const { isUnlocked, address, privateKey, resetTxAuth, isCheckingSession } = useWallet();
@@ -321,7 +339,7 @@ export default function DashboardPage() {
   const [usdcPriceChange24h, setUsdcPriceChange24h] = useState<number>(0);
   const [balanceVisible, setBalanceVisible] = useState(true);
   const [copied, setCopied] = useState(false);
-  const [activeTab, setActiveTab] = useState<'settings' | 'wallet' | 'discover' | 'agents'>('wallet');
+  const [dashboardSurface, setDashboardSurface] = useState<DashboardSurface>('wallet');
   const [assetTab, setAssetTab] = useState<AssetTab>('tokens');
   const [tokenBalances, setTokenBalances] = useState<Record<string, string>>({
     INJ: '0.0000',
@@ -553,6 +571,10 @@ export default function DashboardPage() {
     history: {
       title: 'Recent Activity',
       subtitle: 'Review your latest on-chain transfers and swaps right here.',
+    },
+    settings: {
+      title: 'Wallet Settings',
+      subtitle: 'Manage security, PIN, keys, and wallet preferences without leaving this card.',
     },
   };
 
@@ -976,7 +998,8 @@ export default function DashboardPage() {
   return (
     <LoadingSpinner ready={isDashboardReady}>
       {isDashboardReady ? (
-        <div className="min-h-screen pb-24 md:pb-8 bg-black">
+        <>
+        <div className="min-h-screen bg-black">
           <div>
             {/* Modern Dashboard Header */}
             <div className="bg-gradient-to-b from-white/5 to-transparent border-b border-white/5 backdrop-blur-sm">
@@ -1055,6 +1078,29 @@ export default function DashboardPage() {
             </div>
           </div>
 
+          <div className="mb-6">
+            <div className="inline-flex rounded-2xl border border-white/10 bg-white/[0.04] p-1">
+              {[
+                { key: 'wallet' as const, label: 'Wallet' },
+                { key: 'discover' as const, label: 'Discover' },
+                { key: 'agents' as const, label: 'Agents' },
+              ].map((item) => (
+                <button
+                  key={item.key}
+                  onClick={() => setDashboardSurface(item.key)}
+                  className={`rounded-[0.95rem] px-4 py-2.5 text-sm font-semibold transition-all ${
+                    dashboardSurface === item.key
+                      ? 'bg-white text-black shadow-[0_8px_24px_rgba(255,255,255,0.08)]'
+                      : 'text-gray-400 hover:text-white'
+                  }`}
+                >
+                  {item.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {dashboardSurface === 'wallet' ? (
           <div className="grid gap-5 xl:grid-cols-[minmax(0,1.18fr)_minmax(360px,0.82fr)] xl:items-start">
             {/* Total Balance Card - OKX Style */}
             <div className="bg-black rounded-2xl p-6 border border-white/10 relative overflow-hidden flex flex-col h-[760px] md:h-[720px]">
@@ -1082,15 +1128,27 @@ export default function DashboardPage() {
                       )}
                     </button>
                   </div>
-                  <button 
-                    onClick={handleRefresh}
-                    disabled={refreshing}
-                    className="p-1 rounded hover:bg-white/5 transition-colors disabled:opacity-50"
-                  >
-                    <svg className={`w-4 h-4 text-gray-400 ${refreshing ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                    </svg>
-                  </button>
+                  <div className="flex items-center gap-1.5">
+                    <button 
+                      onClick={handleRefresh}
+                      disabled={refreshing}
+                      className="p-1 rounded hover:bg-white/5 transition-colors disabled:opacity-50"
+                    >
+                      <svg className={`w-4 h-4 text-gray-400 ${refreshing ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                      </svg>
+                    </button>
+                    <button
+                      onClick={() => toggleWalletPanel('settings')}
+                      className={`rounded p-1 transition-colors ${walletPanel === 'settings' ? 'bg-white text-black' : 'hover:bg-white/5'}`}
+                      title="Open settings"
+                    >
+                      <svg className={`w-4 h-4 ${walletPanel === 'settings' ? 'text-black' : 'text-gray-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                      </svg>
+                    </button>
+                  </div>
                 </div>
 
                 <div className="relative flex-1 min-h-0">
@@ -1148,37 +1206,8 @@ export default function DashboardPage() {
                         </div>
                       </div>
 
-                      <div className="pointer-events-none flex flex-1 items-center justify-center pt-2 xl:justify-start xl:pl-6">
-                        <div className="flex items-center justify-center gap-3 sm:gap-5 xl:gap-6">
-                          <div className="relative h-[176px] w-[176px] sm:h-[212px] sm:w-[212px] xl:h-[248px] xl:w-[248px]">
-                            <div className="absolute inset-4 rounded-[2rem] bg-[radial-gradient(circle_at_50%_38%,rgba(255,164,78,0.26),transparent_68%)] blur-3xl" />
-                            <div className="absolute inset-0 rounded-[2rem] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.035),rgba(255,255,255,0.015))] shadow-[0_22px_54px_rgba(0,0,0,0.36)]" />
-                            <div className="absolute inset-[1px] rounded-[calc(2rem-1px)] bg-[linear-gradient(180deg,rgba(255,255,255,0.03),rgba(0,0,0,0.04))]" />
-                            <div className="absolute inset-0 overflow-hidden rounded-[2rem]">
-                              <Image
-                                src="/N1NJ4DEMO.png"
-                                alt="N1NJ4 demo primary"
-                                fill
-                                priority
-                                className="object-cover object-center opacity-95"
-                              />
-                            </div>
-                          </div>
-
-                          <div className="relative h-[176px] w-[176px] sm:h-[212px] sm:w-[212px] xl:h-[248px] xl:w-[248px]">
-                            <div className="absolute inset-4 rounded-[2rem] bg-[radial-gradient(circle_at_52%_40%,rgba(255,176,94,0.2),transparent_70%)] blur-3xl" />
-                            <div className="absolute inset-0 rounded-[2rem] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0.012))] shadow-[0_22px_54px_rgba(0,0,0,0.3)]" />
-                            <div className="absolute inset-[1px] rounded-[calc(2rem-1px)] bg-[linear-gradient(180deg,rgba(255,255,255,0.025),rgba(0,0,0,0.05))]" />
-                            <div className="absolute inset-0 overflow-hidden rounded-[2rem]">
-                              <Image
-                                src="/N1NJ4DEMO.png"
-                                alt="N1NJ4 demo secondary"
-                                fill
-                                className="object-cover object-center opacity-88 saturate-[0.92] brightness-[0.95]"
-                              />
-                            </div>
-                          </div>
-                        </div>
+                      <div className="pointer-events-none relative flex flex-1 items-center justify-center">
+                        <div className="absolute inset-x-12 top-1/2 h-40 -translate-y-1/2 rounded-full bg-[radial-gradient(circle_at_center,rgba(255,255,255,0.07),transparent_70%)] blur-3xl" />
                       </div>
                     </div>
                   </div>
@@ -1207,7 +1236,7 @@ export default function DashboardPage() {
                         </button>
                       </div>
 
-                      <div className="min-h-0 flex-1 overflow-y-auto pr-1">
+                      <div className={`min-h-0 flex-1 ${walletPanel === 'settings' ? 'overflow-hidden pr-0 pt-5' : 'overflow-y-auto pr-1'}`}>
                         {walletPanel === 'send' && (
                           <div className="grid gap-4 pt-5 lg:grid-cols-[minmax(0,1.2fr)_minmax(260px,0.8fr)]">
                             <div className="space-y-4">
@@ -1617,6 +1646,15 @@ export default function DashboardPage() {
                             )}
                           </div>
                         )}
+
+                        {walletPanel === 'settings' && (
+                          <div className="h-full overflow-hidden rounded-[1.35rem] border border-white/10 bg-black/30">
+                            <DashboardSurfaceFrame
+                              src="/settings?embed=1"
+                              title="Embedded settings"
+                            />
+                          </div>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -1973,6 +2011,16 @@ export default function DashboardPage() {
       </div>
             </div>
           </div>
+          ) : (
+          <div className="h-[760px] overflow-hidden rounded-[1.75rem] border border-white/10 bg-black/90 shadow-[0_24px_80px_rgba(0,0,0,0.34)] md:h-[820px]">
+            <DashboardSurfaceFrame
+              src={dashboardSurface === 'discover' ? '/discover?embed=1' : '/agents?embed=1'}
+              title={dashboardSurface === 'discover' ? 'Embedded discover' : 'Embedded agents'}
+            />
+          </div>
+          )}
+        </div>
+      </div>
         </div>
       </div>
 
@@ -2199,112 +2247,7 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* Bottom Navigation */}
-      <div className="fixed bottom-0 left-0 right-0 bg-black/95 border-t border-white/10 backdrop-blur-lg">
-        <div className="max-w-7xl mx-auto px-4">
-          <div className="grid grid-cols-4 gap-2 py-3">
-            {/* Settings */}
-            <button
-              onClick={() => {
-                setActiveTab('settings');
-                router.push('/settings');
-              }}
-              className={`flex flex-col items-center gap-1 py-2 rounded-xl transition-all ${
-                activeTab === 'settings' 
-                  ? 'text-white' 
-                  : 'text-gray-500 hover:text-gray-300'
-              }`}
-            >
-              <div className={`p-2 rounded-xl transition-all ${
-                activeTab === 'settings' 
-                  ? 'bg-white/10' 
-                  : 'bg-transparent'
-              }`}>
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                </svg>
-              </div>
-              <span className="text-xs font-semibold">Settings</span>
-            </button>
-
-            {/* Wallet (Default) */}
-            <button
-              onClick={() => setActiveTab('wallet')}
-              className={`flex flex-col items-center gap-1 py-2 rounded-xl transition-all ${
-                activeTab === 'wallet' 
-                  ? 'text-white' 
-                  : 'text-gray-500 hover:text-gray-300'
-              }`}
-            >
-              <div className={`p-2 rounded-xl transition-all ${
-                activeTab === 'wallet' 
-                  ? 'bg-white/10' 
-                  : 'bg-transparent'
-              }`}>
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <rect x="2" y="6" width="20" height="14" rx="2" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
-                  <path d="M2 10h20" strokeWidth={2} strokeLinecap="round" />
-                  <circle cx="18" cy="15" r="1.5" fill="currentColor" />
-                </svg>
-              </div>
-              <span className="text-xs font-semibold">Wallet</span>
-            </button>
-
-            {/* Discover */}
-            <button
-              onClick={() => {
-                setActiveTab('discover');
-                router.push('/discover');
-              }}
-              className={`flex flex-col items-center gap-1 py-2 rounded-xl transition-all ${
-                activeTab === 'discover' 
-                  ? 'text-white' 
-                  : 'text-gray-500 hover:text-gray-300'
-              }`}
-            >
-              <div className={`p-2 rounded-xl transition-all ${
-                activeTab === 'discover' 
-                  ? 'bg-white/10' 
-                  : 'bg-transparent'
-              }`}>
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <circle cx="12" cy="12" r="10" strokeWidth={2} strokeLinecap="round" />
-                  <path d="M8 12h8M12 8v8" strokeWidth={2} strokeLinecap="round" />
-                  <path d="M15 9l-3 3 3 3" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              </div>
-              <span className="text-xs font-semibold">Discover</span>
-            </button>
-
-            {/* Agents */}
-            <button
-              onClick={() => {
-                setActiveTab('agents');
-                router.push('/agents');
-              }}
-              className={`flex flex-col items-center gap-1 py-2 rounded-xl transition-all ${
-                activeTab === 'agents' 
-                  ? 'text-white' 
-                  : 'text-gray-500 hover:text-gray-300'
-              }`}
-            >
-              <div className={`p-2 rounded-xl transition-all ${
-                activeTab === 'agents' 
-                  ? 'bg-white/10' 
-                  : 'bg-transparent'
-              }`}>
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17H3a2 2 0 01-2-2V5a2 2 0 012-2h14a2 2 0 012 2v10a2 2 0 01-2 2h-2" />
-                </svg>
-              </div>
-              <span className="text-xs font-semibold">Agents</span>
-            </button>
-          </div>
-        </div>
-          </div>
-          </div>
-        </div>
+        </>
       ) : null}
     </LoadingSpinner>
   );

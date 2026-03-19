@@ -16,9 +16,11 @@ export default function SettingsPage() {
   const [showPrivateKey, setShowPrivateKey] = useState(false);
   const [copied, setCopied] = useState(false);
   const [showSecurityModal, setShowSecurityModal] = useState(false);
-  const [activeTab, setActiveTab] = useState<'settings' | 'wallet' | 'discover'>('settings');
   const [verifyingPasskey, setVerifyingPasskey] = useState(false);
   const [passkeyError, setPasskeyError] = useState('');
+  const [isEmbedded] = useState(
+    () => typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('embed') === '1'
+  );
   
   // PIN-Free warning
   const [showPinFreeWarning, setShowPinFreeWarning] = useState(false);
@@ -46,9 +48,18 @@ export default function SettingsPage() {
   const [resettingPin, setResettingPin] = useState(false);
   const [pinResetSuccess, setPinResetSuccess] = useState(false);
 
+  const navigateApp = (path: string) => {
+    if (typeof window !== 'undefined' && isEmbedded && window.top) {
+      window.top.location.assign(path);
+      return;
+    }
+
+    router.push(path);
+  };
+
   if (!isCheckingSession && (!isUnlocked || !address)) {
     if (typeof window !== 'undefined') {
-      router.push('/welcome');
+      navigateApp('/welcome');
     }
   }
 
@@ -67,7 +78,7 @@ export default function SettingsPage() {
 
   const handleLock = () => {
     lock();
-    router.push('/welcome');
+    navigateApp('/welcome');
   };
 
   // Handle Show Key with Passkey verification
@@ -193,7 +204,7 @@ export default function SettingsPage() {
     lockWallet();
     setShowPinLock(false);
     setLockPin('');
-    router.push('/unlock');
+    navigateApp('/unlock');
   };
 
   // Reset PIN with Passkey
@@ -245,19 +256,19 @@ export default function SettingsPage() {
   return (
     <LoadingSpinner ready={isSettingsReady}>
       {isSettingsReady ? (
-        <div className="min-h-screen pb-24 md:pb-8 bg-black">
-          {/* Header - OKX Style */}
-          <div className="bg-gradient-to-b from-white/5 to-transparent border-b border-white/5 backdrop-blur-sm">
-            <div className="max-w-7xl mx-auto px-4 py-6">
-          {/* Account Header */}
-          <div className="mb-6">
-            <AccountHeader address={address} />
-          </div>
-        </div>
-      </div>
+        <div className={isEmbedded ? 'h-full bg-transparent' : 'min-h-screen bg-black'}>
+          {!isEmbedded && (
+            <div className="bg-gradient-to-b from-white/5 to-transparent border-b border-white/5 backdrop-blur-sm">
+              <div className="max-w-7xl mx-auto px-4 py-6">
+                <div className="mb-6">
+                  <AccountHeader address={address} />
+                </div>
+              </div>
+            </div>
+          )}
 
       {/* Main Content */}
-      <div className="max-w-7xl mx-auto px-4 py-6">
+      <div className={isEmbedded ? 'h-full overflow-y-auto px-1 py-1' : 'max-w-7xl mx-auto px-4 py-6'}>
         {/* PIN Reset Success Message */}
         {pinResetSuccess && (
           <div className="mb-6 p-4 rounded-2xl bg-green-500/10 border border-green-500/30 text-green-400 flex items-center gap-3 animate-fade-in">
@@ -586,9 +597,9 @@ export default function SettingsPage() {
                 <p className="text-xs text-red-400">
                   NEVER share your private key. Anyone with this key can steal your funds.
                 </p>
-              </div>
             </div>
-          )}
+          </div>
+        )}
         </div>
 
         {/* Wallet Actions */}
@@ -1131,87 +1142,7 @@ export default function SettingsPage() {
         </div>
       )}
 
-      {/* Bottom Navigation - Same as Dashboard */}
-      <div className="fixed bottom-0 left-0 right-0 bg-black/95 border-t border-white/10 backdrop-blur-lg">
-        <div className="max-w-7xl mx-auto px-4">
-          <div className="grid grid-cols-3 gap-4 py-3">
-            {/* Settings */}
-            <button
-              onClick={() => setActiveTab('settings')}
-              className={`flex flex-col items-center gap-1 py-2 rounded-xl transition-all duration-300 ease-in-out transform ${
-                activeTab === 'settings' 
-                  ? 'text-white scale-105' 
-                  : 'text-gray-500 hover:text-gray-300'
-              }`}
-            >
-              <div className={`p-2 rounded-xl transition-all duration-300 ease-in-out ${
-                activeTab === 'settings' 
-                  ? 'bg-white/10' 
-                  : 'bg-transparent'
-              }`}>
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                </svg>
-              </div>
-              <span className="text-xs font-semibold">Settings</span>
-            </button>
-
-            {/* Wallet */}
-            <button
-              onClick={() => {
-                setActiveTab('wallet');
-                router.push('/dashboard');
-              }}
-              className={`flex flex-col items-center gap-1 py-2 rounded-xl transition-all duration-300 ease-in-out transform ${
-                activeTab === 'wallet' 
-                  ? 'text-white scale-105' 
-                  : 'text-gray-500 hover:text-gray-300'
-              }`}
-            >
-              <div className={`p-2 rounded-xl transition-all duration-300 ease-in-out ${
-                activeTab === 'wallet' 
-                  ? 'bg-white/10' 
-                  : 'bg-transparent'
-              }`}>
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <rect x="2" y="6" width="20" height="14" rx="2" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
-                  <path d="M2 10h20" strokeWidth={2} strokeLinecap="round" />
-                  <circle cx="18" cy="15" r="1.5" fill="currentColor" />
-                </svg>
-              </div>
-              <span className="text-xs font-semibold">Wallet</span>
-            </button>
-
-            {/* Discover */}
-            <button
-              onClick={() => {
-                setActiveTab('discover');
-                router.push('/discover');
-              }}
-              className={`flex flex-col items-center gap-1 py-2 rounded-xl transition-all duration-300 ease-in-out transform ${
-                activeTab === 'discover' 
-                  ? 'text-white scale-105' 
-                  : 'text-gray-500 hover:text-gray-300'
-              }`}
-            >
-              <div className={`p-2 rounded-xl transition-all duration-300 ease-in-out ${
-                activeTab === 'discover' 
-                  ? 'bg-white/10' 
-                  : 'bg-transparent'
-              }`}>
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <circle cx="12" cy="12" r="10" strokeWidth={2} strokeLinecap="round" />
-                  <path d="M8 12h8M12 8v8" strokeWidth={2} strokeLinecap="round" />
-                  <path d="M15 9l-3 3 3 3" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              </div>
-              <span className="text-xs font-semibold">Discover</span>
-            </button>
-          </div>
-        </div>
-          </div>
-        </div>
+      </div>
       ) : null}
     </LoadingSpinner>
   );

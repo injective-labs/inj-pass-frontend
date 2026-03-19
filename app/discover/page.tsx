@@ -23,6 +23,18 @@ export default function DiscoverPage() {
   const { isUnlocked, address, isCheckingSession } = useWallet();
   const [activeCategory, setActiveCategory] = useState<DAppCategory>('all');
   const [searchQuery, setSearchQuery] = useState('');
+  const [isEmbedded] = useState(
+    () => typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('embed') === '1'
+  );
+
+  const navigateApp = (path: string) => {
+    if (typeof window !== 'undefined' && isEmbedded && window.top) {
+      window.top.location.assign(path);
+      return;
+    }
+
+    router.push(path);
+  };
 
   // DApp data with Google Favicon Service (more reliable)
   const dapps: DApp[] = [
@@ -136,7 +148,7 @@ export default function DiscoverPage() {
   };
 
   if (!isCheckingSession && !isUnlocked) {
-    router.push('/');
+    navigateApp('/');
   }
 
   const isDiscoverReady = !isCheckingSession && isUnlocked;
@@ -144,24 +156,54 @@ export default function DiscoverPage() {
   return (
     <LoadingSpinner ready={isDiscoverReady}>
       {isDiscoverReady ? (
-        <div className="min-h-screen pb-24 md:pb-8 bg-black">
+        <div className={isEmbedded ? 'h-full bg-black' : 'min-h-screen bg-black'}>
           <div>
-            {/* Header - OKX Style */}
-            <div className="bg-gradient-to-b from-white/5 to-transparent border-b border-white/5 backdrop-blur-sm">
-          <div className="max-w-7xl mx-auto px-4 py-6">
-            {/* Account Header with Faucet + Scan Buttons */}
-            <div className="mb-6">
-              <AccountHeader 
-                address={address || undefined}
-                showFaucetButton={true}
-                onFaucetClick={() => router.push('/faucet')}
-                showScanButton={true}
-                onScanClick={() => {/* TODO: Implement scan functionality */}}
-              />
-            </div>
+            {!isEmbedded && (
+              <div className="bg-gradient-to-b from-white/5 to-transparent border-b border-white/5 backdrop-blur-sm">
+                <div className="max-w-7xl mx-auto px-4 py-6">
+                  <div className="mb-6">
+                    <AccountHeader 
+                      address={address || undefined}
+                      showFaucetButton={true}
+                      onFaucetClick={() => navigateApp('/faucet')}
+                      showScanButton={true}
+                      onScanClick={() => {/* TODO: Implement scan functionality */}}
+                    />
+                  </div>
 
-            {/* Search Bar - OKX Style */}
-            <div className="bg-black rounded-2xl p-4 border border-white/10">
+                  <div className="bg-black rounded-2xl p-4 border border-white/10">
+                    <div className="relative">
+                      <input
+                        type="text"
+                        placeholder="Search dApps..."
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        className="w-full py-3 px-12 rounded-xl bg-white/5 border border-white/10 text-white placeholder-gray-500 focus:outline-none focus:border-white/20 transition-all text-sm"
+                      />
+                      <svg className="w-4 h-4 absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <circle cx="11" cy="11" r="8" strokeWidth={2} />
+                        <path d="m21 21-4.35-4.35" strokeWidth={2} strokeLinecap="round" />
+                      </svg>
+                      {searchQuery && (
+                        <button
+                          onClick={() => setSearchQuery('')}
+                          className="absolute right-4 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-white transition-colors"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+        {/* Main Content */}
+        <div className={`${isEmbedded ? 'h-full px-4 py-4' : 'max-w-7xl mx-auto px-4 py-6'}`}>
+          {isEmbedded && (
+            <div className="mb-4 bg-black rounded-2xl p-4 border border-white/10">
               <div className="relative">
                 <input
                   type="text"
@@ -174,23 +216,9 @@ export default function DiscoverPage() {
                   <circle cx="11" cy="11" r="8" strokeWidth={2} />
                   <path d="m21 21-4.35-4.35" strokeWidth={2} strokeLinecap="round" />
                 </svg>
-                {searchQuery && (
-                  <button
-                    onClick={() => setSearchQuery('')}
-                    className="absolute right-4 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-white transition-colors"
-                  >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                  </button>
-                )}
               </div>
             </div>
-          </div>
-        </div>
-
-        {/* Main Content */}
-        <div className="max-w-7xl mx-auto px-4 py-6">
+          )}
           {/* Featured Section - Horizontal 4 Cards (Above Categories) */}
           {!searchQuery && (
             <div className="mb-6">
@@ -298,82 +326,8 @@ export default function DiscoverPage() {
           </div>
         </div>
       </div>
+      </div>
 
-      {/* Bottom Navigation - Same as Dashboard */}
-      <div className="fixed bottom-0 left-0 right-0 bg-black/95 border-t border-white/10 backdrop-blur-lg">
-        <div className="max-w-7xl mx-auto px-4">
-          <div className="grid grid-cols-3 gap-4 py-3">
-            {/* Settings */}
-            <button
-              onClick={() => router.push('/settings')}
-              className={`flex flex-col items-center gap-1 py-2 rounded-xl transition-all duration-300 ease-in-out transform ${
-                false
-                  ? 'text-white scale-105' 
-                  : 'text-gray-500 hover:text-gray-300'
-              }`}
-            >
-              <div className={`p-2 rounded-xl transition-all duration-300 ease-in-out ${
-                false
-                  ? 'bg-white/10' 
-                  : 'bg-transparent'
-              }`}>
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                </svg>
-              </div>
-              <span className="text-xs font-semibold">Settings</span>
-            </button>
-
-            {/* Wallet */}
-            <button
-              onClick={() => router.push('/dashboard')}
-              className={`flex flex-col items-center gap-1 py-2 rounded-xl transition-all duration-300 ease-in-out transform ${
-                false
-                  ? 'text-white scale-105' 
-                  : 'text-gray-500 hover:text-gray-300'
-              }`}
-            >
-              <div className={`p-2 rounded-xl transition-all duration-300 ease-in-out ${
-                false
-                  ? 'bg-white/10' 
-                  : 'bg-transparent'
-              }`}>
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <rect x="2" y="6" width="20" height="14" rx="2" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
-                  <path d="M2 10h20" strokeWidth={2} strokeLinecap="round" />
-                  <circle cx="18" cy="15" r="1.5" fill="currentColor" />
-                </svg>
-              </div>
-              <span className="text-xs font-semibold">Wallet</span>
-            </button>
-
-            {/* Discover */}
-            <button
-              onClick={() => router.push('/discover')}
-              className={`flex flex-col items-center gap-1 py-2 rounded-xl transition-all duration-300 ease-in-out transform ${
-                true
-                  ? 'text-white scale-105' 
-                  : 'text-gray-500 hover:text-gray-300'
-              }`}
-            >
-              <div className={`p-2 rounded-xl transition-all duration-300 ease-in-out ${
-                true
-                  ? 'bg-white/10' 
-                  : 'bg-transparent'
-              }`}>
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <circle cx="12" cy="12" r="10" strokeWidth={2} strokeLinecap="round" />
-                  <path d="M8 12h8M12 8v8" strokeWidth={2} strokeLinecap="round" />
-                  <path d="M15 9l-3 3 3 3" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              </div>
-              <span className="text-xs font-semibold">Discover</span>
-            </button>
-          </div>
-        </div>
-          </div>
-        </div>
       ) : null}
     </LoadingSpinner>
   );
