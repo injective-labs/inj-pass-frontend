@@ -2002,13 +2002,13 @@ export default function DashboardPage() {
                         setFlippedTokenCard((current) => (current === token.symbol ? null : token.symbol));
                       }
                     }}
-                    className="relative h-[104px] w-full cursor-pointer text-left"
+                    className="relative h-[84px] w-full cursor-pointer text-left"
                     role="button"
                     tabIndex={0}
                     style={{ transformStyle: 'preserve-3d' }}
                   >
                     <div
-                      className={`absolute inset-0 rounded-2xl border border-white/10 bg-white/5 p-4 transition-all duration-500 [backface-visibility:hidden] ${
+                      className={`absolute inset-0 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 transition-all duration-500 [backface-visibility:hidden] ${
                         flippedTokenCard === token.symbol ? 'pointer-events-none opacity-0' : 'opacity-100'
                       }`}
                       style={{
@@ -2017,32 +2017,32 @@ export default function DashboardPage() {
                         WebkitBackfaceVisibility: 'hidden',
                       }}
                     >
-                      <div className="flex h-full items-center gap-4">
-                        <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-full">
+                      <div className="flex h-full items-center gap-3">
+                        <div className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full">
                           <Image
                             src={token.icon}
                             alt={token.symbol}
-                            width={48}
-                            height={48}
+                            width={40}
+                            height={40}
                             className="h-full w-full object-contain"
                           />
                         </div>
                         <div className="min-w-0 flex-1">
-                          <div className="mb-1 flex items-center gap-2">
+                          <div className="mb-0.5 flex items-center gap-1.5">
                             <div className="font-bold">{token.symbol}</div>
-                            <span className="text-[10px] uppercase tracking-[0.18em] text-gray-500">Tap for info</span>
+                            <span className="text-[9px] uppercase tracking-[0.16em] text-gray-500">Tap for info</span>
                           </div>
-                          <div className="text-sm text-gray-400">{token.balance}</div>
+                          <div className="text-[13px] text-gray-400">{token.balance}</div>
                         </div>
                         <div className="text-right">
-                          <div className="font-bold font-mono">{token.usdValue}</div>
-                          <div className={`text-sm ${token.changeClass}`}>{token.change}</div>
+                          <div className="font-bold font-mono text-[13px]">{token.usdValue}</div>
+                          <div className={`text-[13px] ${token.changeClass}`}>{token.change}</div>
                         </div>
                       </div>
                     </div>
 
                     <div
-                      className={`absolute inset-0 rounded-2xl border border-white/10 bg-[linear-gradient(135deg,rgba(255,255,255,0.08),rgba(255,255,255,0.03))] p-4 transition-all duration-500 ${
+                      className={`absolute inset-0 rounded-2xl border border-white/10 bg-[linear-gradient(135deg,rgba(255,255,255,0.08),rgba(255,255,255,0.03))] px-4 py-3 transition-all duration-500 ${
                         flippedTokenCard === token.symbol ? 'opacity-100' : 'pointer-events-none opacity-0'
                       }`}
                       style={{
@@ -2052,11 +2052,16 @@ export default function DashboardPage() {
                         WebkitBackfaceVisibility: 'hidden',
                       }}
                     >
-                      <div className="flex h-full flex-col justify-between">
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="rounded-full border border-white/10 bg-white/[0.05] px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-white">
+                      <div className="flex h-full items-center gap-3">
+                        <div className="rounded-full border border-white/10 bg-white/[0.05] px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-white">
                             {token.symbol}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="mb-0.5 uppercase tracking-[0.14em] text-[9px] text-gray-500">Contract</div>
+                          <div className="truncate font-mono text-[13px] text-white">
+                            {token.contractValue}
                           </div>
+                        </div>
                           <button
                             onClick={(event) => {
                               event.stopPropagation();
@@ -2068,7 +2073,7 @@ export default function DashboardPage() {
                               }, 1600);
                             }}
                             disabled={!token.copyValue}
-                            className={`rounded-lg border px-2.5 py-1.5 text-[11px] font-semibold transition-all ${
+                            className={`rounded-lg border px-2 py-1 text-[10px] font-semibold transition-all ${
                               token.copyValue
                                 ? copiedTokenInfo === token.symbol
                                   ? 'border-emerald-400/30 bg-emerald-500/10 text-emerald-300'
@@ -2078,14 +2083,6 @@ export default function DashboardPage() {
                           >
                             {!token.copyValue ? 'No Contract' : copiedTokenInfo === token.symbol ? 'Copied' : 'Copy'}
                           </button>
-                        </div>
-
-                        <div className="flex flex-1 flex-col justify-center">
-                          <div className="uppercase tracking-[0.16em] text-[10px] text-gray-500">Contract</div>
-                          <div className="mt-2 font-mono text-sm text-white break-all">
-                            {token.contractValue}
-                          </div>
-                        </div>
                       </div>
                     </div>
                   </div>
