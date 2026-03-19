@@ -2566,7 +2566,7 @@ export default function DashboardPage() {
 
               <div className="relative">
                 <div className="overflow-hidden rounded-[1.5rem] border border-white/10 bg-black/30">
-                  <div className="h-[760px] overflow-hidden rounded-[1.35rem] bg-black">
+                  <div className="h-[248px] overflow-hidden rounded-[1.35rem] bg-black sm:h-[228px] lg:h-[210px]">
                     <DashboardSurfaceFrame
                       src="/discover?embed=1"
                       title="Embedded discover"

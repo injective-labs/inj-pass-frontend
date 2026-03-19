@@ -256,7 +256,7 @@ export default function DiscoverPage() {
               Try adjusting your search or filters.
             </div>
           ) : (
-            <div className="flex min-h-0 flex-1 gap-4 overflow-x-auto pb-2 scrollbar-hide">
+            <div className="flex min-h-0 flex-1 gap-4 overflow-x-auto scrollbar-hide">
               {filteredDapps.map((dapp) => (
                 <button
                   key={dapp.id}
