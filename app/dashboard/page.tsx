@@ -1514,7 +1514,7 @@ export default function DashboardPage() {
                       <div className={`min-h-0 flex-1 ${
                         walletPanel === 'settings'
                           ? 'overflow-hidden pr-0 pt-3'
-                          : walletPanel === 'send' || walletPanel === 'swap'
+                          : walletPanel === 'send' || walletPanel === 'swap' || walletPanel === 'history'
                             ? 'overflow-hidden pt-4'
                             : 'overflow-y-auto pt-4 pr-1'
                       }`}>
@@ -1935,7 +1935,7 @@ export default function DashboardPage() {
                         )}
 
                         {walletPanel === 'history' && (
-                          <div>
+                          <div className="flex h-full min-h-0 flex-col">
                             <div className="flex flex-wrap gap-2">
                               {(['all', 'send', 'receive', 'swap'] as DashboardHistoryFilter[]).map((filter) => (
                                 <button
@@ -1958,49 +1958,51 @@ export default function DashboardPage() {
                               </div>
                             )}
 
-                            {historyLoading ? (
-                              <div className="mt-5 flex items-center justify-center py-14">
-                                <div className="w-10 h-10 rounded-full border-4 border-white/10 border-t-white animate-spin" />
-                              </div>
-                            ) : filteredHistoryItems.length === 0 ? (
-                              <div className="mt-10 text-center text-sm text-gray-400">
-                                No transactions yet. Your recent wallet activity will appear here.
-                              </div>
-                            ) : (
-                              <div className="mt-5 space-y-3">
-                                {filteredHistoryItems.map((item) => (
-                                  <div
-                                    key={item.id}
-                                    className="rounded-2xl border border-white/10 bg-white/5 px-4 py-4"
-                                  >
-                                    <div className="flex items-start justify-between gap-4">
-                                      <div className="min-w-0">
-                                        <div className="flex items-center gap-2">
-                                          <span className="text-sm font-bold text-white capitalize">{item.type}</span>
-                                          <span className="rounded-full border border-white/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.16em] text-gray-400">
-                                            {item.chainType}
-                                          </span>
+                            <div className="mt-5 flex min-h-0 flex-1 flex-col">
+                              {historyLoading ? (
+                                <div className="flex flex-1 items-center justify-center">
+                                  <div className="w-10 h-10 rounded-full border-4 border-white/10 border-t-white animate-spin" />
+                                </div>
+                              ) : filteredHistoryItems.length === 0 ? (
+                                <div className="flex flex-1 items-center justify-center text-center text-sm text-gray-400">
+                                  No transactions yet. Your recent wallet activity will appear here.
+                                </div>
+                              ) : (
+                                <div className="min-h-0 flex-1 space-y-3 overflow-y-auto pr-1 scrollbar-hide">
+                                  {filteredHistoryItems.map((item) => (
+                                    <div
+                                      key={item.id}
+                                      className="rounded-2xl border border-white/10 bg-white/5 px-4 py-4"
+                                    >
+                                      <div className="flex items-start justify-between gap-4">
+                                        <div className="min-w-0">
+                                          <div className="flex items-center gap-2">
+                                            <span className="text-sm font-bold text-white capitalize">{item.type}</span>
+                                            <span className="rounded-full border border-white/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.16em] text-gray-400">
+                                              {item.chainType}
+                                            </span>
+                                          </div>
+                                          <div className="mt-1 text-sm text-gray-400">{item.address}</div>
+                                          <div className="mt-2 text-xs text-gray-500">{formatDashboardTimestamp(item.timestamp)}</div>
                                         </div>
-                                        <div className="mt-1 text-sm text-gray-400">{item.address}</div>
-                                        <div className="mt-2 text-xs text-gray-500">{formatDashboardTimestamp(item.timestamp)}</div>
-                                      </div>
-                                      <div className="text-right">
-                                        <div className="text-sm font-mono text-white">{item.amount} {item.token}</div>
-                                        <div className={`mt-1 text-xs font-semibold ${
-                                          item.status === 'completed'
-                                            ? 'text-emerald-300'
-                                            : item.status === 'failed'
-                                              ? 'text-red-300'
-                                              : 'text-amber-300'
-                                        }`}>
-                                          {item.status}
+                                        <div className="text-right">
+                                          <div className="text-sm font-mono text-white">{item.amount} {item.token}</div>
+                                          <div className={`mt-1 text-xs font-semibold ${
+                                            item.status === 'completed'
+                                              ? 'text-emerald-300'
+                                              : item.status === 'failed'
+                                                ? 'text-red-300'
+                                                : 'text-amber-300'
+                                          }`}>
+                                            {item.status}
+                                          </div>
                                         </div>
                                       </div>
                                     </div>
-                                  </div>
-                                ))}
-                              </div>
-                            )}
+                                  ))}
+                                </div>
+                              )}
+                            </div>
                           </div>
                         )}
 
