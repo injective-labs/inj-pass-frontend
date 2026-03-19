@@ -1122,6 +1122,27 @@ export default function DashboardPage() {
             <div className="flex items-center gap-2">
               <ThemeToggleButton compact />
               <button
+                onClick={() => router.push('/faucet')}
+                className="rounded-lg border border-white/10 bg-white/5 p-2.5 transition-all group hover:border-violet-500/40 hover:bg-violet-600/20"
+                title="Testnet Faucet"
+              >
+                <svg
+                  className="h-[18px] w-[18px] text-gray-400 transition-colors group-hover:text-violet-300"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth={2}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M2 12h7" />
+                  <path d="M9 9h5a1 1 0 0 1 1 1v4a1 1 0 0 1-1 1H9V9z" />
+                  <path d="M10 9V7M13 9V7" />
+                  <path d="M15 10h2.5a3.5 3.5 0 1 1 0 7H15" />
+                  <path d="M18 17.5a2.5 2.5 0 1 1-5 0c0-1.1 1.2-2.4 2.1-3.4.5-.5.8-.9.9-1.1.1.2.5.6.9 1.1.9 1 2.1 2.3 2.1 3.4Z" />
+                </svg>
+              </button>
+              <button
                 onClick={() => setShowCardCenter(true)}
                 className="rounded-lg border border-white/10 bg-white/5 p-2.5 transition-all hover:bg-white/10"
                 title="Open Card Pay"
