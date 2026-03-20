@@ -2096,8 +2096,8 @@ export default function DashboardPage() {
                         )}
 
                         {walletPanel === 'receive' && (
-                          <div className="grid gap-5 pt-5 lg:grid-cols-[220px_minmax(0,1fr)] lg:items-center">
-                            <div className="flex justify-center">
+                          <div className="grid h-full min-h-0 gap-5 pt-5 lg:grid-cols-[220px_minmax(0,1fr)] lg:items-stretch">
+                            <div className="flex h-full items-center justify-center">
                               <div className="rounded-[2rem] bg-white p-4 shadow-2xl">
                                 <QRCodeSVG
                                   value={receiveDisplayAddress || address || ''}
@@ -2110,7 +2110,7 @@ export default function DashboardPage() {
                               </div>
                             </div>
 
-                            <div className="space-y-4">
+                            <div className="flex h-full min-h-0 flex-col">
                               <div className="relative p-1 bg-white/5 rounded-2xl border border-white/10">
                                 <div
                                   className={`absolute top-1 bottom-1 w-[calc(50%-0.25rem)] rounded-[0.85rem] bg-white transition-all duration-300 ${
@@ -2133,7 +2133,7 @@ export default function DashboardPage() {
                                 </div>
                               </div>
 
-                              <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                              <div className="mt-4 rounded-2xl border border-white/10 bg-black/20 p-4">
                                 <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">Wallet Address</div>
                                 <div className="mt-3 flex items-center gap-3">
                                   <div className="flex-1 overflow-x-auto scrollbar-hide font-mono text-sm text-white whitespace-nowrap">
@@ -2157,7 +2157,7 @@ export default function DashboardPage() {
                                 </div>
                               </div>
 
-                              <div className="grid gap-3 sm:grid-cols-2">
+                              <div className="mt-auto grid gap-3 pt-4 sm:grid-cols-2">
                                 <div className="rounded-2xl border border-emerald-500/15 bg-emerald-500/5 px-4 py-3 text-sm text-gray-300">
                                   Use <span className="text-white">{receiveAddressType === 'evm' ? 'EVM' : 'Cosmos'}</span> format depending on the sender you are receiving from.
                                 </div>
