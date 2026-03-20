@@ -939,6 +939,17 @@ export default function DashboardPage() {
   const getAlternateSwapToken = (current: SwapToken) => (
     swapTokenOptions.find((token) => token.symbol !== current)?.symbol || 'INJ'
   );
+  const sanitizeDecimalInput = useCallback((value: string) => {
+    const cleaned = value.replace(/[^\d.]/g, '');
+    const firstDot = cleaned.indexOf('.');
+
+    if (firstDot === -1) {
+      return cleaned;
+    }
+
+    return `${cleaned.slice(0, firstDot + 1)}${cleaned.slice(firstDot + 1).replace(/\./g, '')}`;
+  }, []);
+
   const triggerSendAmountAlert = () => {
     if (sendAmountAlertTimerRef.current) {
       window.clearTimeout(sendAmountAlertTimerRef.current);
@@ -1931,7 +1942,7 @@ export default function DashboardPage() {
                                     <input
                                       value={sendAmount}
                                       onChange={(event) => {
-                                        const nextValue = event.target.value;
+                                        const nextValue = sanitizeDecimalInput(event.target.value);
                                         setSendAmount(nextValue);
                                         setSendError('');
                                         const nextNumeric = Number(nextValue);
@@ -1943,12 +1954,12 @@ export default function DashboardPage() {
                                       placeholder="0.0000"
                                       className={`w-full bg-transparent text-3xl font-mono outline-none transition-colors duration-200 md:text-[2.35rem] ${
                                         sendAmountExceedsBalance
-                                          ? 'text-[#d66b6b] placeholder:text-[#d66b6b]/28'
+                                          ? 'text-[#8e3f3f] placeholder:text-[#8e3f3f]/20'
                                           : 'text-white placeholder:text-gray-600'
                                       }`}
                                     />
                                     <span className={`pb-1.5 text-sm font-semibold transition-colors duration-200 ${
-                                      sendAmountExceedsBalance ? 'text-[#d66b6b]/88' : 'text-gray-400'
+                                      sendAmountExceedsBalance ? 'text-[#8e3f3f]/85' : 'text-gray-400'
                                     }`}>INJ</span>
                                   </div>
 
