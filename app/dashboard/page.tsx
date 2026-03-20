@@ -921,7 +921,6 @@ export default function DashboardPage() {
   }, []);
 
   const receiveDisplayAddress = receiveAddressType === 'evm' ? (address || '') : getCosmosAddress(address || '');
-  const sendGasCost = sendGasEstimate ? formatEther(sendGasEstimate.totalCost) : '';
   const sendGasLimitLabel = sendGasEstimate ? sendGasEstimate.gasLimit.toString() : 'Awaiting input';
   const sendMaxFeeLabel = sendGasEstimate ? `${Number(formatUnits(sendGasEstimate.maxFeePerGas, 9)).toFixed(2)} Gwei` : 'Awaiting input';
   const sendPriorityFeeLabel = sendGasEstimate ? `${Number(formatUnits(sendGasEstimate.maxPriorityFeePerGas, 9)).toFixed(2)} Gwei` : 'Awaiting input';
@@ -1254,8 +1253,15 @@ export default function DashboardPage() {
 
     const trimmedRecipient = sendRecipient.trim();
     const trimmedAmount = sendAmount.trim();
+    const parsedAmount = Number(trimmedAmount);
+    const estimateRecipient = trimmedRecipient && isValidAddress(trimmedRecipient)
+      ? getEvmAddress(trimmedRecipient)
+      : '0x0000000000000000000000000000000000000000';
+    const estimateAmount = trimmedAmount !== '' && Number.isFinite(parsedAmount) && parsedAmount > 0
+      ? trimmedAmount
+      : '0.001';
 
-    if (!address || !trimmedRecipient || !trimmedAmount || !isValidAddress(trimmedRecipient) || Number(trimmedAmount) <= 0) {
+    if (!address) {
       setSendGasEstimate(null);
       setSendEstimating(false);
       return;
@@ -1267,8 +1273,8 @@ export default function DashboardPage() {
         setSendEstimating(true);
         const estimate = await estimateGas(
           address,
-          getEvmAddress(trimmedRecipient),
-          trimmedAmount,
+          estimateRecipient,
+          estimateAmount,
           undefined,
           currentNetworkMeta.chain
         );
@@ -1993,12 +1999,6 @@ export default function DashboardPage() {
                               <div className="mt-5 rounded-2xl border border-white/8 bg-white/[0.03] px-4 py-3">
                                 <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">Gas</div>
                                 <div className="mt-3 space-y-3">
-                                  <div className="flex items-center justify-between gap-3 text-sm">
-                                    <span className="text-gray-500">Estimated Cost</span>
-                                    <span className="font-mono text-white">
-                                      {sendEstimating ? 'Estimating...' : sendGasEstimate ? `${Number(sendGasCost).toFixed(6)} INJ` : 'Awaiting input'}
-                                    </span>
-                                  </div>
                                   <div className="flex items-center justify-between gap-3 text-sm">
                                     <span className="text-gray-500">Gas Limit</span>
                                     <span className="font-mono text-white">{sendEstimating && !sendGasEstimate ? 'Estimating...' : sendGasLimitLabel}</span>
