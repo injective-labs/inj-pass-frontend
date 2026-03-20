@@ -241,7 +241,7 @@ export default function NinjaMinerGame({ walletAddress }: NinjaMinerGameProps) {
           }`}
           aria-label={isCoolingDown ? 'NINJA tap cooldown active' : 'Tap NINJA'}
         >
-          <div className={`ninja-logo-wrap ${isLight ? 'bg-white/88' : 'bg-black/30'}`}>
+          <div className="ninja-logo-wrap">
             <Image
               src="/NIJIA.png"
               alt="NINJA"
@@ -332,8 +332,6 @@ export default function NinjaMinerGame({ walletAddress }: NinjaMinerGameProps) {
           width: 11rem;
           height: 11rem;
           border-radius: 999px;
-          backdrop-filter: blur(18px);
-          box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 16px 40px rgba(15, 23, 42, 0.14);
         }
 
         .tap-burst {
