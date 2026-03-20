@@ -1940,6 +1940,9 @@ export default function DashboardPage() {
                                 <div className="flex h-full flex-col justify-between">
                                   <div className={`flex items-end gap-3 ${sendAmountAlertActive ? 'animate-send-amount-shake' : ''}`}>
                                     <input
+                                      type="text"
+                                      autoComplete="off"
+                                      spellCheck={false}
                                       value={sendAmount}
                                       onChange={(event) => {
                                         const nextValue = sanitizeDecimalInput(event.target.value);
@@ -1952,7 +1955,7 @@ export default function DashboardPage() {
                                       }}
                                       inputMode="decimal"
                                       placeholder="0.0000"
-                                      className={`w-full bg-transparent text-3xl font-mono outline-none transition-colors duration-200 md:text-[2.35rem] ${
+                                      className={`w-full appearance-none bg-transparent text-3xl font-mono outline-none transition-colors duration-200 selection:bg-transparent selection:text-current [-webkit-text-fill-color:currentColor] md:text-[2.35rem] ${
                                         sendAmountExceedsBalance
                                           ? 'text-[#8e3f3f] placeholder:text-[#8e3f3f]/20'
                                           : 'text-white placeholder:text-gray-600'
