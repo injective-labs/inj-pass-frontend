@@ -1,9 +1,7 @@
 'use client';
 
-import { useState } from 'react';
-import Image from 'next/image';
 import ThemeToggleButton from '@/components/ThemeToggleButton';
-import { formatAddress } from '@/utils/wallet';
+import EditableAccountIdentity from '@/components/EditableAccountIdentity';
 
 interface AccountHeaderProps {
   address?: string;
@@ -22,58 +20,9 @@ export default function AccountHeader({
   showFaucetButton = false,
   onFaucetClick,
 }: AccountHeaderProps) {
-  const [copied, setCopied] = useState(false);
-
-  const handleCopyAddress = () => {
-    if (address) {
-      navigator.clipboard.writeText(address);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    }
-  };
-
   return (
     <div className="flex items-center justify-between gap-4">
-      {/* Account Info */}
-      <div className="flex min-w-0 items-center gap-2.5">
-        {/* Brand Logo */}
-        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[0.95rem] border border-white/10 bg-white/5 p-1.5">
-          <Image 
-            src="/lambdalogo.png" 
-            alt="Logo" 
-            width={24} 
-            height={24}
-            className="h-6 w-6 object-contain"
-          />
-        </div>
-        
-        <div className="min-w-0">
-          <div className="text-sm font-bold text-white">{accountName}</div>
-          <div className="mt-1.5 flex items-center gap-1.5 whitespace-nowrap">
-            {address && (
-              <span className="rounded-full border border-white/10 bg-white/[0.04] px-2 py-0.5 font-mono text-[10px] text-gray-400">
-                {formatAddress(address)}
-              </span>
-            )}
-            <button 
-              onClick={handleCopyAddress}
-              className="flex h-6 w-6 items-center justify-center rounded-md border border-white/10 bg-white/[0.04] transition-all hover:bg-white/10 group"
-              title="Copy address"
-            >
-              {copied ? (
-                <svg className="h-3 w-3 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                </svg>
-              ) : (
-                <svg className="h-3 w-3 text-gray-400 transition-colors group-hover:text-white" fill="none" stroke="currentColor" viewBox="0 0 16 16">
-                  <rect width="11" height="11" x="4" y="4" rx="1" ry="1" strokeWidth="1.5" />
-                  <path d="M2 10c-0.8 0-1.5-0.7-1.5-1.5V2c0-0.8 0.7-1.5 1.5-1.5h8.5c0.8 0 1.5 0.7 1.5 1.5" strokeWidth="1.5" />
-                </svg>
-              )}
-            </button>
-          </div>
-        </div>
-      </div>
+      <EditableAccountIdentity key={address || 'default'} address={address} defaultName={accountName} />
 
       <div className="flex items-center gap-2">
         <ThemeToggleButton compact />

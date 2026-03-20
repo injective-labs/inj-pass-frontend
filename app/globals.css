@@ -518,6 +518,78 @@ html[data-theme="light"] [class*="shadow-"] {
   }
 }
 
+@keyframes injpassNameplateSheen {
+  0% {
+    transform: translateX(-150%);
+    opacity: 0;
+  }
+  18% {
+    opacity: 0.12;
+  }
+  48% {
+    opacity: 0.6;
+  }
+  100% {
+    transform: translateX(170%);
+    opacity: 0;
+  }
+}
+
+@keyframes dashboardSurfaceIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.injpass-nameplate {
+  position: relative;
+  overflow: hidden;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  padding: 0.2rem 0.58rem;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  backdrop-filter: blur(10px);
+}
+
+.injpass-nameplate::after {
+  content: '';
+  position: absolute;
+  inset: -22% auto -22% -45%;
+  width: 44%;
+  background: linear-gradient(115deg, transparent 0%, rgba(255, 255, 255, 0.08) 18%, rgba(255, 255, 255, 0.75) 50%, rgba(255, 255, 255, 0.14) 82%, transparent 100%);
+  transform: translateX(-150%);
+  animation: injpassNameplateSheen 5.6s cubic-bezier(0.19, 1, 0.22, 1) infinite;
+}
+
+.injpass-nameplate-gold {
+  border-color: rgba(250, 204, 21, 0.28);
+  background: linear-gradient(135deg, rgba(250, 204, 21, 0.12), rgba(234, 179, 8, 0.22));
+  color: #fef3c7;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 0 0 1px rgba(161, 98, 7, 0.08);
+}
+
+.injpass-nameplate-silver {
+  border-color: rgba(226, 232, 240, 0.22);
+  background: linear-gradient(135deg, rgba(226, 232, 240, 0.1), rgba(148, 163, 184, 0.18));
+  color: #e2e8f0;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 0 0 1px rgba(148, 163, 184, 0.08);
+}
+
+.dashboard-surface-enter {
+  animation: dashboardSurfaceIn 360ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
 @keyframes cardFloat {
   0% {
     transform: translateY(0px) rotateY(0deg) scale(1.25);

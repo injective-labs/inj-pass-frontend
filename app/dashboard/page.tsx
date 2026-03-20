@@ -1,18 +1,18 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { usePin } from '@/contexts/PinContext';
 import { useWallet } from '@/contexts/WalletContext';
 import { estimateGas, getBalance, getCosmosTxHistory, getTxHistory, sendTransaction } from '@/wallet/chain';
 import { Balance, GasEstimate, INJECTIVE_MAINNET } from '@/types/chain';
 import { getTokenPrice } from '@/services/price';
-import { executeSwap, getSwapQuote, getTokenBalances, ROUTER_ADDRESS } from '@/services/dex-swap';
+import { executeSwap, getSwapQuote, ROUTER_ADDRESS } from '@/services/dex-swap';
 import { startQRScanner, stopQRScanner, clearQRScanner, isCameraSupported, isValidAddress } from '@/services/qr-scanner';
 import { getN1NJ4NFTs, type NFT } from '@/services/nft';
 import { getUserStakingInfo, type StakingInfo } from '@/services/staking';
 import { QRCodeSVG } from 'qrcode.react';
-import { formatEther, type Address } from 'viem';
+import { createPublicClient, formatEther, formatUnits, http, type Address } from 'viem';
 import Image from 'next/image';
 import LoadingSpinner from '@/components/LoadingSpinner';
 import NFTDetailModal from '@/components/NFTDetailModal';
@@ -20,11 +20,14 @@ import TransactionAuthModal from '@/components/TransactionAuthModal';
 import ThemeToggleButton from '@/components/ThemeToggleButton';
 import CardCenterModal from '@/components/CardCenterModal';
 import NinjaMinerGame from '@/components/NinjaMinerGame';
+import EditableAccountIdentity from '@/components/EditableAccountIdentity';
 import { useTheme } from '@/contexts/ThemeContext';
-import { TOKENS_MAINNET } from '@/services/tokens';
+import { TOKENS_MAINNET, TOKENS_TESTNET } from '@/services/tokens';
+import { ERC20_ABI } from '@/services/dex-abi';
 import SettingsPage from '../settings/page';
-import { formatAddress, privateKeyToHex } from '@/utils/wallet';
+import { privateKeyToHex } from '@/utils/wallet';
 import { getInjectiveAddress, getEthereumAddress } from '@injectivelabs/sdk-ts';
+import { INJECTIVE_TESTNET } from '@/types/chain';
 
 type AssetTab = 'tokens' | 'nfts' | 'defi' | 'earn';
 type WalletPanel = 'overview' | 'send' | 'receive' | 'swap' | 'history' | 'settings';
@@ -34,10 +37,26 @@ type DashboardTransactionStatus = 'completed' | 'pending' | 'failed';
 type DashboardHistoryFilter = 'all' | DashboardTransactionType;
 type DashboardChainType = 'EVM' | 'Cosmos';
 type SwapToken = 'INJ' | 'USDT' | 'USDC' | 'NINJA';
-type AssetSurfaceMode = 'assets' | 'ai';
+type AssetSurfaceMode = 'assets' | 'ai' | 'faucet';
+type WalletNetworkMode = 'mainnet' | 'testnet';
 
 const NINJA_STORAGE_PREFIX = 'inj-pass:ninja-miner:';
 const DEFAULT_NINJA_BALANCE = 22;
+
+const NETWORK_META: Record<WalletNetworkMode, { label: string; shortLabel: string; chain: typeof INJECTIVE_MAINNET; tokenSet: typeof TOKENS_MAINNET }> = {
+  mainnet: {
+    label: 'Injective EVM Mainnet',
+    shortLabel: 'Mainnet',
+    chain: INJECTIVE_MAINNET,
+    tokenSet: TOKENS_MAINNET,
+  },
+  testnet: {
+    label: 'Injective EVM Testnet',
+    shortLabel: 'Testnet',
+    chain: INJECTIVE_TESTNET,
+    tokenSet: TOKENS_TESTNET as typeof TOKENS_MAINNET,
+  },
+};
 
 interface DashboardTransaction {
   id: string;
@@ -87,6 +106,46 @@ function readStoredNinjaBalance(walletAddress?: string) {
     console.error('Failed to restore ninja balance:', error);
     return DEFAULT_NINJA_BALANCE;
   }
+}
+
+async function getDashboardTokenBalances(userAddress: Address, networkMode: WalletNetworkMode) {
+  const networkMeta = NETWORK_META[networkMode];
+  const client = createPublicClient({
+    transport: http(networkMeta.chain.rpcUrl),
+  });
+
+  const nativeBalance = await client.getBalance({ address: userAddress });
+  const results: Record<string, string> = {
+    INJ: formatUnits(nativeBalance, 18),
+    USDC: '0',
+    USDT: '0',
+  };
+
+  await Promise.all(
+    (['USDC', 'USDT'] as const).map(async (symbol) => {
+      const tokenInfo = networkMeta.tokenSet[symbol];
+      if (!tokenInfo) {
+        results[symbol] = '0';
+        return;
+      }
+
+      try {
+        const rawBalance = await client.readContract({
+          address: tokenInfo.address as Address,
+          abi: ERC20_ABI,
+          functionName: 'balanceOf',
+          args: [userAddress],
+        }) as bigint;
+
+        results[symbol] = formatUnits(rawBalance, tokenInfo.decimals);
+      } catch (error) {
+        console.error(`Failed to load ${symbol} balance on ${networkMode}:`, error);
+        results[symbol] = '0';
+      }
+    })
+  );
+
+  return results;
 }
 
 const ROLLING_DIGIT_STACK = Array.from({ length: 20 }, (_, index) => String(index % 10));
@@ -361,46 +420,18 @@ function DashboardSurfaceFrame({
   );
 }
 
-function getFaucetPopoverStyle(button: HTMLButtonElement | null): CSSProperties {
-  const defaultWidth = 384;
-  const defaultHeight = 540;
-
-  if (typeof window === 'undefined' || !button) {
-    return {
-      width: defaultWidth,
-      height: defaultHeight,
-      top: 88,
-      left: '50%',
-      transform: 'translateX(-50%)',
-    };
-  }
-
-  const rect = button.getBoundingClientRect();
-  const viewportWidth = window.innerWidth;
-  const viewportHeight = window.innerHeight;
-  const width = Math.min(defaultWidth, viewportWidth - 32);
-  const centeredLeft = rect.left + rect.width / 2 - width / 2;
-  const left = Math.max(16, Math.min(centeredLeft, viewportWidth - width - 16));
-  const top = Math.max(20, rect.top + rect.height / 2 - 18);
-  const height = Math.min(defaultHeight, viewportHeight - top - 24);
-
-  return {
-    width,
-    height,
-    top,
-    left,
-  };
-}
-
 export default function DashboardPage() {
   const router = useRouter();
   const { theme } = useTheme();
   const { isUnlocked, address, privateKey, resetTxAuth, isCheckingSession } = useWallet();
   const { autoLockMinutes, isPinLocked } = usePin();
-  const faucetButtonRef = useRef<HTMLButtonElement | null>(null);
   const [balance, setBalance] = useState<Balance | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [walletNetworkMode, setWalletNetworkMode] = useState<WalletNetworkMode>('mainnet');
+  const [networkSwitching, setNetworkSwitching] = useState(false);
+  const [walletSurfaceMotionKey, setWalletSurfaceMotionKey] = useState(0);
+  const [assetSurfaceMotionKey, setAssetSurfaceMotionKey] = useState(0);
   const [injPrice, setInjPrice] = useState<number>(25);
   const [injPriceChange24h, setInjPriceChange24h] = useState<number>(0);
   const [usdtPriceChange24h, setUsdtPriceChange24h] = useState<number>(0);
@@ -467,16 +498,15 @@ export default function DashboardPage() {
   const [postAuthAction, setPostAuthAction] = useState<'send' | 'swap' | null>(null);
   const [showCardCenter, setShowCardCenter] = useState(false);
   const [cardCenterActive, setCardCenterActive] = useState(false);
-  const [showFaucetSheet, setShowFaucetSheet] = useState(false);
-  const [faucetSheetActive, setFaucetSheetActive] = useState(false);
   const [flippedTokenCard, setFlippedTokenCard] = useState<string | null>(null);
   const [copiedTokenInfo, setCopiedTokenInfo] = useState<string | null>(null);
   const [sendAmountAlertActive, setSendAmountAlertActive] = useState(false);
   const tokenFlipTimerRef = useRef<number | null>(null);
   const cardCenterTimerRef = useRef<number | null>(null);
   const isLight = theme === 'light';
-  const faucetSheetTimerRef = useRef<number | null>(null);
   const sendAmountAlertTimerRef = useRef<number | null>(null);
+  const hasLoadedOnceRef = useRef(false);
+  const currentNetworkMeta = NETWORK_META[walletNetworkMode];
 
   useEffect(() => {
     // Wait for session check to complete
@@ -493,9 +523,10 @@ export default function DashboardPage() {
     }
 
     console.log('[Dashboard] Unlocked, loading data...');
-    loadData();
+    void loadData({ background: hasLoadedOnceRef.current });
+    hasLoadedOnceRef.current = true;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isUnlocked, address, isCheckingSession]);
+  }, [isUnlocked, address, isCheckingSession, walletNetworkMode]);
 
   useEffect(() => {
     const walletAddress = address || undefined;
@@ -519,6 +550,13 @@ export default function DashboardPage() {
       window.removeEventListener('storage', handleStorage);
     };
   }, [address]);
+
+  useEffect(() => {
+    setTokenBalances((current) => ({
+      ...current,
+      NINJA: walletNetworkMode === 'mainnet' ? ninjaBalance.toFixed(2) : '0.00',
+    }));
+  }, [ninjaBalance, walletNetworkMode]);
 
   useEffect(() => {
     if (tokenFlipTimerRef.current) {
@@ -549,10 +587,6 @@ export default function DashboardPage() {
         window.clearTimeout(cardCenterTimerRef.current);
         cardCenterTimerRef.current = null;
       }
-      if (faucetSheetTimerRef.current) {
-        window.clearTimeout(faucetSheetTimerRef.current);
-        faucetSheetTimerRef.current = null;
-      }
       if (sendAmountAlertTimerRef.current) {
         window.clearTimeout(sendAmountAlertTimerRef.current);
         sendAmountAlertTimerRef.current = null;
@@ -560,17 +594,22 @@ export default function DashboardPage() {
     };
   }, []);
 
-  const loadData = useCallback(async () => {
+  const loadData = useCallback(async ({ background = false }: { background?: boolean } = {}) => {
     if (!address) return;
 
     try {
-      setLoading(true);
+      if (background) {
+        setRefreshing(true);
+        setNetworkSwitching(true);
+      } else {
+        setLoading(true);
+      }
       const [balanceData, injPriceData, usdtPriceData, usdcPriceData, tokenBalData] = await Promise.all([
-        getBalance(address, INJECTIVE_MAINNET),
+        getBalance(address, currentNetworkMeta.chain),
         getTokenPrice('injective-protocol'),
         getTokenPrice('tether'),
         getTokenPrice('usd-coin'),
-        getTokenBalances(['INJ', 'USDT', 'USDC'], address as Address),
+        getDashboardTokenBalances(address as Address, walletNetworkMode),
       ]);
       
       setBalance(balanceData);
@@ -581,7 +620,7 @@ export default function DashboardPage() {
       setTokenBalances({
         INJ: parseFloat(tokenBalData.INJ).toFixed(4),
         USDC: parseFloat(tokenBalData.USDC).toFixed(2),
-        NINJA: '0.00',
+        NINJA: walletNetworkMode === 'mainnet' ? ninjaBalance.toFixed(2) : '0.00',
         USDT: parseFloat(tokenBalData.USDT).toFixed(2),
       });
     } catch (error) {
@@ -589,8 +628,9 @@ export default function DashboardPage() {
     } finally {
       setLoading(false);
       setRefreshing(false);
+      setNetworkSwitching(false);
     }
-  }, [address]);
+  }, [address, currentNetworkMeta.chain, ninjaBalance, walletNetworkMode]);
 
   // Load NFTs when switching to NFTs tab
   const loadNFTs = async () => {
@@ -644,7 +684,7 @@ export default function DashboardPage() {
 
   const handleRefresh = () => {
     setRefreshing(true);
-    loadData();
+    void loadData({ background: true });
     
     // Also refresh staking info if on DeFi tab
     if (assetTab === 'defi') {
@@ -654,14 +694,6 @@ export default function DashboardPage() {
     // Also refresh NFTs if on NFTs tab
     if (assetTab === 'nfts') {
       loadNFTs();
-    }
-  };
-
-  const handleCopyAddress = () => {
-    if (address) {
-      navigator.clipboard.writeText(address);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
     }
   };
 
@@ -699,7 +731,7 @@ export default function DashboardPage() {
     { symbol: 'INJ' as const, name: 'Injective', icon: '/injswap.png', balance: tokenBalances.INJ, enabled: true },
     { symbol: 'USDT' as const, name: 'Tether', icon: '/USDT_Logo.png', balance: tokenBalances.USDT, enabled: true },
     { symbol: 'USDC' as const, name: 'USD Coin', icon: '/USDC_Logo.png', balance: tokenBalances.USDC, enabled: true },
-    { symbol: 'NINJA' as const, name: 'Ninja', icon: '/NIJIA.png', balance: ninjaBalance.toFixed(2), enabled: false },
+    { symbol: 'NINJA' as const, name: 'Ninja', icon: '/NIJIA.png', balance: walletNetworkMode === 'mainnet' ? ninjaBalance.toFixed(2) : '0.00', enabled: false },
   ];
   const swapFromMeta = swapTokenOptions.find((token) => token.symbol === swapFromToken) || swapTokenOptions[0];
   const swapToMeta = swapTokenOptions.find((token) => token.symbol === swapToToken) || swapTokenOptions[1];
@@ -758,11 +790,14 @@ export default function DashboardPage() {
 
     try {
       const [evmTxHistory, cosmosTxHistory] = await Promise.all([
-        getTxHistory(address, 20).catch((error) => {
+        getTxHistory(address, 20, currentNetworkMeta.chain).catch((error) => {
           console.error('Failed to fetch EVM transactions:', error);
           return [];
         }),
         (async () => {
+          if (walletNetworkMode === 'testnet') {
+            return [];
+          }
           try {
             const cosmosAddress = getInjectiveAddress(address);
             return await getCosmosTxHistory(cosmosAddress, 20);
@@ -826,7 +861,7 @@ export default function DashboardPage() {
     } finally {
       setHistoryLoading(false);
     }
-  }, [address, isUnlocked]);
+  }, [address, currentNetworkMeta.chain, isUnlocked, walletNetworkMode]);
 
   const executeInlineSend = useCallback(async () => {
     const trimmedRecipient = sendRecipient.trim();
@@ -869,7 +904,7 @@ export default function DashboardPage() {
         recipientAddress,
         trimmedAmount,
         undefined,
-        INJECTIVE_MAINNET
+        currentNetworkMeta.chain
       );
 
       setSendTxHash(hash);
@@ -881,9 +916,14 @@ export default function DashboardPage() {
     } finally {
       setSendSubmitting(false);
     }
-  }, [getEvmAddress, loadData, loadHistory, privateKey, resetTxAuth, sendAmount, sendBalanceValue, sendGasEstimate, sendRecipient]);
+  }, [currentNetworkMeta.chain, getEvmAddress, loadData, loadHistory, privateKey, resetTxAuth, sendAmount, sendBalanceValue, sendGasEstimate, sendRecipient]);
 
   const executeInlineSwap = useCallback(async () => {
+    if (walletNetworkMode === 'testnet') {
+      setSwapError('Swap is unavailable on testnet right now.');
+      return;
+    }
+
     const numericAmount = Number(swapAmount);
     const availableBalance = Number(swapFromMeta.balance || '0');
 
@@ -934,7 +974,7 @@ export default function DashboardPage() {
     } finally {
       setSwapSubmitting(false);
     }
-  }, [address, loadData, loadHistory, privateKey, resetTxAuth, swapAmount, swapFromMeta.balance, swapFromMeta.enabled, swapFromToken, swapSlippage, swapToMeta.enabled, swapToToken]);
+  }, [address, loadData, loadHistory, privateKey, resetTxAuth, swapAmount, swapFromMeta.balance, swapFromMeta.enabled, swapFromToken, swapSlippage, swapToMeta.enabled, swapToToken, walletNetworkMode]);
 
   const handleSendAction = () => {
     if (isPinLocked || autoLockMinutes === 0 || !privateKey) {
@@ -1024,7 +1064,7 @@ export default function DashboardPage() {
           getEvmAddress(trimmedRecipient),
           trimmedAmount,
           undefined,
-          INJECTIVE_MAINNET
+          currentNetworkMeta.chain
         );
 
         if (!ignore) {
@@ -1046,10 +1086,17 @@ export default function DashboardPage() {
       ignore = true;
       window.clearTimeout(timer);
     };
-  }, [address, getEvmAddress, sendAmount, sendRecipient, walletPanel]);
+  }, [address, currentNetworkMeta.chain, getEvmAddress, sendAmount, sendRecipient, walletPanel]);
 
   useEffect(() => {
     if (walletPanel !== 'swap') return;
+
+    if (walletNetworkMode === 'testnet') {
+      setSwapQuoteAmount('');
+      setSwapQuoteLoading(false);
+      setSwapPriceImpact('0.00');
+      return;
+    }
 
     if (!swapAmount || Number(swapAmount) <= 0 || swapFromToken === swapToToken) {
       setSwapQuoteAmount('');
@@ -1096,7 +1143,7 @@ export default function DashboardPage() {
       ignore = true;
       window.clearTimeout(timer);
     };
-  }, [swapAmount, swapFromMeta.enabled, swapFromToken, swapSlippage, swapToMeta.enabled, swapToToken, walletPanel]);
+  }, [swapAmount, swapFromMeta.enabled, swapFromToken, swapSlippage, swapToMeta.enabled, swapToToken, walletNetworkMode, walletPanel]);
 
   const assetTabOrder: AssetTab[] = ['tokens', 'nfts', 'defi', 'earn'];
   const assetTabIndex = assetTabOrder.indexOf(assetTab);
@@ -1216,35 +1263,6 @@ export default function DashboardPage() {
     }, 280);
   };
 
-  const openFaucetSheet = () => {
-    if (faucetSheetTimerRef.current) {
-      window.clearTimeout(faucetSheetTimerRef.current);
-      faucetSheetTimerRef.current = null;
-    }
-
-    setShowFaucetSheet(true);
-    setFaucetSheetActive(false);
-
-    window.requestAnimationFrame(() => {
-      window.requestAnimationFrame(() => {
-        setFaucetSheetActive(true);
-      });
-    });
-  };
-
-  const closeFaucetSheet = () => {
-    if (faucetSheetTimerRef.current) {
-      window.clearTimeout(faucetSheetTimerRef.current);
-      faucetSheetTimerRef.current = null;
-    }
-
-    setFaucetSheetActive(false);
-    faucetSheetTimerRef.current = window.setTimeout(() => {
-      setShowFaucetSheet(false);
-      faucetSheetTimerRef.current = null;
-    }, 260);
-  };
-
   const openAiAssetSurface = () => {
     setFlippedTokenCard(null);
     setAssetSurfaceMode((current) => {
@@ -1255,6 +1273,29 @@ export default function DashboardPage() {
 
       return 'ai';
     });
+  };
+
+  const openFaucetAssetSurface = () => {
+    setFlippedTokenCard(null);
+    setWalletNetworkMode('testnet');
+    setAssetSurfaceMode((current) => (current === 'faucet' ? 'assets' : 'faucet'));
+    setWalletSurfaceMotionKey((value) => value + 1);
+    setAssetSurfaceMotionKey((value) => value + 1);
+    setAssetTrendReplayKey((value) => value + 1);
+  };
+
+  const toggleWalletNetworkMode = () => {
+    setFlippedTokenCard(null);
+    setWalletNetworkMode((current) => {
+      const next = current === 'mainnet' ? 'testnet' : 'mainnet';
+      if (next === 'mainnet' && assetSurfaceMode === 'faucet') {
+        setAssetSurfaceMode('assets');
+      }
+      return next;
+    });
+    setWalletSurfaceMotionKey((value) => value + 1);
+    setAssetSurfaceMotionKey((value) => value + 1);
+    setAssetTrendReplayKey((value) => value + 1);
   };
 
   const isDashboardReady = !isCheckingSession && !loading && isUnlocked && !!address;
@@ -1275,13 +1316,21 @@ export default function DashboardPage() {
   const assetTrendSeries = buildPixelTrendSeries(totalUsdNumeric, injPriceChange24h);
   const isWalletOverview = walletPanel === 'overview';
   const isAiStage = assetSurfaceMode === 'ai';
+  const isFaucetStage = assetSurfaceMode === 'faucet';
   const activeWalletPanelMeta = walletPanel !== 'overview' ? walletPanelMeta[walletPanel] : null;
-  const formattedNinjaBalance = ninjaBalance.toFixed(2);
+  const formattedNinjaBalance = walletNetworkMode === 'mainnet' ? ninjaBalance.toFixed(2) : '0.00';
   const overviewStageClassName = 'h-[510px] md:h-[482px]';
   const detailStageClassName = 'h-[540px] md:h-[520px]';
   const aiStageClassName = overviewStageClassName;
   const walletStageClassName = isAiStage ? aiStageClassName : isWalletOverview ? overviewStageClassName : detailStageClassName;
-  const assetStageClassName = isAiStage ? aiStageClassName : overviewStageClassName;
+  const assetStageClassName = overviewStageClassName;
+  const currentNetworkLabel = currentNetworkMeta.label;
+  const currentNetworkShortLabel = currentNetworkMeta.shortLabel;
+  const currentTokenSet = currentNetworkMeta.tokenSet;
+  const currentWinjAddress = currentTokenSet.WINJ?.address || TOKENS_MAINNET.WINJ.address;
+  const currentUsdtAddress = currentTokenSet.USDT?.address || null;
+  const currentUsdcAddress = currentTokenSet.USDC?.address || null;
+  const swapUnavailableOnTestnet = walletNetworkMode === 'testnet';
   const dashboardTokenCards = [
     {
       symbol: 'INJ',
@@ -1290,8 +1339,8 @@ export default function DashboardPage() {
       usdValue: `$${(parseFloat(tokenBalances.INJ) * injPrice).toFixed(2)}`,
       change: `${injPriceChange24h >= 0 ? '+' : ''}${injPriceChange24h.toFixed(2)}%`,
       changeClass: injPriceChange24h >= 0 ? 'text-green-400' : 'text-red-400',
-      copyValue: TOKENS_MAINNET.WINJ.address,
-      contractValue: truncateMiddle(TOKENS_MAINNET.WINJ.address, 8, 6),
+      copyValue: currentWinjAddress,
+      contractValue: truncateMiddle(currentWinjAddress, 8, 6),
     },
     {
       symbol: 'USDC',
@@ -1300,8 +1349,8 @@ export default function DashboardPage() {
       usdValue: `$${tokenBalances.USDC}`,
       change: `${usdcPriceChange24h >= 0 ? '+' : ''}${usdcPriceChange24h.toFixed(2)}%`,
       changeClass: usdcPriceChange24h >= 0 ? 'text-green-400' : 'text-red-400',
-      copyValue: TOKENS_MAINNET.USDC.address,
-      contractValue: truncateMiddle(TOKENS_MAINNET.USDC.address, 8, 6),
+      copyValue: currentUsdcAddress,
+      contractValue: currentUsdcAddress ? truncateMiddle(currentUsdcAddress, 8, 6) : 'No contract yet',
     },
     {
       symbol: 'NINJA',
@@ -1320,8 +1369,8 @@ export default function DashboardPage() {
       usdValue: `$${tokenBalances.USDT}`,
       change: `${usdtPriceChange24h >= 0 ? '+' : ''}${usdtPriceChange24h.toFixed(2)}%`,
       changeClass: usdtPriceChange24h >= 0 ? 'text-green-400' : 'text-red-400',
-      copyValue: TOKENS_MAINNET.USDT.address,
-      contractValue: truncateMiddle(TOKENS_MAINNET.USDT.address, 8, 6),
+      copyValue: currentUsdtAddress,
+      contractValue: currentUsdtAddress ? truncateMiddle(currentUsdtAddress, 8, 6) : 'No contract yet',
     },
   ] as const;
 
@@ -1336,54 +1385,27 @@ export default function DashboardPage() {
             <div className="max-w-7xl mx-auto px-4 py-6">
           {/* Header Top */}
           <div className="mb-6 flex items-center justify-between">
-            {/* Account Info */}
-            <div className="flex min-w-0 items-center gap-2.5">
-              {/* Brand Logo */}
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[0.95rem] border border-white/10 bg-white/5 p-1.5">
-                <Image 
-                  src="/lambdalogo.png" 
-                  alt="Logo" 
-                  width={24} 
-                  height={24}
-                  className="h-6 w-6 object-contain"
-                />
-              </div>
-              
-              <div className="min-w-0">
-                <div className="text-sm font-bold text-white">Account 1</div>
-                <div className="mt-1.5 flex items-center gap-1.5 whitespace-nowrap">
-                  {address && (
-                    <span className="rounded-full border border-white/10 bg-white/[0.04] px-2 py-0.5 font-mono text-[10px] text-gray-400">
-                      {formatAddress(address)}
-                    </span>
-                  )}
-                  <button 
-                    onClick={handleCopyAddress}
-                    className="group flex h-6 w-6 items-center justify-center rounded-md border border-white/10 bg-white/[0.04] transition-all hover:bg-white/10"
-                    title="Copy address"
-                  >
-                    {copied ? (
-                      <svg className="h-3 w-3 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                      </svg>
-                    ) : (
-                      <svg className="h-3 w-3 text-gray-400 transition-colors group-hover:text-white" fill="none" stroke="currentColor" viewBox="0 0 16 16">
-                        <rect width="11" height="11" x="4" y="4" rx="1" ry="1" strokeWidth="1.5" />
-                        <path d="M2 10c-0.8 0-1.5-0.7-1.5-1.5V2c0-0.8 0.7-1.5 1.5-1.5h8.5c0.8 0 1.5 0.7 1.5 1.5" strokeWidth="1.5" />
-                      </svg>
-                    )}
-                  </button>
-                </div>
-              </div>
-            </div>
+            <EditableAccountIdentity key={address || 'default'} address={address || undefined} />
 
             {/* Scan QR Code Button */}
             <div className="flex items-center gap-2">
               <ThemeToggleButton compact />
               <button
+                onClick={toggleWalletNetworkMode}
+                disabled={networkSwitching}
+                className={`rounded-lg border px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.22em] transition-all ${
+                  walletNetworkMode === 'testnet'
+                    ? 'border-cyan-400/35 bg-[linear-gradient(135deg,rgba(34,211,238,0.22),rgba(59,130,246,0.14))] text-white shadow-[0_10px_26px_rgba(34,211,238,0.16)]'
+                    : 'border-white/10 bg-white/5 text-gray-300 hover:border-cyan-500/30 hover:bg-cyan-500/10 hover:text-white'
+                } ${networkSwitching ? 'cursor-wait opacity-80' : ''}`}
+                title={walletNetworkMode === 'testnet' ? 'Switch to mainnet wallet' : 'Switch to testnet wallet'}
+              >
+                {networkSwitching ? '...' : 'T'}
+              </button>
+              <button
                 onClick={openAiAssetSurface}
                 className={`rounded-lg border px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.22em] transition-all ${
-                  assetSurfaceMode === 'assets'
+                  !isAiStage
                     ? 'border-white/10 bg-white/5 text-gray-300 hover:border-violet-500/40 hover:bg-violet-600/15 hover:text-white'
                     : 'border-fuchsia-400/35 bg-[linear-gradient(135deg,rgba(139,92,246,0.24),rgba(59,130,246,0.14))] text-white shadow-[0_10px_30px_rgba(99,102,241,0.22)]'
                 }`}
@@ -1392,13 +1414,16 @@ export default function DashboardPage() {
                 AI
               </button>
               <button
-                ref={faucetButtonRef}
-                onClick={openFaucetSheet}
-                className="rounded-lg border border-white/10 bg-white/5 p-2.5 transition-all group hover:border-violet-500/40 hover:bg-violet-600/20"
+                onClick={openFaucetAssetSurface}
+                className={`rounded-lg border p-2.5 transition-all group ${
+                  isFaucetStage
+                    ? 'border-violet-400/35 bg-[linear-gradient(135deg,rgba(124,58,237,0.20),rgba(59,130,246,0.14))] shadow-[0_10px_28px_rgba(99,102,241,0.16)]'
+                    : 'border-white/10 bg-white/5 hover:border-violet-500/40 hover:bg-violet-600/20'
+                }`}
                 title="Testnet Faucet"
               >
                 <svg
-                  className="h-[18px] w-[18px] text-gray-400 transition-colors group-hover:text-violet-300"
+                  className={`h-[18px] w-[18px] transition-colors ${isFaucetStage ? 'text-violet-200' : 'text-gray-400 group-hover:text-violet-300'}`}
                   viewBox="0 0 24 24"
                   fill="none"
                   stroke="currentColor"
@@ -1468,6 +1493,13 @@ export default function DashboardPage() {
                   <div className="mb-4 flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <span className="text-gray-400 text-xs font-semibold uppercase tracking-wider">Total Balance</span>
+                      <span className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.18em] ${
+                        walletNetworkMode === 'testnet'
+                          ? 'border-cyan-400/20 bg-cyan-500/10 text-cyan-200'
+                          : 'border-white/10 bg-white/[0.04] text-gray-400'
+                      }`}>
+                        {currentNetworkShortLabel}
+                      </span>
                       <button 
                         onClick={() => setBalanceVisible(!balanceVisible)}
                         className="p-1 rounded hover:bg-white/5 transition-colors"
@@ -1516,7 +1548,7 @@ export default function DashboardPage() {
                         : 'opacity-0 translate-y-5 pointer-events-none'
                     }`}
                   >
-                    <div className="flex h-full flex-col">
+                    <div key={`wallet-overview-${walletNetworkMode}-${walletSurfaceMotionKey}`} className="dashboard-surface-enter flex h-full flex-col">
                       <div className="flex flex-col gap-6 xl:flex-row xl:items-end">
                         <div className="min-w-0 flex-1">
                           <div className="mb-5">
@@ -1709,7 +1741,7 @@ export default function DashboardPage() {
                                 </div>
                                 <div className="flex items-center justify-between gap-3 text-sm">
                                   <span className="text-gray-400">Network</span>
-                                  <span className="text-white">Injective EVM</span>
+                                  <span className="text-white">{currentNetworkLabel}</span>
                                 </div>
                               </div>
 
@@ -1968,7 +2000,9 @@ export default function DashboardPage() {
                                   <div className="flex items-center justify-between gap-3 text-sm">
                                     <span className="text-gray-400">Expected Out</span>
                                     <span className="font-mono text-white">
-                                      {!swapFromMeta.enabled || !swapToMeta.enabled
+                                      {swapUnavailableOnTestnet
+                                        ? 'Unavailable on testnet'
+                                        : !swapFromMeta.enabled || !swapToMeta.enabled
                                         ? 'Coming soon'
                                         : swapQuoteLoading
                                           ? 'Quoting...'
@@ -1992,7 +2026,7 @@ export default function DashboardPage() {
                                   <div className="mt-3 space-y-2 text-sm text-gray-300">
                                     <p>Pair: {swapFromToken} → {swapToToken}</p>
                                     <p>Slippage: {swapSlippage}%</p>
-                                    <p>Network: Injective EVM</p>
+                                    <p>Network: {currentNetworkLabel}</p>
                                   </div>
                                 </div>
 
@@ -2008,7 +2042,9 @@ export default function DashboardPage() {
                                     </div>
                                   ) : (
                                     <div className="rounded-2xl border border-white/8 bg-white/[0.03] px-4 py-3 text-sm text-gray-500">
-                                      Set the pair and amount, then review the quote before confirming the swap.
+                                      {swapUnavailableOnTestnet
+                                        ? 'Switch back to mainnet to use swap inside this wallet surface.'
+                                        : 'Set the pair and amount, then review the quote before confirming the swap.'}
                                     </div>
                                   )}
                                 </div>
@@ -2017,10 +2053,16 @@ export default function DashboardPage() {
                               <div className="mt-auto pt-4">
                                 <button
                                   onClick={handleSwapAction}
-                                  disabled={swapSubmitting || !swapAmount || swapFromToken === swapToToken || !swapFromMeta.enabled || !swapToMeta.enabled}
+                                  disabled={swapUnavailableOnTestnet || swapSubmitting || !swapAmount || swapFromToken === swapToToken || !swapFromMeta.enabled || !swapToMeta.enabled}
                                   className="w-full rounded-2xl bg-white py-3.5 font-bold text-black transition-all hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-40"
                                 >
-                                  {swapSubmitting ? 'Swapping...' : !swapFromMeta.enabled || !swapToMeta.enabled ? 'NINJA Swap Coming Soon' : `Swap to ${swapToMeta.symbol}`}
+                                  {swapUnavailableOnTestnet
+                                    ? 'Swap Unavailable on Testnet'
+                                    : swapSubmitting
+                                      ? 'Swapping...'
+                                      : !swapFromMeta.enabled || !swapToMeta.enabled
+                                        ? 'NINJA Swap Coming Soon'
+                                        : `Swap to ${swapToMeta.symbol}`}
                                 </button>
                               </div>
                             </div>
@@ -2193,9 +2235,12 @@ export default function DashboardPage() {
               >
                 <div className="bg-black rounded-2xl border border-white/10 relative overflow-hidden p-4 sm:p-5 h-full flex flex-col">
                   <div className="absolute bottom-0 left-0 w-32 h-32 rounded-full bg-gradient-to-tr from-cyan-500/5 to-transparent blur-2xl" />
-                  <div className="relative flex min-h-0 flex-1 flex-col">
-                    <div className="mb-4">
+                  <div key={`compact-assets-${walletNetworkMode}-${assetSurfaceMotionKey}`} className="dashboard-surface-enter relative flex min-h-0 flex-1 flex-col">
+                    <div className="mb-4 flex items-center justify-between gap-3">
                       <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-gray-500">Assets</div>
+                      <div className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-gray-400">
+                        {currentNetworkShortLabel}
+                      </div>
                     </div>
 
                     <div className="space-y-3">
@@ -2231,14 +2276,14 @@ export default function DashboardPage() {
             <div className={`relative ${assetStageClassName}`}>
               <div
                 className={`absolute inset-0 transition-all duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] ${
-                  isAiStage
+                  isAiStage || isFaucetStage
                     ? 'pointer-events-none translate-x-10 scale-[0.96] opacity-0'
                     : 'translate-x-0 scale-100 opacity-100'
                 }`}
               >
             <div className="bg-black rounded-2xl border border-white/10 relative overflow-hidden p-4 sm:p-5 h-full flex flex-col">
               <div className="absolute bottom-0 left-0 w-32 h-32 bg-gradient-to-tr from-cyan-500/5 to-transparent rounded-full blur-2xl"></div>
-              <div className="relative flex flex-1 flex-col">
+              <div key={`asset-surface-${walletNetworkMode}-${assetSurfaceMotionKey}`} className="dashboard-surface-enter relative flex flex-1 flex-col">
         {/* Asset Tabs - Smooth Sliding Background */}
         <div className="relative mb-4 p-1 bg-white/5 rounded-xl">
           {/* Sliding Background */}
@@ -2395,6 +2440,7 @@ export default function DashboardPage() {
                             <button
                               onClick={(event) => {
                                 event.stopPropagation();
+                                if (!token.copyValue) return;
                                 navigator.clipboard.writeText(token.copyValue);
                                 setCopiedTokenInfo(token.symbol);
                                 setTimeout(() => {
@@ -2558,6 +2604,50 @@ export default function DashboardPage() {
 
               <div
                 className={`absolute inset-0 transition-all duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] ${
+                  isFaucetStage
+                    ? 'translate-x-0 scale-100 opacity-100'
+                    : 'pointer-events-none translate-x-10 scale-[0.98] opacity-0'
+                }`}
+              >
+                <div className="bg-black rounded-2xl border border-white/10 relative overflow-hidden h-full flex flex-col">
+                  <div className="absolute bottom-0 left-0 h-32 w-32 rounded-full bg-gradient-to-tr from-cyan-500/8 to-transparent blur-2xl" />
+                  <div className="absolute top-0 right-0 h-32 w-32 rounded-full bg-gradient-to-bl from-violet-500/8 to-transparent blur-2xl" />
+                  <div className="relative flex items-center justify-between gap-4 border-b border-white/8 px-4 py-4 sm:px-5">
+                    <div>
+                      <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-gray-500">Faucet</div>
+                      <div className="mt-1 flex items-center gap-2">
+                        <div className="text-base font-bold text-white">Testnet faucet</div>
+                        <span className="rounded-full border border-cyan-400/20 bg-cyan-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.2em] text-cyan-200">
+                          {currentNetworkShortLabel}
+                        </span>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => setAssetSurfaceMode('assets')}
+                      className="flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-white/5 transition-all hover:bg-white/10"
+                      title="Close faucet"
+                    >
+                      <svg className="h-4 w-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
+                  <div className="min-h-0 flex-1 p-3 sm:p-4">
+                    <div className="h-full overflow-hidden rounded-[1.75rem] border border-white/10 bg-black/70">
+                      <div className="h-full overflow-hidden rounded-[1.55rem] bg-black">
+                        <DashboardSurfaceFrame
+                          src="/faucet?embed=1"
+                          title="Embedded faucet"
+                          loadingStrategy="eager"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div
+                className={`absolute inset-0 transition-all duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] ${
                   isAiStage
                     ? 'translate-x-0 scale-100 opacity-100'
                     : 'pointer-events-none translate-x-10 scale-[0.98] opacity-0'
@@ -2645,48 +2735,6 @@ export default function DashboardPage() {
           setSendError('');
         }}
       />
-
-      {showFaucetSheet && (
-        <div
-          className={`fixed inset-0 z-[120] bg-black/18 backdrop-blur-[2px] transition-opacity duration-200 ${
-            faucetSheetActive ? 'opacity-100' : 'opacity-0'
-          }`}
-          onClick={closeFaucetSheet}
-        >
-          <div
-            className={`absolute flex flex-col overflow-hidden rounded-[2rem] border border-white/10 bg-black/95 shadow-[0_26px_90px_rgba(0,0,0,0.42)] transition-all duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] origin-top ${
-              faucetSheetActive
-                ? 'translate-y-0 scale-100 opacity-100'
-                : '-translate-y-3 scale-[0.96] opacity-0'
-            }`}
-            style={getFaucetPopoverStyle(faucetButtonRef.current)}
-            onClick={(event) => event.stopPropagation()}
-          >
-            <div className="flex items-center justify-between gap-3 px-4 py-4">
-              <div>
-                <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-gray-500">Faucet</div>
-                <div className="mt-1 text-base font-bold text-white">Testnet faucet</div>
-              </div>
-              <button
-                onClick={closeFaucetSheet}
-                className="flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-white/5 transition-all hover:bg-white/10"
-                title="Close faucet"
-              >
-                <svg className="h-4 w-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-            <div className="min-h-0 flex-1 px-4 pb-4">
-              <div className="h-full overflow-hidden rounded-[1.75rem] border border-white/10 bg-black/70">
-                <div className="h-full overflow-hidden rounded-[1.55rem] bg-black">
-                  <DashboardSurfaceFrame src="/faucet?embed=1" title="Embedded faucet" />
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* NFT Detail Modal */}
       {selectedNFT && (
