@@ -41,6 +41,7 @@ type DashboardChainType = 'EVM' | 'Cosmos';
 type SwapToken = 'INJ' | 'USDT' | 'USDC' | 'NINJA';
 type AssetSurfaceMode = 'assets' | 'ai' | 'faucet';
 type WalletNetworkMode = 'mainnet' | 'testnet';
+type FaucetCategory = 'popular' | 'others';
 
 interface BoundCardPreview {
   uid: string;
@@ -54,6 +55,7 @@ interface BoundCardPreview {
 const NINJA_STORAGE_PREFIX = 'inj-pass:ninja-miner:';
 const NINJA_BALANCE_EVENT = 'inj-pass:ninja-balance-update';
 const DEFAULT_NINJA_BALANCE = 22;
+const POPULAR_FAUCET_IDS = new Set(['injective', 'sepolia', 'arbitrum', 'base']);
 
 const NETWORK_META: Record<WalletNetworkMode, { label: string; shortLabel: string; chain: typeof INJECTIVE_MAINNET; tokenSet: typeof TOKENS_MAINNET }> = {
   mainnet: {
@@ -468,6 +470,7 @@ export default function DashboardPage() {
   const [copied, setCopied] = useState(false);
   const [ninjaBalance, setNinjaBalance] = useState(DEFAULT_NINJA_BALANCE);
   const [assetTab, setAssetTab] = useState<AssetTab>('tokens');
+  const [faucetCategory, setFaucetCategory] = useState<FaucetCategory>('popular');
   const [assetSurfaceMode, setAssetSurfaceMode] = useState<AssetSurfaceMode>('assets');
   const [assetTrendReplayKey, setAssetTrendReplayKey] = useState(0);
   const [faucetClaimingId, setFaucetClaimingId] = useState<string | null>(null);
@@ -1552,7 +1555,9 @@ export default function DashboardPage() {
     label: network.isBase ? 'INJ' : network.name,
     amountLabel: `${network.amount} ${network.symbol}`,
     icon: FAUCET_ICON_BY_ID[network.id] || '/injswap.png',
+    category: POPULAR_FAUCET_IDS.has(network.id) ? 'popular' as const : 'others' as const,
   }));
+  const filteredFaucetCards = faucetCards.filter((token) => token.category === faucetCategory);
   const dashboardTokenCards = [
     {
       symbol: 'INJ',
@@ -3112,8 +3117,38 @@ export default function DashboardPage() {
                   <div className="absolute bottom-0 left-0 h-32 w-32 rounded-full bg-gradient-to-tr from-cyan-500/8 to-transparent blur-2xl" />
                   <div className="absolute top-0 right-0 h-32 w-32 rounded-full bg-gradient-to-bl from-violet-500/8 to-transparent blur-2xl" />
                   <div className="relative flex min-h-0 flex-1 flex-col">
+                    <div className="relative mb-4 rounded-xl bg-white/5 p-1">
+                      <div
+                        className="absolute h-[calc(100%-0.5rem)] rounded-lg bg-white transition-all duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]"
+                        style={{
+                          width: 'calc((100% - 0.5rem) / 2)',
+                          left: faucetCategory === 'popular'
+                            ? '0.25rem'
+                            : 'calc(0.25rem + (100% - 0.5rem) / 2)',
+                        }}
+                      />
+                      <div className="relative flex gap-2">
+                        <button
+                          onClick={() => setFaucetCategory('popular')}
+                          className={`flex-1 rounded-lg px-3 py-3 text-xs font-bold transition-all duration-300 sm:text-sm ${
+                            faucetCategory === 'popular' ? 'text-black' : 'text-gray-400 hover:text-white'
+                          }`}
+                        >
+                          Popular
+                        </button>
+                        <button
+                          onClick={() => setFaucetCategory('others')}
+                          className={`flex-1 rounded-lg px-3 py-3 text-xs font-bold transition-all duration-300 sm:text-sm ${
+                            faucetCategory === 'others' ? 'text-black' : 'text-gray-400 hover:text-white'
+                          }`}
+                        >
+                          Others
+                        </button>
+                      </div>
+                    </div>
+
                     <div className="grid gap-2.5">
-                      {faucetCards.map((token) => {
+                      {filteredFaucetCards.map((token) => {
                         const isClaiming = faucetClaimingId === token.id;
                         const isClaimed = faucetClaimLocked && faucetClaimedId === token.id;
                         const isLocked = faucetClaimLocked && faucetClaimedId !== token.id;
