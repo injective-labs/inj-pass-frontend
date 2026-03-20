@@ -468,18 +468,24 @@ function DashboardSurfaceFrame({
   title,
   className,
   loadingStrategy = 'lazy',
+  iframeRef,
+  onLoad,
 }: {
   src: string;
   title: string;
   className?: string;
   loadingStrategy?: 'lazy' | 'eager';
+  iframeRef?: React.RefObject<HTMLIFrameElement | null>;
+  onLoad?: React.ReactEventHandler<HTMLIFrameElement>;
 }) {
   return (
     <iframe
+      ref={iframeRef}
       src={src}
       title={title}
       className={`h-full w-full border-0 ${className ?? 'bg-black'}`}
       loading={loadingStrategy}
+      onLoad={onLoad}
     />
   );
 }
@@ -575,6 +581,8 @@ export default function DashboardPage() {
   const [copiedTokenInfo, setCopiedTokenInfo] = useState<string | null>(null);
   const [sendAmountAlertActive, setSendAmountAlertActive] = useState(false);
   const tokenFlipTimerRef = useRef<number | null>(null);
+  const aiNinjaMentionTimerRef = useRef<number | null>(null);
+  const agentsFrameRef = useRef<HTMLIFrameElement | null>(null);
   const cardScanSessionRef = useRef(0);
   const isLight = theme === 'light';
   const sendAmountAlertTimerRef = useRef<number | null>(null);
@@ -704,10 +712,46 @@ export default function DashboardPage() {
   }, [flippedTokenCard]);
 
   useEffect(() => {
+    if (aiNinjaMentionTimerRef.current) {
+      window.clearTimeout(aiNinjaMentionTimerRef.current);
+      aiNinjaMentionTimerRef.current = null;
+    }
+
+    if (assetSurfaceMode !== 'ai') {
+      return;
+    }
+
+    aiNinjaMentionTimerRef.current = window.setTimeout(() => {
+      agentsFrameRef.current?.contentWindow?.postMessage(
+        {
+          type: 'injpass:add-asset-mention',
+          symbol: 'NINJA',
+          prioritize: true,
+          highlight: 'black-outline',
+          animate: 'rise-first',
+        },
+        window.location.origin
+      );
+      aiNinjaMentionTimerRef.current = null;
+    }, 620);
+
+    return () => {
+      if (aiNinjaMentionTimerRef.current) {
+        window.clearTimeout(aiNinjaMentionTimerRef.current);
+        aiNinjaMentionTimerRef.current = null;
+      }
+    };
+  }, [assetSurfaceMode]);
+
+  useEffect(() => {
     return () => {
       if (sendAmountAlertTimerRef.current) {
         window.clearTimeout(sendAmountAlertTimerRef.current);
         sendAmountAlertTimerRef.current = null;
+      }
+      if (aiNinjaMentionTimerRef.current) {
+        window.clearTimeout(aiNinjaMentionTimerRef.current);
+        aiNinjaMentionTimerRef.current = null;
       }
       if (redirectTimerRef.current) {
         window.clearTimeout(redirectTimerRef.current);
@@ -3331,6 +3375,23 @@ export default function DashboardPage() {
                     <DashboardSurfaceFrame
                       src="/agents?embed=1&compact=1"
                       title="Embedded asset agent"
+                      iframeRef={agentsFrameRef}
+                      onLoad={() => {
+                        if (!isAiStage) return;
+
+                        window.setTimeout(() => {
+                          agentsFrameRef.current?.contentWindow?.postMessage(
+                            {
+                              type: 'injpass:add-asset-mention',
+                              symbol: 'NINJA',
+                              prioritize: true,
+                              highlight: 'black-outline',
+                              animate: 'rise-first',
+                            },
+                            window.location.origin
+                          );
+                        }, 80);
+                      }}
                     />
                   </div>
                 </div>

@@ -1422,3 +1422,22 @@ html[data-theme="light"] [class*="shadow-"] {
 .animate-send-amount-shake {
   animation: sendAmountShake 0.46s cubic-bezier(0.22, 1, 0.36, 1);
 }
+
+@keyframes ninjaAssetTagRise {
+  0% {
+    opacity: 0;
+    transform: translateY(18px) scale(0.92);
+  }
+  62% {
+    opacity: 1;
+    transform: translateY(-4px) scale(1.03);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.ninja-asset-tag-rise {
+  animation: ninjaAssetTagRise 0.72s cubic-bezier(0.22, 1, 0.36, 1);
+}
