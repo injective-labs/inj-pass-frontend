@@ -231,7 +231,7 @@ export default function NinjaMinerGame({ walletAddress, onOpenMoreChance }: Ninj
         </div>
       </div>
 
-      <div className="relative -mt-3 flex flex-1 items-center justify-center">
+      <div className="relative -mt-5 flex flex-1 items-center justify-center">
         {bursts.map((burst) => (
           <div
             key={burst.id}
