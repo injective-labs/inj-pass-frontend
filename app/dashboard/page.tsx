@@ -31,7 +31,7 @@ import { getInjectiveAddress, getEthereumAddress } from '@injectivelabs/sdk-ts';
 import { INJECTIVE_TESTNET } from '@/types/chain';
 
 type AssetTab = 'tokens' | 'nfts' | 'defi' | 'earn';
-type WalletPanel = 'overview' | 'send' | 'receive' | 'swap' | 'history' | 'settings' | 'card';
+type WalletPanel = 'overview' | 'send' | 'receive' | 'swap' | 'history' | 'settings' | 'card' | 'chance';
 type AddressType = 'evm' | 'cosmos';
 type CardPanelTab = 'pay' | 'cards';
 type DashboardTransactionType = 'send' | 'receive' | 'swap';
@@ -42,6 +42,7 @@ type SwapToken = 'INJ' | 'USDT' | 'USDC' | 'NINJA';
 type AssetSurfaceMode = 'assets' | 'ai' | 'faucet';
 type WalletNetworkMode = 'mainnet' | 'testnet';
 type FaucetCategory = 'popular' | 'others';
+type ChancePlanId = 'go' | 'pro' | 'max';
 
 interface BoundCardPreview {
   uid: string;
@@ -56,6 +57,39 @@ const NINJA_STORAGE_PREFIX = 'inj-pass:ninja-miner:';
 const NINJA_BALANCE_EVENT = 'inj-pass:ninja-balance-update';
 const DEFAULT_NINJA_BALANCE = 22;
 const POPULAR_FAUCET_IDS = new Set(['injective', 'sepolia', 'arbitrum', 'base']);
+const MORE_CHANCE_PLANS: Array<{
+  id: ChancePlanId;
+  name: string;
+  chances: number;
+  blurb: string;
+  accentClass: string;
+  surfaceClass: string;
+}> = [
+  {
+    id: 'go',
+    name: 'Go',
+    chances: 3,
+    blurb: 'Quick refill for a few extra tap runs.',
+    accentClass: 'text-emerald-300',
+    surfaceClass: 'border-emerald-400/18 bg-emerald-500/[0.08]',
+  },
+  {
+    id: 'pro',
+    name: 'Pro',
+    chances: 12,
+    blurb: 'Best balance for repeat NINJA farming.',
+    accentClass: 'text-violet-200',
+    surfaceClass: 'border-violet-400/22 bg-violet-500/[0.08]',
+  },
+  {
+    id: 'max',
+    name: 'Max',
+    chances: 30,
+    blurb: 'Longest session pack for power users.',
+    accentClass: 'text-amber-200',
+    surfaceClass: 'border-amber-400/18 bg-amber-500/[0.08]',
+  },
+];
 
 const NETWORK_META: Record<WalletNetworkMode, { label: string; shortLabel: string; chain: typeof INJECTIVE_MAINNET; tokenSet: typeof TOKENS_MAINNET }> = {
   mainnet: {
@@ -527,6 +561,7 @@ export default function DashboardPage() {
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState('');
   const [historyItems, setHistoryItems] = useState<DashboardTransaction[]>([]);
+  const [selectedChancePlan, setSelectedChancePlan] = useState<ChancePlanId>('pro');
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [showInlineSendAuth, setShowInlineSendAuth] = useState(false);
   const [pendingAuthAction, setPendingAuthAction] = useState<'send' | 'swap' | null>(null);
@@ -1002,6 +1037,10 @@ export default function DashboardPage() {
       title: 'Wallet Settings',
       subtitle: 'Manage security, PIN, keys, and wallet preferences without leaving this card.',
     },
+    chance: {
+      title: 'More Chance',
+      subtitle: 'Choose an extra tap pack for the NINJA earn loop without leaving the wallet surface.',
+    },
   };
 
   const loadHistory = useCallback(async () => {
@@ -1474,6 +1513,10 @@ export default function DashboardPage() {
     toggleWalletPanel('card');
   };
 
+  const openMoreChancePanel = () => {
+    setWalletPanel('chance');
+  };
+
   const openAiAssetSurface = () => {
     setFlippedTokenCard(null);
     setAssetSurfaceMode((current) => {
@@ -1899,7 +1942,7 @@ export default function DashboardPage() {
                       <div className={`min-h-0 flex-1 ${
                         walletPanel === 'settings'
                           ? 'overflow-hidden pr-0 pt-3'
-                          : walletPanel === 'send' || walletPanel === 'swap' || walletPanel === 'history' || walletPanel === 'card'
+                          : walletPanel === 'send' || walletPanel === 'swap' || walletPanel === 'history' || walletPanel === 'card' || walletPanel === 'chance'
                             ? 'overflow-hidden pt-4'
                             : 'overflow-y-auto pt-4 pr-1'
                       }`}>
@@ -2669,6 +2712,65 @@ export default function DashboardPage() {
                           </div>
                         )}
 
+                        {walletPanel === 'chance' && (
+                          <div className="flex h-full min-h-0 flex-col">
+                            <div className="grid flex-1 gap-4 md:grid-cols-3">
+                              {MORE_CHANCE_PLANS.map((plan) => {
+                                const isSelected = selectedChancePlan === plan.id;
+
+                                return (
+                                  <button
+                                    key={plan.id}
+                                    type="button"
+                                    onClick={() => setSelectedChancePlan(plan.id)}
+                                    className={`flex h-full min-h-[220px] flex-col rounded-[1.65rem] border px-5 py-5 text-left transition-all ${
+                                      isSelected
+                                        ? `${plan.surfaceClass} shadow-[0_18px_44px_rgba(15,23,42,0.18)]`
+                                        : 'border-white/10 bg-black/20 hover:bg-white/[0.04]'
+                                    }`}
+                                  >
+                                    <div className="flex items-start justify-between gap-3">
+                                      <div>
+                                        <div className={`text-[11px] font-semibold uppercase tracking-[0.22em] ${isSelected ? plan.accentClass : 'text-gray-500'}`}>
+                                          {plan.name}
+                                        </div>
+                                        <div className="mt-3 text-4xl font-bold text-white">{plan.chances}</div>
+                                        <div className="mt-1 text-sm text-gray-400">extra chances</div>
+                                      </div>
+                                      <div className={`rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] ${
+                                        isSelected ? 'border-white/12 bg-white/10 text-white' : 'border-white/8 bg-white/[0.03] text-gray-400'
+                                      }`}>
+                                        {isSelected ? 'Selected' : 'Choose'}
+                                      </div>
+                                    </div>
+
+                                    <p className="mt-auto pt-8 text-sm leading-6 text-gray-400">
+                                      {plan.blurb}
+                                    </p>
+                                  </button>
+                                );
+                              })}
+                            </div>
+
+                            <div className="mt-4 rounded-2xl border border-white/10 bg-black/20 px-5 py-4">
+                              <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                                <div>
+                                  <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">Selected Pack</div>
+                                  <div className="mt-2 text-lg font-bold text-white">
+                                    {MORE_CHANCE_PLANS.find((plan) => plan.id === selectedChancePlan)?.name} · {MORE_CHANCE_PLANS.find((plan) => plan.id === selectedChancePlan)?.chances} chances
+                                  </div>
+                                </div>
+                                <button
+                                  type="button"
+                                  className="rounded-2xl border border-white/10 bg-white/5 px-5 py-3 text-sm font-semibold text-white transition-all hover:bg-white/10"
+                                >
+                                  Continue
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
                         {walletPanel === 'settings' && (
                           <SettingsPage embeddedOverride />
                         )}
@@ -3094,7 +3196,7 @@ export default function DashboardPage() {
           {assetTab === 'earn' && (
             <div className="flex h-full items-start justify-center">
               <div className="h-full w-full max-w-[760px]">
-                <NinjaMinerGame walletAddress={address} />
+                <NinjaMinerGame walletAddress={address} onOpenMoreChance={openMoreChancePanel} />
               </div>
             </div>
           )}

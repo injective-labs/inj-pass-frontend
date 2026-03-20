@@ -6,6 +6,7 @@ import { useTheme } from '@/contexts/ThemeContext';
 
 interface NinjaMinerGameProps {
   walletAddress?: string;
+  onOpenMoreChance?: () => void;
 }
 
 interface TapMinerState {
@@ -104,7 +105,7 @@ function randomReward() {
   return roundTo((Math.floor(Math.random() * 9) + 1) / 100, 2);
 }
 
-export default function NinjaMinerGame({ walletAddress }: NinjaMinerGameProps) {
+export default function NinjaMinerGame({ walletAddress, onOpenMoreChance }: NinjaMinerGameProps) {
   const { theme } = useTheme();
   const [gameState, setGameState] = useState<TapMinerState>(() => createInitialState());
   const [bursts, setBursts] = useState<TapBurst[]>([]);
@@ -211,7 +212,18 @@ export default function NinjaMinerGame({ walletAddress }: NinjaMinerGameProps) {
     <div
       className="flex h-full flex-col items-center justify-center px-6 py-7"
     >
-      <div className="mb-4 flex w-full justify-end">
+      <div className="mb-4 flex w-full items-center justify-end gap-2.5">
+        <button
+          type="button"
+          onClick={onOpenMoreChance}
+          className={`rounded-full border px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.18em] transition-all ${
+            isLight
+              ? 'border-slate-300/80 bg-white/88 text-slate-700 hover:bg-slate-100'
+              : 'border-white/10 bg-white/[0.05] text-gray-300 hover:bg-white/[0.08] hover:text-white'
+          }`}
+        >
+          More Chance
+        </button>
         <div className={`rounded-full border px-3 py-1.5 text-[12px] font-mono font-semibold ${
           isLight ? 'border-slate-300/80 bg-white/88 text-slate-900' : 'border-white/10 bg-white/[0.05] text-white'
         }`}>
