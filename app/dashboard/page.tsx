@@ -52,6 +52,7 @@ interface BoundCardPreview {
 }
 
 const NINJA_STORAGE_PREFIX = 'inj-pass:ninja-miner:';
+const NINJA_BALANCE_EVENT = 'inj-pass:ninja-balance-update';
 const DEFAULT_NINJA_BALANCE = 22;
 
 const NETWORK_META: Record<WalletNetworkMode, { label: string; shortLabel: string; chain: typeof INJECTIVE_MAINNET; tokenSet: typeof TOKENS_MAINNET }> = {
@@ -592,12 +593,17 @@ export default function DashboardPage() {
         syncNinjaBalance();
       }
     };
+    const handleNinjaBalanceUpdate = () => {
+      syncNinjaBalance();
+    };
 
     window.addEventListener('storage', handleStorage);
+    window.addEventListener(NINJA_BALANCE_EVENT, handleNinjaBalanceUpdate);
 
     return () => {
       window.clearInterval(interval);
       window.removeEventListener('storage', handleStorage);
+      window.removeEventListener(NINJA_BALANCE_EVENT, handleNinjaBalanceUpdate);
     };
   }, [address]);
 
