@@ -1415,8 +1415,8 @@ export default function DashboardPage() {
                 disabled={networkSwitching}
                 className={`rounded-lg border px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.22em] transition-all ${
                   walletNetworkMode === 'testnet'
-                    ? 'border-cyan-400/35 bg-[linear-gradient(135deg,rgba(34,211,238,0.22),rgba(59,130,246,0.14))] text-white shadow-[0_10px_26px_rgba(34,211,238,0.16)]'
-                    : 'border-white/10 bg-white/5 text-gray-300 hover:border-cyan-500/30 hover:bg-cyan-500/10 hover:text-white'
+                    ? 'border-cyan-300 bg-[linear-gradient(135deg,#0f8fb0,#2157d6)] text-white shadow-[0_10px_26px_rgba(34,211,238,0.22)]'
+                    : 'border-slate-600 bg-slate-900 text-slate-200 hover:border-cyan-400 hover:bg-slate-800 hover:text-white'
                 } ${networkSwitching ? 'cursor-wait opacity-80' : ''}`}
                 title={walletNetworkMode === 'testnet' ? 'Switch to mainnet wallet' : 'Switch to testnet wallet'}
               >
@@ -1515,8 +1515,8 @@ export default function DashboardPage() {
                       <span className="text-gray-400 text-xs font-semibold uppercase tracking-wider">Total Balance</span>
                       <span className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.18em] ${
                         walletNetworkMode === 'testnet'
-                          ? 'border-cyan-400/20 bg-cyan-500/10 text-cyan-200'
-                          : 'border-white/10 bg-white/[0.04] text-gray-400'
+                          ? 'border-cyan-300 bg-cyan-900 text-cyan-100'
+                          : 'border-slate-700 bg-slate-900 text-slate-300'
                       }`}>
                         {currentNetworkShortLabel}
                       </span>
@@ -2258,7 +2258,11 @@ export default function DashboardPage() {
                   <div key={`compact-assets-${walletNetworkMode}-${assetSurfaceMotionKey}`} className="dashboard-surface-enter relative flex min-h-0 flex-1 flex-col">
                     <div className="mb-4 flex items-center justify-between gap-3">
                       <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-gray-500">Assets</div>
-                      <div className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-gray-400">
+                      <div className={`rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] ${
+                        walletNetworkMode === 'testnet'
+                          ? 'border-cyan-300 bg-cyan-900 text-cyan-100'
+                          : 'border-slate-700 bg-slate-900 text-slate-300'
+                      }`}>
                         {currentNetworkShortLabel}
                       </div>
                     </div>
@@ -2637,7 +2641,7 @@ export default function DashboardPage() {
                       <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-gray-500">Faucet</div>
                       <div className="mt-1 flex items-center gap-2">
                         <div className="text-base font-bold text-white">Testnet faucet</div>
-                        <span className="rounded-full border border-cyan-400/20 bg-cyan-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.2em] text-cyan-200">
+                        <span className="rounded-full border border-cyan-300 bg-cyan-900 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.2em] text-cyan-100">
                           {currentNetworkShortLabel}
                         </span>
                       </div>
