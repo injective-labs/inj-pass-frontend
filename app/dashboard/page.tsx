@@ -1838,12 +1838,12 @@ export default function DashboardPage() {
                                       placeholder="0.0000"
                                       className={`w-full bg-transparent text-3xl font-mono outline-none transition-colors duration-200 md:text-[2.35rem] ${
                                         sendAmountExceedsBalance
-                                          ? 'text-rose-300 placeholder:text-rose-200/40'
+                                          ? 'text-[#d66b6b] placeholder:text-[#d66b6b]/28'
                                           : 'text-white placeholder:text-gray-600'
                                       }`}
                                     />
                                     <span className={`pb-1.5 text-sm font-semibold transition-colors duration-200 ${
-                                      sendAmountExceedsBalance ? 'text-rose-300/90' : 'text-gray-400'
+                                      sendAmountExceedsBalance ? 'text-[#d66b6b]/88' : 'text-gray-400'
                                     }`}>INJ</span>
                                   </div>
 
