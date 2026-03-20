@@ -3158,7 +3158,7 @@ export default function DashboardPage() {
                             key={token.id}
                             onClick={() => void handleFaucetTokenClaim(token.id)}
                             disabled={isClaiming || faucetClaimLocked || !address}
-                            className={`flex min-h-[64px] items-center gap-3 rounded-2xl border px-4 py-3 text-left transition-all ${
+                            className={`flex h-[84px] items-center gap-3 rounded-2xl border px-4 py-3 text-left transition-all ${
                               isClaimed
                                 ? 'border-slate-500/20 bg-slate-500/10 text-gray-400'
                                 : isLocked
