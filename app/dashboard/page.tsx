@@ -1653,7 +1653,7 @@ export default function DashboardPage() {
                       <button
                         onClick={toggleWalletNetworkMode}
                         disabled={networkSwitching}
-                        className={`rounded px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] transition-all ${
+                        className={`flex h-6 w-6 items-center justify-center rounded p-1 text-[10px] font-semibold uppercase tracking-[0.16em] transition-all ${
                           walletNetworkMode === 'testnet'
                             ? 'border border-[#5c7899] bg-[linear-gradient(135deg,#1b2230,#2b435e)] text-slate-100 shadow-[0_8px_20px_rgba(35,74,118,0.18)]'
                             : 'border border-white/10 bg-white/5 text-gray-300 hover:border-cyan-500/40 hover:bg-cyan-500/12 hover:text-white'
