@@ -1726,11 +1726,11 @@ export default function AgentsPage() {
                 </button>
               </div>
 
-              <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 p-5 sm:p-6 lg:grid-cols-[340px_minmax(0,1fr)]">
-                <section className="flex min-h-0 flex-col gap-4">
+              <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 p-5 sm:p-6 lg:grid-cols-[360px_minmax(0,1fr)]">
+                <section className="grid min-h-0 grid-rows-[auto_auto_1fr] gap-4">
                   <div className={`rounded-[1.8rem] border p-5 ${
                     isLight
-                      ? 'border-violet-200/70 bg-[linear-gradient(180deg,rgba(255,255,255,0.96),rgba(244,246,255,0.9))]'
+                      ? 'border-violet-200/70 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(245,247,255,0.92))]'
                       : 'border-[#6e5dff]/20 bg-[linear-gradient(180deg,rgba(255,255,255,0.04),rgba(255,255,255,0.02))]'
                   }`}>
                     <div className="text-[10px] font-semibold uppercase tracking-[0.24em] text-gray-500">Invite Code</div>
@@ -1772,15 +1772,15 @@ export default function AgentsPage() {
                   </div>
 
                   <div className="grid grid-cols-2 gap-3">
-                    <div className={`rounded-[1.4rem] border px-4 py-4 ${
-                      isLight ? 'border-slate-200/80 bg-white/80' : 'border-white/10 bg-white/[0.03]'
+                    <div className={`rounded-[1.35rem] border px-4 py-4 ${
+                      isLight ? 'border-slate-200/80 bg-white/82' : 'border-white/10 bg-white/[0.03]'
                     }`}>
                       <p className="text-[10px] uppercase tracking-[0.22em] text-gray-500">Invited</p>
                       <p className={`mt-2 text-3xl font-semibold ${isLight ? 'text-slate-900' : 'text-white'}`}>{INVITED_FRIENDS.length}</p>
                       <p className="mt-1 text-xs text-gray-400">{activeInviteCount} active</p>
                     </div>
-                    <div className={`rounded-[1.4rem] border px-4 py-4 ${
-                      isLight ? 'border-slate-200/80 bg-white/80' : 'border-white/10 bg-white/[0.03]'
+                    <div className={`rounded-[1.35rem] border px-4 py-4 ${
+                      isLight ? 'border-slate-200/80 bg-white/82' : 'border-white/10 bg-white/[0.03]'
                     }`}>
                       <p className="text-[10px] uppercase tracking-[0.22em] text-gray-500">Passbits</p>
                       <p className={`mt-2 text-3xl font-semibold ${isLight ? 'text-violet-700' : 'text-blue-300'}`}>{totalInviteCredits.toLocaleString()}</p>
@@ -1788,20 +1788,29 @@ export default function AgentsPage() {
                     </div>
                   </div>
 
-                  <div className={`flex-1 rounded-[1.4rem] border px-4 py-4 ${
+                  <div className={`rounded-[1.35rem] border px-4 py-4 ${
                     isLight ? 'border-slate-200/80 bg-slate-900/[0.03]' : 'border-white/10 bg-black/20'
                   }`}>
                     <div className="text-[10px] font-semibold uppercase tracking-[0.22em] text-gray-500">Referral Notes</div>
-                    <div className={`mt-3 space-y-2 text-sm ${isLight ? 'text-slate-600' : 'text-gray-300'}`}>
-                      <p>Active friends unlock rewards immediately.</p>
-                      <p>Pending invites remain tracked until wallet activation.</p>
-                      <p>Share the code or the link. Both map to the same referral route.</p>
+                    <div className={`mt-3 space-y-3 text-sm ${isLight ? 'text-slate-600' : 'text-gray-300'}`}>
+                      <div className="flex items-start gap-2">
+                        <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-current opacity-60" />
+                        <span>Active friends unlock rewards immediately.</span>
+                      </div>
+                      <div className="flex items-start gap-2">
+                        <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-current opacity-60" />
+                        <span>Pending invites stay tracked until wallet activation.</span>
+                      </div>
+                      <div className="flex items-start gap-2">
+                        <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-current opacity-60" />
+                        <span>Code and link route to the same referral path.</span>
+                      </div>
                     </div>
                   </div>
                 </section>
 
-                <section className={`flex min-h-0 flex-col rounded-[1.8rem] border ${
-                  isLight ? 'border-slate-200/80 bg-white/78' : 'border-white/10 bg-white/[0.03]'
+                <section className={`flex min-h-0 flex-col rounded-[1.8rem] border overflow-hidden ${
+                  isLight ? 'border-slate-200/80 bg-white/80' : 'border-white/10 bg-white/[0.03]'
                 }`}>
                   <div className={`flex items-center justify-between gap-3 border-b px-5 py-4 ${
                     isLight ? 'border-slate-200/80' : 'border-white/10'
@@ -1817,44 +1826,48 @@ export default function AgentsPage() {
                     </div>
                   </div>
 
-                  <div className="grid min-h-0 flex-1 grid-rows-3 gap-3 p-4">
-                    {INVITED_FRIENDS.map((friend) => (
+                  <div className={`grid grid-cols-[minmax(0,1.45fr)_132px_132px_90px] gap-3 px-5 py-3 text-[10px] font-semibold uppercase tracking-[0.22em] ${
+                    isLight ? 'border-b border-slate-200/80 text-slate-400' : 'border-b border-white/10 text-gray-500'
+                  }`}>
+                    <span>Wallet</span>
+                    <span>Joined</span>
+                    <span>Reward</span>
+                    <span className="text-right">Status</span>
+                  </div>
+
+                  <div className="grid min-h-0 flex-1 grid-rows-3">
+                    {INVITED_FRIENDS.map((friend, index) => (
                       <div
                         key={`${friend.wallet}-${friend.joinedAt}`}
-                        className={`grid grid-cols-[44px_minmax(0,1fr)_auto] items-center gap-4 rounded-[1.3rem] border px-4 py-3 ${
-                          isLight ? 'border-slate-200/80 bg-slate-900/[0.03]' : 'border-white/10 bg-black/25'
+                        className={`grid grid-cols-[minmax(0,1.45fr)_132px_132px_90px] items-center gap-3 px-5 py-4 ${
+                          index !== INVITED_FRIENDS.length - 1
+                            ? isLight ? 'border-b border-slate-200/80' : 'border-b border-white/10'
+                            : ''
                         }`}
                       >
-                        <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl ${
-                          friend.status === 'Active'
-                            ? isLight ? 'bg-emerald-500/12 text-emerald-600' : 'bg-emerald-500/12 text-emerald-300'
-                            : isLight ? 'bg-amber-500/12 text-amber-600' : 'bg-amber-500/12 text-amber-300'
-                        }`}>
-                          <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0ZM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7Z" />
-                          </svg>
-                        </div>
-
                         <div className="min-w-0">
                           <div className={`truncate font-mono text-sm ${isLight ? 'text-slate-700' : 'text-gray-100'}`}>{friend.wallet}</div>
-                          <div className="mt-1 flex items-center gap-2 text-xs text-gray-400">
-                            <span>Joined {friend.joinedAt}</span>
-                            <span className="text-gray-500">•</span>
-                            <span>{friend.credits > 0 ? `+${friend.credits.toLocaleString()} Passbits` : 'No reward yet'}</span>
-                          </div>
                         </div>
 
-                        <span className={`shrink-0 rounded-full border px-2.5 py-1 text-[11px] font-semibold ${
-                          friend.status === 'Active'
-                            ? isLight
-                              ? 'border-emerald-400/35 bg-emerald-500/8 text-emerald-600'
-                              : 'border-emerald-400/40 bg-emerald-500/10 text-emerald-300'
-                            : isLight
-                              ? 'border-amber-400/35 bg-amber-500/8 text-amber-600'
-                              : 'border-amber-400/40 bg-amber-500/10 text-amber-300'
-                        }`}>
-                          {friend.status}
-                        </span>
+                        <div className="text-xs text-gray-400">{friend.joinedAt}</div>
+
+                        <div className={`text-sm font-semibold ${friend.credits > 0 ? (isLight ? 'text-violet-700' : 'text-blue-300') : 'text-gray-400'}`}>
+                          {friend.credits > 0 ? `+${friend.credits.toLocaleString()} Passbits` : 'No reward yet'}
+                        </div>
+
+                        <div className="text-right">
+                          <span className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-semibold ${
+                            friend.status === 'Active'
+                              ? isLight
+                                ? 'border-emerald-400/35 bg-emerald-500/8 text-emerald-600'
+                                : 'border-emerald-400/40 bg-emerald-500/10 text-emerald-300'
+                              : isLight
+                                ? 'border-amber-400/35 bg-amber-500/8 text-amber-600'
+                                : 'border-amber-400/40 bg-amber-500/10 text-amber-300'
+                          }`}>
+                            {friend.status}
+                          </span>
+                        </div>
                       </div>
                     ))}
                   </div>
