@@ -319,6 +319,7 @@ export default function AgentsPage() {
   const totalInviteCredits = INVITED_FRIENDS.reduce((sum, friend) => sum + friend.credits, 0);
   const isLight = theme === 'light';
   const isCompactStage = isCompactEmbedded && isEmbedded;
+  const hasEmbeddedAgentAccess = isEmbedded ? !!address : isUnlocked && !!address;
   const assetMentionTone: Record<AssetMentionSymbol, string> = isLight
     ? {
         INJ: 'border-violet-200/90 bg-violet-500/10 text-violet-700',
@@ -407,10 +408,10 @@ export default function AgentsPage() {
 
   // ── Auth guard ──────────────────────────────────────────────────────────
   useEffect(() => {
-    if (!isEmbedded && !isCheckingSession && (!isUnlocked || !address)) {
+    if (!isEmbedded && !isCheckingSession && !hasEmbeddedAgentAccess) {
       navigateApp('/welcome');
     }
-  }, [isUnlocked, address, isCheckingSession, isEmbedded, navigateApp]);
+  }, [hasEmbeddedAgentAccess, isCheckingSession, isEmbedded, navigateApp]);
 
   // ── Load persisted history ──────────────────────────────────────────────
   useEffect(() => {
@@ -1068,7 +1069,7 @@ export default function AgentsPage() {
     );
   }
 
-  if (!isUnlocked || !address) {
+  if (!hasEmbeddedAgentAccess) {
     if (isEmbedded) {
       return <div className={rootShellClass} />;
     }
