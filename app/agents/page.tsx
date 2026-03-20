@@ -278,8 +278,6 @@ export default function AgentsPage() {
   const [input, setInput] = useState('');
   const [assetMentions, setAssetMentions] = useState<AssetMentionSymbol[]>([]);
   const [dappMentions, setDappMentions] = useState<DAppMentionName[]>([]);
-  const [focusedAssetMention, setFocusedAssetMention] = useState<AssetMentionSymbol | null>(null);
-  const [animatedAssetMention, setAnimatedAssetMention] = useState<AssetMentionSymbol | null>(null);
   const [isAssetDropActive, setIsAssetDropActive] = useState(false);
   const [model, setModel] = useState<Model>('claude-sonnet-4-6');
   const [isRunning, setIsRunning] = useState(false);
@@ -313,7 +311,6 @@ export default function AgentsPage() {
 
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const animatedAssetMentionTimerRef = useRef<number | null>(null);
 
   const activeConv = conversations.find((c) => c.id === activeId) ?? null;
   const messages = activeConv?.messages ?? [];
@@ -337,9 +334,6 @@ export default function AgentsPage() {
         NINJA: 'border-amber-400/30 bg-amber-500/12 text-amber-200',
         USDT: 'border-emerald-400/30 bg-emerald-500/12 text-emerald-200',
       };
-  const highlightedAssetMentionTone = isLight
-    ? 'border-black/75 bg-white/90 text-slate-900 shadow-[0_0_0_1px_rgba(15,23,42,0.24)]'
-    : 'border-black/80 bg-white/[0.08] text-white shadow-[0_0_0_1px_rgba(0,0,0,0.6)]';
   const dappMentionTone: Record<DAppMentionName, string> = {
     Omisper: isLight ? DAPP_MENTION_META.Omisper.lightTone : DAPP_MENTION_META.Omisper.darkTone,
     'Hash Mahjong': isLight ? DAPP_MENTION_META['Hash Mahjong'].lightTone : DAPP_MENTION_META['Hash Mahjong'].darkTone,
@@ -433,36 +427,10 @@ export default function AgentsPage() {
 
   useEffect(() => {
     const handleAssetMentionMessage = (event: MessageEvent) => {
-      const data = event.data as {
-        type?: string;
-        symbol?: AssetMentionSymbol;
-        dapp?: DAppMentionName;
-        prioritize?: boolean;
-        highlight?: 'black-outline';
-        animate?: 'rise-first';
-      } | undefined;
+      const data = event.data as { type?: string; symbol?: AssetMentionSymbol; dapp?: DAppMentionName } | undefined;
       if (!data) return;
       if (data.type === 'injpass:add-asset-mention' && data.symbol) {
-        setAssetMentions((current) => {
-          if (data.prioritize) {
-            return [data.symbol!, ...current.filter((item) => item !== data.symbol!)];
-          }
-          return current.includes(data.symbol!) ? current : [...current, data.symbol!];
-        });
-        if (data.highlight === 'black-outline') {
-          setFocusedAssetMention(data.symbol);
-        }
-        if (data.animate === 'rise-first') {
-          if (animatedAssetMentionTimerRef.current) {
-            window.clearTimeout(animatedAssetMentionTimerRef.current);
-            animatedAssetMentionTimerRef.current = null;
-          }
-          setAnimatedAssetMention(data.symbol);
-          animatedAssetMentionTimerRef.current = window.setTimeout(() => {
-            setAnimatedAssetMention((current) => (current === data.symbol ? null : current));
-            animatedAssetMentionTimerRef.current = null;
-          }, 760);
-        }
+        setAssetMentions((current) => current.includes(data.symbol!) ? current : [...current, data.symbol!]);
       }
       if (data.type === 'injpass:add-dapp-mention' && data.dapp && data.dapp in DAPP_MENTION_META) {
         setDappMentions((current) => current.includes(data.dapp!) ? current : [...current, data.dapp!]);
@@ -482,15 +450,6 @@ export default function AgentsPage() {
     el.style.height = 'auto';
     el.style.height = Math.min(el.scrollHeight, 160) + 'px';
   }, [input]);
-
-  useEffect(() => {
-    return () => {
-      if (animatedAssetMentionTimerRef.current) {
-        window.clearTimeout(animatedAssetMentionTimerRef.current);
-        animatedAssetMentionTimerRef.current = null;
-      }
-    };
-  }, []);
 
   useEffect(() => {
     saveConversations(conversations);
@@ -1021,8 +980,6 @@ export default function AgentsPage() {
 
   function removeAssetMention(symbol: AssetMentionSymbol) {
     setAssetMentions((current) => current.filter((item) => item !== symbol));
-    setFocusedAssetMention((current) => (current === symbol ? null : current));
-    setAnimatedAssetMention((current) => (current === symbol ? null : current));
     textareaRef.current?.focus();
   }
 
@@ -2213,9 +2170,7 @@ export default function AgentsPage() {
                                 key={symbol}
                                 type="button"
                                 onClick={() => removeAssetMention(symbol)}
-                                className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[10px] font-semibold transition-all ${
-                                  focusedAssetMention === symbol ? highlightedAssetMentionTone : assetMentionTone[symbol]
-                                } ${animatedAssetMention === symbol ? 'ninja-asset-tag-rise' : ''}`}
+                                className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[10px] font-semibold transition-all ${assetMentionTone[symbol]}`}
                                 title={`Remove $${symbol}`}
                               >
                                 <span>${symbol}</span>

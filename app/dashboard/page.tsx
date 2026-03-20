@@ -468,24 +468,18 @@ function DashboardSurfaceFrame({
   title,
   className,
   loadingStrategy = 'lazy',
-  iframeRef,
-  onLoad,
 }: {
   src: string;
   title: string;
   className?: string;
   loadingStrategy?: 'lazy' | 'eager';
-  iframeRef?: React.RefObject<HTMLIFrameElement | null>;
-  onLoad?: React.ReactEventHandler<HTMLIFrameElement>;
 }) {
   return (
     <iframe
-      ref={iframeRef}
       src={src}
       title={title}
       className={`h-full w-full border-0 ${className ?? 'bg-black'}`}
       loading={loadingStrategy}
-      onLoad={onLoad}
     />
   );
 }
@@ -581,14 +575,14 @@ export default function DashboardPage() {
   const [copiedTokenInfo, setCopiedTokenInfo] = useState<string | null>(null);
   const [sendAmountAlertActive, setSendAmountAlertActive] = useState(false);
   const tokenFlipTimerRef = useRef<number | null>(null);
-  const aiNinjaMentionTimerRef = useRef<number | null>(null);
-  const agentsFrameRef = useRef<HTMLIFrameElement | null>(null);
+  const aiCompactPromoteTimerRef = useRef<number | null>(null);
   const cardScanSessionRef = useRef(0);
   const isLight = theme === 'light';
   const sendAmountAlertTimerRef = useRef<number | null>(null);
   const redirectTimerRef = useRef<number | null>(null);
   const hasLoadedOnceRef = useRef(false);
   const currentNetworkMeta = NETWORK_META[walletNetworkMode];
+  const [aiCompactNinjaPromoted, setAiCompactNinjaPromoted] = useState(false);
 
   useEffect(() => {
     if (redirectTimerRef.current) {
@@ -712,33 +706,26 @@ export default function DashboardPage() {
   }, [flippedTokenCard]);
 
   useEffect(() => {
-    if (aiNinjaMentionTimerRef.current) {
-      window.clearTimeout(aiNinjaMentionTimerRef.current);
-      aiNinjaMentionTimerRef.current = null;
+    if (aiCompactPromoteTimerRef.current) {
+      window.clearTimeout(aiCompactPromoteTimerRef.current);
+      aiCompactPromoteTimerRef.current = null;
     }
 
     if (assetSurfaceMode !== 'ai') {
+      setAiCompactNinjaPromoted(false);
       return;
     }
 
-    aiNinjaMentionTimerRef.current = window.setTimeout(() => {
-      agentsFrameRef.current?.contentWindow?.postMessage(
-        {
-          type: 'injpass:add-asset-mention',
-          symbol: 'NINJA',
-          prioritize: true,
-          highlight: 'black-outline',
-          animate: 'rise-first',
-        },
-        window.location.origin
-      );
-      aiNinjaMentionTimerRef.current = null;
+    setAiCompactNinjaPromoted(false);
+    aiCompactPromoteTimerRef.current = window.setTimeout(() => {
+      setAiCompactNinjaPromoted(true);
+      aiCompactPromoteTimerRef.current = null;
     }, 620);
 
     return () => {
-      if (aiNinjaMentionTimerRef.current) {
-        window.clearTimeout(aiNinjaMentionTimerRef.current);
-        aiNinjaMentionTimerRef.current = null;
+      if (aiCompactPromoteTimerRef.current) {
+        window.clearTimeout(aiCompactPromoteTimerRef.current);
+        aiCompactPromoteTimerRef.current = null;
       }
     };
   }, [assetSurfaceMode]);
@@ -749,9 +736,9 @@ export default function DashboardPage() {
         window.clearTimeout(sendAmountAlertTimerRef.current);
         sendAmountAlertTimerRef.current = null;
       }
-      if (aiNinjaMentionTimerRef.current) {
-        window.clearTimeout(aiNinjaMentionTimerRef.current);
-        aiNinjaMentionTimerRef.current = null;
+      if (aiCompactPromoteTimerRef.current) {
+        window.clearTimeout(aiCompactPromoteTimerRef.current);
+        aiCompactPromoteTimerRef.current = null;
       }
       if (redirectTimerRef.current) {
         window.clearTimeout(redirectTimerRef.current);
@@ -1687,7 +1674,16 @@ export default function DashboardPage() {
       contractValue: currentUsdtAddress ? truncateMiddle(currentUsdtAddress, 8, 6) : 'No contract yet',
     },
   ] as const;
-  const renderCompactAssetSurface = (surface: 'left' | 'right') => (
+  const compactAssetCardHeight = 64;
+  const compactAssetCardGap = 12;
+  const renderCompactAssetSurface = (surface: 'left' | 'right') => {
+    const shouldPromoteNinja = surface === 'left' && isAiStage && aiCompactNinjaPromoted;
+    const compactDisplayOrder = shouldPromoteNinja
+      ? ['NINJA', 'INJ', 'USDC', 'USDT']
+      : dashboardTokenCards.map((token) => token.symbol);
+    const compactListHeight = dashboardTokenCards.length * compactAssetCardHeight + (dashboardTokenCards.length - 1) * compactAssetCardGap;
+
+    return (
     <div
       key={`compact-assets-${surface}-${walletNetworkMode}-${assetSurfaceMotionKey}`}
       className="dashboard-surface-enter relative flex min-h-0 flex-1 flex-col"
@@ -1701,7 +1697,7 @@ export default function DashboardPage() {
         )}
       </div>
 
-      <div className="space-y-3">
+      <div className="relative" style={{ height: `${compactListHeight}px` }}>
         {dashboardTokenCards.map((token) => (
           <div
             key={`${surface}-compact-${token.symbol}`}
@@ -1711,7 +1707,18 @@ export default function DashboardPage() {
               event.dataTransfer.setData('application/x-injpass-asset', token.symbol);
               event.dataTransfer.setData('text/plain', `$${token.symbol}`);
             }}
-            className="flex cursor-grab items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 transition-all hover:bg-white/[0.08] active:cursor-grabbing"
+            className={`absolute left-0 right-0 flex h-16 cursor-grab items-center gap-3 rounded-2xl border px-4 py-3 transition-[top,transform,border-color,box-shadow,background-color] duration-700 ease-[cubic-bezier(0.22,1,0.36,1)] hover:bg-white/[0.08] active:cursor-grabbing ${
+              shouldPromoteNinja && token.symbol === 'NINJA'
+                ? isLight
+                  ? 'border-black/45 bg-white/[0.05] shadow-[0_0_0_1px_rgba(0,0,0,0.18)]'
+                  : 'border-black/75 bg-white/[0.06] shadow-[0_0_0_1px_rgba(0,0,0,0.48)]'
+                : 'border-white/10 bg-white/[0.04]'
+            }`}
+            style={{
+              top: `${compactDisplayOrder.indexOf(token.symbol) * (compactAssetCardHeight + compactAssetCardGap)}px`,
+              transform: shouldPromoteNinja && token.symbol === 'NINJA' ? 'translateY(-3px)' : 'translateY(0)',
+              zIndex: shouldPromoteNinja && token.symbol === 'NINJA' ? 2 : 1,
+            }}
           >
             <div className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full bg-white/[0.04]">
               <Image
@@ -1727,7 +1734,8 @@ export default function DashboardPage() {
         ))}
       </div>
     </div>
-  );
+    );
+  };
 
   return (
     <LoadingSpinner ready={isDashboardReady} progress={dashboardLoadProgress} statusLabel={dashboardLoadStatus}>
@@ -3375,23 +3383,6 @@ export default function DashboardPage() {
                     <DashboardSurfaceFrame
                       src="/agents?embed=1&compact=1"
                       title="Embedded asset agent"
-                      iframeRef={agentsFrameRef}
-                      onLoad={() => {
-                        if (!isAiStage) return;
-
-                        window.setTimeout(() => {
-                          agentsFrameRef.current?.contentWindow?.postMessage(
-                            {
-                              type: 'injpass:add-asset-mention',
-                              symbol: 'NINJA',
-                              prioritize: true,
-                              highlight: 'black-outline',
-                              animate: 'rise-first',
-                            },
-                            window.location.origin
-                          );
-                        }, 80);
-                      }}
                     />
                   </div>
                 </div>
