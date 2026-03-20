@@ -9,6 +9,7 @@ import { Balance, GasEstimate, INJECTIVE_MAINNET } from '@/types/chain';
 import { getTokenPrice } from '@/services/price';
 import { executeSwap, getSwapQuote, ROUTER_ADDRESS } from '@/services/dex-swap';
 import { startQRScanner, stopQRScanner, clearQRScanner, isCameraSupported, isValidAddress } from '@/services/qr-scanner';
+import { isNFCSupported, readNFCCard, type NFCCardData } from '@/services/nfc';
 import { getN1NJ4NFTs, type NFT } from '@/services/nft';
 import { getUserStakingInfo, type StakingInfo } from '@/services/staking';
 import { QRCodeSVG } from 'qrcode.react';
@@ -18,7 +19,6 @@ import LoadingSpinner from '@/components/LoadingSpinner';
 import NFTDetailModal from '@/components/NFTDetailModal';
 import TransactionAuthModal from '@/components/TransactionAuthModal';
 import ThemeToggleButton from '@/components/ThemeToggleButton';
-import CardCenterModal from '@/components/CardCenterModal';
 import NinjaMinerGame from '@/components/NinjaMinerGame';
 import EditableAccountIdentity from '@/components/EditableAccountIdentity';
 import { useTheme } from '@/contexts/ThemeContext';
@@ -30,8 +30,9 @@ import { getInjectiveAddress, getEthereumAddress } from '@injectivelabs/sdk-ts';
 import { INJECTIVE_TESTNET } from '@/types/chain';
 
 type AssetTab = 'tokens' | 'nfts' | 'defi' | 'earn';
-type WalletPanel = 'overview' | 'send' | 'receive' | 'swap' | 'history' | 'settings';
+type WalletPanel = 'overview' | 'send' | 'receive' | 'swap' | 'history' | 'settings' | 'card';
 type AddressType = 'evm' | 'cosmos';
+type CardPanelTab = 'pay' | 'cards';
 type DashboardTransactionType = 'send' | 'receive' | 'swap';
 type DashboardTransactionStatus = 'completed' | 'pending' | 'failed';
 type DashboardHistoryFilter = 'all' | DashboardTransactionType;
@@ -39,6 +40,15 @@ type DashboardChainType = 'EVM' | 'Cosmos';
 type SwapToken = 'INJ' | 'USDT' | 'USDC' | 'NINJA';
 type AssetSurfaceMode = 'assets' | 'ai' | 'faucet';
 type WalletNetworkMode = 'mainnet' | 'testnet';
+
+interface BoundCardPreview {
+  uid: string;
+  name: string;
+  isActive: boolean;
+  boundAt: Date;
+  cardNumber: string;
+  cvv: string;
+}
 
 const NINJA_STORAGE_PREFIX = 'inj-pass:ninja-miner:';
 const DEFAULT_NINJA_BALANCE = 22;
@@ -498,13 +508,16 @@ export default function DashboardPage() {
   const [showInlineSendAuth, setShowInlineSendAuth] = useState(false);
   const [pendingAuthAction, setPendingAuthAction] = useState<'send' | 'swap' | null>(null);
   const [postAuthAction, setPostAuthAction] = useState<'send' | 'swap' | null>(null);
-  const [showCardCenter, setShowCardCenter] = useState(false);
-  const [cardCenterActive, setCardCenterActive] = useState(false);
+  const [cardPanelTab, setCardPanelTab] = useState<CardPanelTab>('pay');
+  const [boundCards, setBoundCards] = useState<BoundCardPreview[]>([]);
+  const [cardScanState, setCardScanState] = useState<'idle' | 'scanning' | 'success' | 'error'>('idle');
+  const [cardScanData, setCardScanData] = useState<NFCCardData | null>(null);
+  const [cardScanError, setCardScanError] = useState('');
   const [flippedTokenCard, setFlippedTokenCard] = useState<string | null>(null);
   const [copiedTokenInfo, setCopiedTokenInfo] = useState<string | null>(null);
   const [sendAmountAlertActive, setSendAmountAlertActive] = useState(false);
   const tokenFlipTimerRef = useRef<number | null>(null);
-  const cardCenterTimerRef = useRef<number | null>(null);
+  const cardScanSessionRef = useRef(0);
   const isLight = theme === 'light';
   const sendAmountAlertTimerRef = useRef<number | null>(null);
   const redirectTimerRef = useRef<number | null>(null);
@@ -601,10 +614,6 @@ export default function DashboardPage() {
 
   useEffect(() => {
     return () => {
-      if (cardCenterTimerRef.current) {
-        window.clearTimeout(cardCenterTimerRef.current);
-        cardCenterTimerRef.current = null;
-      }
       if (sendAmountAlertTimerRef.current) {
         window.clearTimeout(sendAmountAlertTimerRef.current);
         sendAmountAlertTimerRef.current = null;
@@ -615,6 +624,85 @@ export default function DashboardPage() {
       }
     };
   }, []);
+
+  const loadBoundCards = useCallback(() => {
+    if (!address || typeof window === 'undefined') {
+      setBoundCards([]);
+      return;
+    }
+
+    try {
+      const saved = window.localStorage.getItem(`nfc_cards_${address}`);
+      if (!saved) {
+        setBoundCards([]);
+        return;
+      }
+
+      const parsed = JSON.parse(saved) as Array<Omit<BoundCardPreview, 'boundAt'> & { boundAt: string }>;
+      setBoundCards(
+        parsed.map((card) => ({
+          ...card,
+          boundAt: new Date(card.boundAt),
+        }))
+      );
+    } catch (error) {
+      console.error('Failed to load bound cards:', error);
+      setBoundCards([]);
+    }
+  }, [address]);
+
+  const startCardScanner = useCallback(async () => {
+    const sessionId = cardScanSessionRef.current + 1;
+    cardScanSessionRef.current = sessionId;
+    setCardScanData(null);
+    setCardScanError('');
+
+    if (!isNFCSupported()) {
+      setCardScanState('error');
+      setCardScanError('NFC is not supported on this device. Please use an Android device with Chrome browser.');
+      return;
+    }
+
+    setCardScanState('scanning');
+
+    try {
+      const nextCardData = await readNFCCard();
+      if (cardScanSessionRef.current !== sessionId) {
+        return;
+      }
+
+      setCardScanData(nextCardData);
+      if (!nextCardData.address) {
+        setCardScanState('error');
+        setCardScanError('This card has no address stored yet. Open Manage Cards to bind or review it first.');
+        return;
+      }
+
+      setCardScanState('success');
+    } catch (error) {
+      if (cardScanSessionRef.current !== sessionId) {
+        return;
+      }
+
+      setCardScanState('error');
+      setCardScanError((error as Error).message || 'Failed to read NFC card. Please try again.');
+    }
+  }, []);
+
+  useEffect(() => {
+    loadBoundCards();
+  }, [loadBoundCards]);
+
+  useEffect(() => {
+    if (walletPanel !== 'card' || cardPanelTab !== 'pay') {
+      cardScanSessionRef.current += 1;
+      return;
+    }
+
+    if (cardScanState === 'idle') {
+      void startCardScanner();
+    }
+  }, [cardPanelTab, cardScanState, startCardScanner, walletPanel]);
 
   const loadData = useCallback(async ({ background = false }: { background?: boolean } = {}) => {
     if (!address) return;
@@ -779,6 +867,10 @@ export default function DashboardPage() {
     ? historyItems
     : historyItems.filter((item) => item.type === historyFilter);
   const walletPanelMeta: Record<Exclude<WalletPanel, 'overview'>, { title: string; subtitle: string }> = {
+    card: {
+      title: 'Card Center',
+      subtitle: 'Tap a card, inject its address into Send, or manage bound NFC cards without leaving this wallet surface.',
+    },
     send: {
       title: 'Send INJ',
       subtitle: 'Transfer directly from this wallet card without leaving the dashboard.',
@@ -1256,33 +1348,12 @@ export default function DashboardPage() {
     }, 350);
   };
 
-  const openCardCenter = () => {
-    if (cardCenterTimerRef.current) {
-      window.clearTimeout(cardCenterTimerRef.current);
-      cardCenterTimerRef.current = null;
-    }
-
-    setShowCardCenter(true);
-    setCardCenterActive(false);
-
-    window.requestAnimationFrame(() => {
-      window.requestAnimationFrame(() => {
-        setCardCenterActive(true);
-      });
-    });
-  };
-
-  const closeCardCenter = () => {
-    if (cardCenterTimerRef.current) {
-      window.clearTimeout(cardCenterTimerRef.current);
-      cardCenterTimerRef.current = null;
-    }
-
-    setCardCenterActive(false);
-    cardCenterTimerRef.current = window.setTimeout(() => {
-      setShowCardCenter(false);
-      cardCenterTimerRef.current = null;
-    }, 280);
+  const openCardPanel = () => {
+    setCardPanelTab('pay');
+    setCardScanData(null);
+    setCardScanError('');
+    setCardScanState('idle');
+    toggleWalletPanel('card');
   };
 
   const openAiAssetSurface = () => {
@@ -1342,6 +1413,7 @@ export default function DashboardPage() {
   const isWalletOverview = walletPanel === 'overview';
   const isAiStage = assetSurfaceMode === 'ai';
   const isFaucetStage = assetSurfaceMode === 'faucet';
+  const isCardPanel = walletPanel === 'card';
   const isTestnet = walletNetworkMode === 'testnet';
   const activeWalletPanelMeta = walletPanel !== 'overview' ? walletPanelMeta[walletPanel] : null;
   const formattedNinjaBalance = walletNetworkMode === 'mainnet' ? ninjaBalance.toFixed(2) : '0.00';
@@ -1357,6 +1429,8 @@ export default function DashboardPage() {
   const currentUsdtAddress = currentTokenSet.USDT?.address || null;
   const currentUsdcAddress = currentTokenSet.USDC?.address || null;
   const swapUnavailableOnTestnet = walletNetworkMode === 'testnet';
+  const activeBoundCards = boundCards.filter((card) => card.isActive);
+  const recentBoundCards = boundCards.slice(0, 2);
   const dashboardTokenCards = [
     {
       symbol: 'INJ',
@@ -1453,11 +1527,15 @@ export default function DashboardPage() {
                 </svg>
               </button>
               <button
-                onClick={openCardCenter}
-                className="rounded-lg border border-white/10 bg-white/5 p-2.5 transition-all hover:bg-white/10"
+                onClick={openCardPanel}
+                className={`rounded-lg border p-2.5 transition-all ${
+                  isCardPanel
+                    ? 'border-amber-300/30 bg-[linear-gradient(135deg,rgba(245,158,11,0.18),rgba(234,88,12,0.12))] shadow-[0_10px_28px_rgba(245,158,11,0.12)]'
+                    : 'border-white/10 bg-white/5 hover:border-amber-500/35 hover:bg-amber-500/10'
+                }`}
                 title="Open Card Pay"
               >
-                <svg className="h-[18px] w-[18px]" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                <svg className={`h-[18px] w-[18px] ${isCardPanel ? 'text-amber-100' : 'text-gray-300'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M3 10h18M7 15h1m4 0h5M5 6h14a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2Z" />
                 </svg>
               </button>
@@ -1485,6 +1563,8 @@ export default function DashboardPage() {
             style={{
               ['--dashboard-columns' as string]: isAiStage
                 ? 'minmax(232px,0.38fr) minmax(0,1.62fr)'
+                : isCardPanel
+                  ? 'minmax(0,1.42fr) minmax(320px,0.58fr)'
                 : 'minmax(0,1.18fr) minmax(360px,0.82fr)',
             }}
           >
@@ -1651,7 +1731,7 @@ export default function DashboardPage() {
                       <div className={`min-h-0 flex-1 ${
                         walletPanel === 'settings'
                           ? 'overflow-hidden pr-0 pt-3'
-                          : walletPanel === 'send' || walletPanel === 'swap' || walletPanel === 'history'
+                          : walletPanel === 'send' || walletPanel === 'swap' || walletPanel === 'history' || walletPanel === 'card'
                             ? 'overflow-hidden pt-4'
                             : 'overflow-y-auto pt-4 pr-1'
                       }`}>
@@ -2166,6 +2246,257 @@ export default function DashboardPage() {
                           </div>
                         )}
 
+                        {walletPanel === 'card' && (
+                          <div className="grid h-full min-h-0 gap-4 md:grid-cols-[minmax(0,1.1fr)_280px]">
+                            <div className="flex min-h-0 flex-col gap-4">
+                              <div className="relative rounded-2xl border border-white/10 bg-white/5 p-1">
+                                <div
+                                  className={`absolute bottom-1 top-1 w-[calc(50%-0.25rem)] rounded-[0.85rem] bg-white transition-all duration-300 ${
+                                    cardPanelTab === 'pay' ? 'left-1' : 'left-[calc(50%+0rem)]'
+                                  }`}
+                                />
+                                <div className="relative grid grid-cols-2 gap-2">
+                                  <button
+                                    onClick={() => {
+                                      setCardPanelTab('pay');
+                                      setCardScanData(null);
+                                      setCardScanError('');
+                                      setCardScanState('idle');
+                                    }}
+                                    className={`rounded-[0.85rem] px-3 py-2.5 text-sm font-bold transition-all ${
+                                      cardPanelTab === 'pay' ? 'text-black' : 'text-gray-400 hover:text-white'
+                                    }`}
+                                  >
+                                    Pay
+                                  </button>
+                                  <button
+                                    onClick={() => {
+                                      setCardPanelTab('cards');
+                                      loadBoundCards();
+                                    }}
+                                    className={`rounded-[0.85rem] px-3 py-2.5 text-sm font-bold transition-all ${
+                                      cardPanelTab === 'cards' ? 'text-black' : 'text-gray-400 hover:text-white'
+                                    }`}
+                                  >
+                                    Cards
+                                  </button>
+                                </div>
+                              </div>
+
+                              {cardPanelTab === 'pay' ? (
+                                <div className="flex min-h-0 flex-1 flex-col rounded-2xl border border-white/10 bg-black/25 p-5">
+                                  <div className="flex h-full flex-col items-center justify-center text-center">
+                                    <div className="mb-6 flex items-center justify-center gap-6">
+                                      <div className="relative">
+                                        <div className="flex h-36 w-56 items-center justify-between rounded-[1.75rem] border border-white/12 bg-[linear-gradient(135deg,rgba(255,255,255,0.08),rgba(255,255,255,0.02))] p-5 shadow-[0_24px_60px_rgba(0,0,0,0.25)]">
+                                          <div className="flex h-full flex-col justify-between text-left">
+                                            <div className="h-10 w-12 rounded bg-gradient-to-br from-cyan-300/20 to-blue-500/10" />
+                                            <div>
+                                              <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-gray-500">Pass Card</div>
+                                              <div className="mt-2 h-3 w-24 rounded bg-white/8" />
+                                              <div className="mt-2 h-2.5 w-16 rounded bg-white/6" />
+                                            </div>
+                                          </div>
+                                          <svg className="h-8 w-8 text-white/40" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                                            <path strokeLinecap="round" strokeLinejoin="round" d="M8.111 16.404a5.5 5.5 0 017.778 0M12 20h.01m-7.08-7.071c3.904-3.905 10.236-3.905 14.141 0" />
+                                          </svg>
+                                        </div>
+                                      </div>
+                                      {cardScanState === 'scanning' && (
+                                        <div className="flex flex-col gap-3">
+                                          <span className="h-2.5 w-2.5 rounded-full bg-white/90 animate-pulse" />
+                                          <span className="h-2.5 w-2.5 rounded-full bg-white/70 animate-pulse [animation-delay:160ms]" />
+                                          <span className="h-2.5 w-2.5 rounded-full bg-white/50 animate-pulse [animation-delay:320ms]" />
+                                        </div>
+                                      )}
+                                    </div>
+
+                                    {cardScanState === 'success' ? (
+                                      <>
+                                        <h4 className="text-lg font-bold text-white">Card Ready</h4>
+                                        <p className="mt-2 max-w-md text-sm text-gray-400">
+                                          Card address detected. You can inject it straight into the dashboard send flow.
+                                        </p>
+
+                                        <div className="mt-5 w-full max-w-xl rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-4 text-left">
+                                          <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">Card Address</div>
+                                          <div className="mt-2 break-all font-mono text-sm text-white">{cardScanData?.address}</div>
+                                          {cardScanData?.uid && (
+                                            <div className="mt-4 border-t border-white/6 pt-3">
+                                              <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">Card UID</div>
+                                              <div className="mt-2 font-mono text-xs text-gray-400">{cardScanData.uid}</div>
+                                            </div>
+                                          )}
+                                        </div>
+
+                                        <div className="mt-5 flex flex-wrap items-center justify-center gap-3">
+                                          <button
+                                            onClick={() => {
+                                              if (!cardScanData?.address) return;
+                                              setSendRecipient(cardScanData.address);
+                                              setSendError('');
+                                              setWalletPanel('send');
+                                            }}
+                                            className="rounded-2xl bg-white px-6 py-3 text-sm font-bold text-black transition-all hover:bg-gray-100"
+                                          >
+                                            Send to This Card
+                                          </button>
+                                          <button
+                                            onClick={() => {
+                                              setCardScanData(null);
+                                              setCardScanError('');
+                                              setCardScanState('idle');
+                                            }}
+                                            className="rounded-2xl border border-white/10 bg-white/5 px-6 py-3 text-sm font-semibold text-gray-200 transition-all hover:bg-white/10 hover:text-white"
+                                          >
+                                            Scan Another
+                                          </button>
+                                          <button
+                                            onClick={() => {
+                                              setCardPanelTab('cards');
+                                              loadBoundCards();
+                                            }}
+                                            className="rounded-2xl border border-white/10 bg-white/5 px-6 py-3 text-sm font-semibold text-gray-200 transition-all hover:bg-white/10 hover:text-white"
+                                          >
+                                            Manage Cards
+                                          </button>
+                                        </div>
+                                      </>
+                                    ) : (
+                                      <>
+                                        <h4 className="text-lg font-bold text-white">
+                                          {cardScanState === 'scanning' ? 'Scanning...' : cardScanState === 'error' ? 'Scan Interrupted' : 'Ready to Scan'}
+                                        </h4>
+                                        <p className="mt-2 max-w-md text-sm text-gray-400">
+                                          {cardScanState === 'error'
+                                            ? cardScanError
+                                            : cardScanState === 'scanning'
+                                              ? 'Hold your phone steady near the card. Once the scan completes, its address can be injected directly into Send.'
+                                              : 'Tap a bound NFC card to your device to start a direct card-pay flow.'}
+                                        </p>
+
+                                        <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
+                                          <button
+                                            onClick={() => {
+                                              setCardScanData(null);
+                                              setCardScanError('');
+                                              setCardScanState('idle');
+                                            }}
+                                            className="rounded-2xl bg-white px-6 py-3 text-sm font-bold text-black transition-all hover:bg-gray-100"
+                                          >
+                                            {cardScanState === 'error' ? 'Retry Scan' : cardScanState === 'scanning' ? 'Restart Scan' : 'Start Scan'}
+                                          </button>
+                                          <button
+                                            onClick={() => {
+                                              setCardPanelTab('cards');
+                                              loadBoundCards();
+                                            }}
+                                            className="rounded-2xl border border-white/10 bg-white/5 px-6 py-3 text-sm font-semibold text-gray-200 transition-all hover:bg-white/10 hover:text-white"
+                                          >
+                                            Open Cards
+                                          </button>
+                                        </div>
+                                      </>
+                                    )}
+                                  </div>
+                                </div>
+                              ) : (
+                                <div className="min-h-0 flex-1 overflow-hidden rounded-2xl border border-white/10 bg-black/25 p-2">
+                                  <div className="h-full overflow-hidden rounded-[1.35rem] border border-white/8 bg-black">
+                                    <DashboardSurfaceFrame
+                                      src="/cards?embed=1&entry=dashboard-card"
+                                      title="Embedded cards manager"
+                                      loadingStrategy="eager"
+                                    />
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+
+                            <div className="flex min-h-0 flex-col gap-4">
+                              <div className="rounded-2xl border border-white/10 bg-black/25 p-4">
+                                <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">Cards</div>
+                                <div className="mt-4 grid grid-cols-2 gap-3">
+                                  <div className="rounded-2xl border border-white/8 bg-white/[0.03] px-4 py-3">
+                                    <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">Bound</div>
+                                    <div className="mt-2 text-2xl font-bold text-white">{boundCards.length}</div>
+                                  </div>
+                                  <div className="rounded-2xl border border-white/8 bg-white/[0.03] px-4 py-3">
+                                    <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">Active</div>
+                                    <div className="mt-2 text-2xl font-bold text-white">{activeBoundCards.length}</div>
+                                  </div>
+                                </div>
+                              </div>
+
+                              <div className="rounded-2xl border border-white/10 bg-black/25 p-4">
+                                <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">Flow</div>
+                                <div className="mt-3 space-y-2 text-sm text-gray-300">
+                                  <p>1. Scan a card with NFC.</p>
+                                  <p>2. Inject its address into Send.</p>
+                                  <p>3. Manage or bind cards in the Cards view.</p>
+                                </div>
+                              </div>
+
+                              <div className="flex min-h-0 flex-1 flex-col rounded-2xl border border-white/10 bg-black/25 p-4">
+                                <div className="flex items-center justify-between gap-3">
+                                  <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">Recent Cards</div>
+                                  <button
+                                    onClick={loadBoundCards}
+                                    className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-400 transition-colors hover:text-white"
+                                  >
+                                    Refresh
+                                  </button>
+                                </div>
+
+                                <div className="mt-4 flex-1 space-y-3">
+                                  {recentBoundCards.length === 0 ? (
+                                    <div className="flex h-full items-center justify-center rounded-2xl border border-white/8 bg-white/[0.03] px-4 py-3 text-center text-sm text-gray-500">
+                                      No bound cards yet. Open Cards to bind and manage your NFC set.
+                                    </div>
+                                  ) : (
+                                    recentBoundCards.map((card) => (
+                                      <div key={card.uid} className="rounded-2xl border border-white/8 bg-white/[0.03] px-4 py-3">
+                                        <div className="flex items-center justify-between gap-3">
+                                          <div className="min-w-0">
+                                            <div className="truncate text-sm font-bold text-white">{card.name}</div>
+                                            <div className="mt-1 text-xs font-mono text-gray-400">{card.cardNumber}</div>
+                                          </div>
+                                          <span className={`rounded-full px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] ${
+                                            card.isActive ? 'border border-emerald-400/20 bg-emerald-500/10 text-emerald-300' : 'border border-white/10 bg-white/[0.04] text-gray-400'
+                                          }`}>
+                                            {card.isActive ? 'Active' : 'Frozen'}
+                                          </span>
+                                        </div>
+                                      </div>
+                                    ))
+                                  )}
+                                </div>
+
+                                <div className="mt-4 space-y-3">
+                                  <button
+                                    onClick={() => setCardPanelTab('cards')}
+                                    className="w-full rounded-2xl border border-white/10 bg-white/5 py-3 text-sm font-semibold text-white transition-all hover:bg-white/10"
+                                  >
+                                    Manage Cards
+                                  </button>
+                                  {cardScanData?.address && (
+                                    <button
+                                      onClick={() => {
+                                        setSendRecipient(cardScanData.address || '');
+                                        setSendError('');
+                                        setWalletPanel('send');
+                                      }}
+                                      className="w-full rounded-2xl bg-white py-3 text-sm font-bold text-black transition-all hover:bg-gray-100"
+                                    >
+                                      Send to Latest Card
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
                         {walletPanel === 'settings' && (
                           <SettingsPage embeddedOverride />
                         )}
@@ -2305,6 +2636,8 @@ export default function DashboardPage() {
                 className={`absolute inset-0 transition-all duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] ${
                   isAiStage || isFaucetStage
                     ? 'pointer-events-none translate-x-10 scale-[0.96] opacity-0'
+                    : isCardPanel
+                      ? 'translate-x-6 scale-[0.97] opacity-100'
                     : 'translate-x-0 scale-100 opacity-100'
                 }`}
               >
@@ -2749,18 +3082,6 @@ export default function DashboardPage() {
         }}
         onSuccess={handleTransactionAuthSuccess}
         transactionType={pendingAuthAction ?? 'send'}
-      />
-
-      <CardCenterModal
-        isOpen={showCardCenter}
-        isActive={cardCenterActive}
-        onClose={closeCardCenter}
-        onUseCardAddress={(nextAddress) => {
-          closeCardCenter();
-          setWalletPanel('send');
-          setSendRecipient(nextAddress);
-          setSendError('');
-        }}
       />
 
       {/* NFT Detail Modal */}
