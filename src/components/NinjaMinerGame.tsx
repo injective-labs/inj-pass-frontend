@@ -13,8 +13,6 @@ interface TapMinerState {
   cooldownEndsAt: number;
   sessionStartedAt: number;
   sessionEndsAt: number;
-  sessionEarned: number;
-  tutorialDismissed: boolean;
 }
 
 interface TapBurst {
@@ -44,8 +42,6 @@ function createInitialState(): TapMinerState {
     cooldownEndsAt: 0,
     sessionStartedAt: 0,
     sessionEndsAt: 0,
-    sessionEarned: 0,
-    tutorialDismissed: false,
   };
 }
 
@@ -84,8 +80,6 @@ function restoreState(walletAddress?: string): TapMinerState {
         cooldownEndsAt: typeof parsed.cooldownEndsAt === 'number' ? parsed.cooldownEndsAt : 0,
         sessionStartedAt: typeof parsed.sessionStartedAt === 'number' ? parsed.sessionStartedAt : 0,
         sessionEndsAt: typeof parsed.sessionEndsAt === 'number' ? parsed.sessionEndsAt : 0,
-        sessionEarned: typeof parsed.sessionEarned === 'number' ? roundTo(parsed.sessionEarned, 2) : 0,
-        tutorialDismissed: parsed.tutorialDismissed === true,
       },
       now
     );
@@ -155,7 +149,6 @@ export default function NinjaMinerGame({ walletAddress }: NinjaMinerGameProps) {
     : 0;
   const progressValue = isActive ? activeProgress : isCoolingDown ? cooldownProgress : 100;
   const isLight = theme === 'light';
-  const showTutorial = !normalizedState.tutorialDismissed && !isCoolingDown;
 
   const progressLabel = isActive
     ? `${(activeRemainingMs / 1000).toFixed(1)}s`
@@ -191,8 +184,6 @@ export default function NinjaMinerGame({ walletAddress }: NinjaMinerGameProps) {
         sessionStartedAt: sessionAlreadyActive ? synced.sessionStartedAt : tapAt,
         sessionEndsAt: sessionAlreadyActive ? synced.sessionEndsAt : tapAt + SESSION_DURATION_MS,
         cooldownEndsAt: sessionAlreadyActive ? synced.cooldownEndsAt : tapAt + SESSION_DURATION_MS + COOLDOWN_MS,
-        sessionEarned: roundTo((sessionAlreadyActive ? synced.sessionEarned : 0) + reward, 2),
-        tutorialDismissed: true,
       };
     });
 
@@ -218,21 +209,6 @@ export default function NinjaMinerGame({ walletAddress }: NinjaMinerGameProps) {
         isLight ? 'border-slate-300/70 bg-white/72' : 'border-white/10 bg-black/30'
       }`}
     >
-      <div className="mb-4 flex w-full items-start justify-end">
-        <div
-          className={`rounded-full border px-3.5 py-1.5 text-right ${
-            isLight ? 'border-slate-300/80 bg-white/88' : 'border-white/10 bg-white/[0.05]'
-          }`}
-        >
-          <div className={`text-[10px] font-semibold uppercase tracking-[0.2em] ${isLight ? 'text-slate-500' : 'text-gray-500'}`}>
-            Earned
-          </div>
-          <div className={`mt-0.5 font-mono text-sm font-semibold ${isLight ? 'text-slate-900' : 'text-white'}`}>
-            +{normalizedState.sessionEarned.toFixed(2)} NINJA
-          </div>
-        </div>
-      </div>
-
       <div className="relative flex flex-1 items-center justify-center">
         {bursts.map((burst) => (
           <div
@@ -243,21 +219,6 @@ export default function NinjaMinerGame({ walletAddress }: NinjaMinerGameProps) {
             +{burst.amount.toFixed(2)}
           </div>
         ))}
-
-        {showTutorial && (
-          <div className="tutorial-guide pointer-events-none absolute inset-0 z-20 flex items-center justify-center">
-            <div className="tutorial-hand-wrap">
-              <div className={`tutorial-touch-ring ${isLight ? 'border-slate-400/45' : 'border-white/18'}`} />
-              <div className={`tutorial-hand ${isLight ? 'bg-slate-900 text-white' : 'bg-white text-black'}`}>
-                <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M9.5 11.5V7.2a1.2 1.2 0 1 1 2.4 0v4.3" />
-                  <path d="M11.9 11.4V5.8a1.2 1.2 0 1 1 2.4 0v5.4" />
-                  <path d="M14.3 11.8V7.6a1.2 1.2 0 1 1 2.4 0v6.1c0 3-2.2 5.3-5 5.3-2.6 0-4.4-1.7-5-4.3l-.8-3.3a1.15 1.15 0 1 1 2.2-.6l.7 2.2V9.7a1.2 1.2 0 1 1 2.4 0v1.8" />
-                </svg>
-              </div>
-            </div>
-          </div>
-        )}
 
         <button
           type="button"
@@ -312,7 +273,7 @@ export default function NinjaMinerGame({ walletAddress }: NinjaMinerGameProps) {
           justify-content: center;
           width: 15rem;
           height: 15rem;
-          border-radius: 999px;
+          border-radius: 2rem;
           transition: transform 180ms ease, opacity 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
           overflow: hidden;
           box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
@@ -360,35 +321,6 @@ export default function NinjaMinerGame({ walletAddress }: NinjaMinerGameProps) {
           backdrop-filter: blur(18px);
         }
 
-        .tutorial-hand-wrap {
-          position: absolute;
-          right: calc(50% - 112px);
-          bottom: calc(50% - 104px);
-          animation: tutorialFloat 1.9s ease-in-out infinite;
-        }
-
-        .tutorial-hand {
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          width: 2.3rem;
-          height: 2.3rem;
-          border-radius: 999px;
-          box-shadow: 0 10px 28px rgba(15, 23, 42, 0.18);
-        }
-
-        .tutorial-touch-ring {
-          position: absolute;
-          left: 50%;
-          top: 50%;
-          width: 2.9rem;
-          height: 2.9rem;
-          border-radius: 999px;
-          border: 1px solid;
-          transform: translate(-50%, -50%);
-          animation: tutorialPulse 1.9s ease-out infinite;
-        }
-
         .tap-burst {
           animation: tapBurstFloat 880ms cubic-bezier(0.2, 0.9, 0.18, 1) forwards;
           text-shadow: 0 6px 18px rgba(143, 118, 255, 0.22);
@@ -421,29 +353,6 @@ export default function NinjaMinerGame({ walletAddress }: NinjaMinerGameProps) {
           100% {
             opacity: 0;
             transform: translateY(-52px);
-          }
-        }
-
-        @keyframes tutorialFloat {
-          0%, 100% {
-            transform: translateY(0);
-          }
-          50% {
-            transform: translateY(7px);
-          }
-        }
-
-        @keyframes tutorialPulse {
-          0% {
-            opacity: 0;
-            transform: translate(-50%, -50%) scale(0.62);
-          }
-          20% {
-            opacity: 0.75;
-          }
-          100% {
-            opacity: 0;
-            transform: translate(-50%, -50%) scale(1.18);
           }
         }
       `}</style>
