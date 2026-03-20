@@ -833,6 +833,9 @@ export default function DashboardPage() {
 
   const receiveDisplayAddress = receiveAddressType === 'evm' ? (address || '') : getCosmosAddress(address || '');
   const sendGasCost = sendGasEstimate ? formatEther(sendGasEstimate.totalCost) : '';
+  const sendGasLimitLabel = sendGasEstimate ? sendGasEstimate.gasLimit.toString() : 'Awaiting input';
+  const sendMaxFeeLabel = sendGasEstimate ? `${Number(formatUnits(sendGasEstimate.maxFeePerGas, 9)).toFixed(2)} Gwei` : 'Awaiting input';
+  const sendPriorityFeeLabel = sendGasEstimate ? `${Number(formatUnits(sendGasEstimate.maxPriorityFeePerGas, 9)).toFixed(2)} Gwei` : 'Awaiting input';
   const sendBalanceValue = parseFloat(tokenBalances.INJ || '0');
   const sendAmountNumeric = Number(sendAmount);
   const sendAmountExceedsBalance =
@@ -1892,18 +1895,25 @@ export default function DashboardPage() {
                               </div>
 
                               <div className="mt-5 rounded-2xl border border-white/8 bg-white/[0.03] px-4 py-3">
-                                <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">Flow</div>
-                                <div className="mt-3 space-y-2 text-sm text-gray-300">
-                                  <p>1. Enter the recipient address.</p>
-                                  <p>2. Set the amount you want to transfer.</p>
-                                  <p>3. Confirm the transaction after review.</p>
-                                </div>
-                                <div className="mt-4 border-t border-white/8 pt-3">
+                                <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">Gas</div>
+                                <div className="mt-3 space-y-3">
                                   <div className="flex items-center justify-between gap-3 text-sm">
-                                    <span className="text-gray-500">Estimated Gas</span>
+                                    <span className="text-gray-500">Estimated Cost</span>
                                     <span className="font-mono text-white">
                                       {sendEstimating ? 'Estimating...' : sendGasEstimate ? `${Number(sendGasCost).toFixed(6)} INJ` : 'Awaiting input'}
                                     </span>
+                                  </div>
+                                  <div className="flex items-center justify-between gap-3 text-sm">
+                                    <span className="text-gray-500">Gas Limit</span>
+                                    <span className="font-mono text-white">{sendEstimating && !sendGasEstimate ? 'Estimating...' : sendGasLimitLabel}</span>
+                                  </div>
+                                  <div className="flex items-center justify-between gap-3 text-sm">
+                                    <span className="text-gray-500">Max Fee</span>
+                                    <span className="font-mono text-white">{sendEstimating && !sendGasEstimate ? 'Estimating...' : sendMaxFeeLabel}</span>
+                                  </div>
+                                  <div className="flex items-center justify-between gap-3 text-sm">
+                                    <span className="text-gray-500">Priority Fee</span>
+                                    <span className="font-mono text-white">{sendEstimating && !sendGasEstimate ? 'Estimating...' : sendPriorityFeeLabel}</span>
                                   </div>
                                 </div>
                               </div>
