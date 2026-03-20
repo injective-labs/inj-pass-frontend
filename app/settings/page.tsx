@@ -264,6 +264,23 @@ export default function SettingsPage({ embeddedOverride }: SettingsPageProps = {
     }
   };
 
+  const sectionWrapperClass = embedded ? 'mb-4' : 'mb-6';
+  const sectionTitleClass = embedded
+    ? 'mb-3 text-[11px] font-bold uppercase tracking-[0.22em] text-gray-400'
+    : 'mb-4 text-sm font-bold uppercase tracking-wider text-gray-400';
+  const settingsListClass = embedded ? 'space-y-2.5' : 'space-y-3';
+  const settingsItemBaseClass = 'w-full flex items-center justify-between rounded-2xl border border-white/10 bg-white/5 transition-all hover:bg-white/10';
+  const settingsItemPaddingClass = embedded ? 'px-3.5 py-3' : 'px-4 py-3.5';
+  const settingsItemContentClass = embedded ? 'flex items-center gap-2.5' : 'flex items-center gap-3';
+  const settingsIconClass = embedded
+    ? 'flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-[1.05rem] bg-white shadow-lg transition-all hover:bg-gray-100'
+    : 'flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-[1.1rem] bg-white shadow-lg transition-all hover:bg-gray-100';
+  const settingsTitleTextClass = embedded ? 'text-[13px] font-bold text-white' : 'text-sm font-bold text-white';
+  const settingsSubtitleTextClass = embedded ? 'text-[11px] leading-snug text-gray-400' : 'text-xs text-gray-400';
+  const settingsActionButtonClass = embedded
+    ? 'rounded-xl px-3 py-1.5 text-[11px] font-bold transition-all'
+    : 'rounded-xl px-4 py-2 text-xs font-bold transition-all';
+
   const settingsContent = isSettingsReady ? (
     <div className={embedded ? 'h-full bg-transparent' : 'min-h-screen bg-black'}>
           {!embedded && (
@@ -277,7 +294,7 @@ export default function SettingsPage({ embeddedOverride }: SettingsPageProps = {
           )}
 
       {/* Main Content */}
-      <div className={embedded ? 'h-full overflow-y-auto px-1 py-1' : 'max-w-7xl mx-auto px-4 py-6'}>
+      <div className={embedded ? 'h-full overflow-y-auto px-0 py-0' : 'max-w-7xl mx-auto px-4 py-6'}>
         {/* PIN Reset Success Message */}
         {pinResetSuccess && (
           <div className="mb-6 p-4 rounded-2xl bg-green-500/10 border border-green-500/30 text-green-400 flex items-center gap-3 animate-fade-in">
@@ -294,25 +311,25 @@ export default function SettingsPage({ embeddedOverride }: SettingsPageProps = {
         )}
 
         {/* PIN Management Section */}
-        <div className="mb-6">
-          <h2 className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-4">PIN Security</h2>
+        <div className={sectionWrapperClass}>
+          <h2 className={sectionTitleClass}>PIN Security</h2>
           
-          <div className="space-y-3">
+          <div className={settingsListClass}>
             {/* Setup/Change PIN */}
             {!hasPin ? (
               <button
                 onClick={() => setShowPinSetup(true)}
-                className="w-full flex items-center justify-between p-4 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10 transition-all"
+                className={`${settingsItemBaseClass} ${settingsItemPaddingClass}`}
               >
-                <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 rounded-full bg-white hover:bg-gray-100 flex items-center justify-center shadow-lg transition-all">
+                <div className={settingsItemContentClass}>
+                  <div className={settingsIconClass}>
                     <svg className="w-5 h-5 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
                     </svg>
                   </div>
                   <div className="text-left">
-                    <div className="text-sm font-bold text-white">Set Transaction PIN</div>
-                    <div className="text-xs text-gray-400">Required for all on-chain transactions</div>
+                    <div className={settingsTitleTextClass}>Set Transaction PIN</div>
+                    <div className={settingsSubtitleTextClass}>Required for all on-chain transactions</div>
                   </div>
                 </div>
                 <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -324,17 +341,17 @@ export default function SettingsPage({ embeddedOverride }: SettingsPageProps = {
                 {/* Change PIN */}
                 <button
                   onClick={() => setShowPinChange(true)}
-                  className="w-full flex items-center justify-between p-4 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10 transition-all"
+                  className={`${settingsItemBaseClass} ${settingsItemPaddingClass}`}
                 >
-                  <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 rounded-full bg-white hover:bg-gray-100 flex items-center justify-center shadow-lg transition-all">
+                  <div className={settingsItemContentClass}>
+                    <div className={settingsIconClass}>
                       <svg className="w-5 h-5 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
                         <path strokeLinecap="round" strokeLinejoin="round" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
                       </svg>
                     </div>
                     <div className="text-left">
-                      <div className="text-sm font-bold text-white">Change Transaction PIN</div>
-                      <div className="text-xs text-gray-400">Update your transaction PIN code</div>
+                      <div className={settingsTitleTextClass}>Change Transaction PIN</div>
+                      <div className={settingsSubtitleTextClass}>Update your transaction PIN code</div>
                     </div>
                   </div>
                   <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -343,17 +360,17 @@ export default function SettingsPage({ embeddedOverride }: SettingsPageProps = {
                 </button>
 
                 {/* PIN-Free Transactions Setting */}
-                <div className="p-4 rounded-2xl bg-white/5 border border-white/10">
+                <div className={`rounded-2xl border border-white/10 bg-white/5 ${settingsItemPaddingClass}`}>
                   <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="w-12 h-12 rounded-full bg-white hover:bg-gray-100 flex items-center justify-center shadow-lg transition-all">
+                    <div className={settingsItemContentClass}>
+                      <div className={settingsIconClass}>
                         <svg className="w-5 h-5 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
                           <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
                         </svg>
                       </div>
                       <div className="text-left">
-                        <div className="text-sm font-bold text-white">PIN-Free Transactions</div>
-                        <div className="text-xs text-gray-400">Skip PIN for small amounts</div>
+                        <div className={settingsTitleTextClass}>PIN-Free Transactions</div>
+                        <div className={settingsSubtitleTextClass}>Skip PIN for small amounts</div>
                       </div>
                     </div>
                     
@@ -361,7 +378,7 @@ export default function SettingsPage({ embeddedOverride }: SettingsPageProps = {
                     <div className="relative">
                       <button
                         onClick={() => setShowAutoLockMenu(!showAutoLockMenu)}
-                        className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white text-black font-bold text-sm hover:bg-gray-100 transition-all"
+                        className={`flex items-center gap-2 bg-white text-black hover:bg-gray-100 ${settingsActionButtonClass}`}
                       >
                         {autoLockMinutes === 0 ? 'Disabled' : `${autoLockMinutes}m`}
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -405,17 +422,17 @@ export default function SettingsPage({ embeddedOverride }: SettingsPageProps = {
                 {/* Reset PIN with Passkey */}
                 <button
                   onClick={() => setShowResetPinModal(true)}
-                  className="w-full flex items-center justify-between p-4 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10 transition-all"
+                  className={`${settingsItemBaseClass} ${settingsItemPaddingClass}`}
                 >
-                  <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 rounded-full bg-white hover:bg-gray-100 flex items-center justify-center shadow-lg transition-all">
+                  <div className={settingsItemContentClass}>
+                    <div className={settingsIconClass}>
                       <svg className="w-5 h-5 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
                         <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                       </svg>
                     </div>
                     <div className="text-left">
-                      <div className="text-sm font-bold text-white">Reset PIN with Passkey</div>
-                      <div className="text-xs text-gray-400">Use biometric to reset your PIN</div>
+                      <div className={settingsTitleTextClass}>Reset PIN with Passkey</div>
+                      <div className={settingsSubtitleTextClass}>Use biometric to reset your PIN</div>
                     </div>
                   </div>
                   <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -424,17 +441,17 @@ export default function SettingsPage({ embeddedOverride }: SettingsPageProps = {
                 </button>
 
                 {/* Default Authentication Method */}
-                <div className="p-4 rounded-2xl bg-white/5 border border-white/10">
+                <div className={`rounded-2xl border border-white/10 bg-white/5 ${settingsItemPaddingClass}`}>
                   <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="w-12 h-12 rounded-full bg-white hover:bg-gray-100 flex items-center justify-center shadow-lg transition-all">
+                    <div className={settingsItemContentClass}>
+                      <div className={settingsIconClass}>
                         <svg className="w-5 h-5 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
                           <path strokeLinecap="round" strokeLinejoin="round" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
                         </svg>
                       </div>
                       <div className="text-left">
-                        <div className="text-sm font-bold text-white">Default Verification</div>
-                        <div className="text-xs text-gray-400">For Send & Swap transactions</div>
+                        <div className={settingsTitleTextClass}>Default Verification</div>
+                        <div className={settingsSubtitleTextClass}>For Send & Swap transactions</div>
                       </div>
                     </div>
                     
@@ -442,7 +459,7 @@ export default function SettingsPage({ embeddedOverride }: SettingsPageProps = {
                     <div className="flex gap-2">
                       <button
                         onClick={() => setDefaultAuthMethod('passkey')}
-                        className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+                        className={`${settingsActionButtonClass} ${
                           defaultAuthMethod === 'passkey'
                             ? 'bg-white text-black'
                             : 'bg-white/5 text-gray-400 hover:bg-white/10 hover:text-white border border-white/10'
@@ -453,7 +470,7 @@ export default function SettingsPage({ embeddedOverride }: SettingsPageProps = {
                       <button
                         onClick={() => setDefaultAuthMethod('pin')}
                         disabled={!hasPin}
-                        className={`px-4 py-2 rounded-xl text-xs font-bold transition-all disabled:opacity-30 disabled:cursor-not-allowed ${
+                        className={`${settingsActionButtonClass} disabled:opacity-30 disabled:cursor-not-allowed ${
                           defaultAuthMethod === 'pin'
                             ? 'bg-white text-black'
                             : 'bg-white/5 text-gray-400 hover:bg-white/10 hover:text-white border border-white/10'
@@ -470,19 +487,19 @@ export default function SettingsPage({ embeddedOverride }: SettingsPageProps = {
         </div>
 
         {/* Agent Sandbox Section */}
-        <div className="mb-6">
-          <h2 className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-4">AI Agent</h2>
-          <div className="p-4 rounded-2xl bg-white/5 border border-white/10">
+        <div className={sectionWrapperClass}>
+          <h2 className={sectionTitleClass}>AI Agent</h2>
+          <div className={`rounded-2xl border border-white/10 bg-white/5 ${settingsItemPaddingClass}`}>
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-full bg-white hover:bg-gray-100 flex items-center justify-center shadow-lg transition-all flex-shrink-0">
+              <div className={settingsItemContentClass}>
+                <div className={settingsIconClass}>
                   <svg className="w-5 h-5 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M21 7.5l-9-5.25L3 7.5m18 0l-9 5.25m9-5.25v9l-9 5.25M3 7.5l9 5.25M3 7.5v9l9 5.25m0-9v9" />
                   </svg>
                 </div>
                 <div className="text-left">
-                  <div className="text-sm font-bold text-white">Sandbox Mode</div>
-                  <div className="text-xs text-gray-400">AI uses an isolated wallet per conversation</div>
+                  <div className={settingsTitleTextClass}>Sandbox Mode</div>
+                  <div className={settingsSubtitleTextClass}>AI uses an isolated wallet per conversation</div>
                 </div>
               </div>
               <div className="flex gap-2">
@@ -492,7 +509,7 @@ export default function SettingsPage({ embeddedOverride }: SettingsPageProps = {
                     // Force re-render
                     setSandboxModeDisplay(true);
                   }}
-                  className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+                  className={`${settingsActionButtonClass} ${
                     sandboxModeDisplay
                       ? 'bg-white text-black'
                       : 'bg-white/5 text-gray-400 hover:bg-white/10 hover:text-white border border-white/10'
@@ -506,7 +523,7 @@ export default function SettingsPage({ embeddedOverride }: SettingsPageProps = {
                       setShowSandboxWarning(true);
                     }
                   }}
-                  className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+                  className={`${settingsActionButtonClass} ${
                     !sandboxModeDisplay
                       ? 'bg-white text-black'
                       : 'bg-white/5 text-gray-400 hover:bg-white/10 hover:text-white border border-white/10'
@@ -520,13 +537,13 @@ export default function SettingsPage({ embeddedOverride }: SettingsPageProps = {
         </div>
 
         {/* Security Section */}
-        <div className="mb-6">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-sm font-bold text-gray-400 uppercase tracking-wider">Private Key</h2>
+        <div className={sectionWrapperClass}>
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className={embedded ? 'text-[11px] font-bold uppercase tracking-[0.22em] text-gray-400' : 'text-sm font-bold uppercase tracking-wider text-gray-400'}>Private Key</h2>
             <button
               onClick={handleShowKey}
               disabled={verifyingPasskey}
-              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
+              className={`${settingsActionButtonClass} flex items-center gap-2 ${
                 showPrivateKey 
                   ? 'bg-white text-black' 
                   : 'bg-white/5 text-gray-400 hover:bg-white/10 hover:text-white border border-white/10'
@@ -547,7 +564,7 @@ export default function SettingsPage({ embeddedOverride }: SettingsPageProps = {
           
           {/* Passkey Verification Info */}
           {!showPrivateKey && !passkeyError && (
-            <div className="mb-4 p-3 rounded-xl bg-white/10 border border-white/20 text-white text-xs flex items-start gap-2">
+            <div className="mb-3 flex items-start gap-2 rounded-xl border border-white/20 bg-white/10 p-3 text-xs text-white">
               <svg className="w-4 h-4 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
@@ -612,12 +629,12 @@ export default function SettingsPage({ embeddedOverride }: SettingsPageProps = {
         </div>
 
         {/* Wallet Actions */}
-        <div className="mb-6">
-          <h2 className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-4">Wallet Actions</h2>
+        <div className={sectionWrapperClass}>
+          <h2 className={sectionTitleClass}>Wallet Actions</h2>
           
           <button
             onClick={handleLock}
-            className="w-full flex items-center justify-center gap-3 py-4 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10 text-white font-bold text-sm transition-all"
+            className={`${settingsItemBaseClass} ${settingsItemPaddingClass} justify-center gap-3 text-white ${embedded ? 'text-[13px]' : 'text-sm'} font-bold`}
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <rect x="3" y="11" width="18" height="11" rx="2" ry="2" strokeWidth={2} />

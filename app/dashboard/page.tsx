@@ -2098,9 +2098,7 @@ export default function DashboardPage() {
                         )}
 
                         {walletPanel === 'settings' && (
-                          <div className="h-full overflow-hidden rounded-[1.35rem] border border-white/10 bg-black/30">
-                            <SettingsPage embeddedOverride />
-                          </div>
+                          <SettingsPage embeddedOverride />
                         )}
                       </div>
                     </div>
