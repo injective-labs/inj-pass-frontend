@@ -186,6 +186,7 @@ export default function DiscoverPage() {
   const isEmbedded = routeContext.embedded;
   const isAiMode = routeContext.aiMode;
   const isLight = theme === 'light';
+  const useWalletSurfaceTheme = isEmbedded;
   const [activeCategory, setActiveCategory] = useState<DiscoverCategory>(isAiMode ? 'ai' : 'all');
   const [searchQuery, setSearchQuery] = useState('');
   const [surfaceReady, setSurfaceReady] = useState(false);
@@ -247,7 +248,7 @@ export default function DiscoverPage() {
   );
 
   return (
-    <div className={`${isEmbedded ? 'h-full' : 'min-h-screen'} ${isLight ? 'bg-[#eef4fb] text-slate-900' : 'bg-black text-white'}`}>
+    <div className={`${isEmbedded ? 'h-full bg-black text-white' : `min-h-screen ${isLight ? 'bg-[#eef4fb] text-slate-900' : 'bg-black text-white'}`}`}>
       {!isEmbedded && (
         <div className={isLight ? 'border-b border-slate-200/80 bg-gradient-to-b from-white/90 to-transparent backdrop-blur-sm' : 'bg-gradient-to-b from-white/5 to-transparent border-b border-white/5 backdrop-blur-sm'}>
           <div className="max-w-7xl mx-auto px-4 py-6">
@@ -274,9 +275,21 @@ export default function DiscoverPage() {
               surfaceReady ? 'translate-y-0 opacity-100' : 'translate-y-3 opacity-0'
             }`}
           >
-            <div className={`relative rounded-xl p-1 ${isAiMode ? 'w-[118px] flex-none' : 'min-w-0 flex-1 max-w-[560px]'} ${isLight ? 'border border-slate-200/80 bg-slate-100/80 shadow-[0_10px_32px_rgba(148,163,184,0.10)]' : 'bg-white/5'}`}>
+            <div className={`relative rounded-xl p-1 ${isAiMode ? 'w-[118px] flex-none' : 'min-w-0 flex-1 max-w-[560px]'} ${
+              useWalletSurfaceTheme
+                ? 'border border-white/10 bg-black'
+                : isLight
+                  ? 'border border-slate-200/80 bg-slate-100/80 shadow-[0_10px_32px_rgba(148,163,184,0.10)]'
+                  : 'bg-white/5'
+            }`}>
               <div
-                className={`pointer-events-none absolute bottom-1 top-1 rounded-lg transition-all duration-300 ease-out ${isLight ? 'border border-slate-200/80 bg-white shadow-[0_10px_24px_rgba(148,163,184,0.18)]' : 'bg-white shadow-lg'}`}
+                className={`pointer-events-none absolute bottom-1 top-1 rounded-lg transition-all duration-300 ease-out ${
+                  useWalletSurfaceTheme
+                    ? 'bg-white shadow-lg'
+                    : isLight
+                      ? 'border border-slate-200/80 bg-white shadow-[0_10px_24px_rgba(148,163,184,0.18)]'
+                      : 'bg-white shadow-lg'
+                }`}
                 style={{
                   width: `calc((100% - ${(categoryTabs.length - 1) * 0.5}rem) / ${categoryTabs.length})`,
                   left: `calc(0.25rem + ${activeCategoryIndex} * ((100% - ${(categoryTabs.length - 1) * 0.5}rem) / ${categoryTabs.length} + 0.5rem))`,
@@ -289,8 +302,8 @@ export default function DiscoverPage() {
                     onClick={() => setActiveCategory(category.id as DiscoverCategory)}
                     className={`flex-1 whitespace-nowrap rounded-lg px-3 py-2.5 text-xs font-bold transition-all duration-300 ${
                       activeCategory === category.id
-                        ? isLight ? 'text-slate-900' : 'text-black'
-                        : isLight ? 'text-slate-500 hover:text-slate-900' : 'text-gray-400 hover:text-white'
+                        ? useWalletSurfaceTheme ? 'text-black' : isLight ? 'text-slate-900' : 'text-black'
+                        : useWalletSurfaceTheme ? 'text-gray-400 hover:text-white' : isLight ? 'text-slate-500 hover:text-slate-900' : 'text-gray-400 hover:text-white'
                     }`}
                   >
                     {category.name}
@@ -299,12 +312,12 @@ export default function DiscoverPage() {
               </div>
             </div>
             <div className="ml-auto w-[168px] flex-shrink-0 sm:w-[196px] md:w-[220px]">
-              <SearchBox value={searchQuery} onChange={setSearchQuery} onClear={() => setSearchQuery('')} isLight={isLight} />
+              <SearchBox value={searchQuery} onChange={setSearchQuery} onClear={() => setSearchQuery('')} isLight={useWalletSurfaceTheme ? false : isLight} />
             </div>
           </div>
 
           {filteredDapps.length === 0 ? (
-            <div className={`flex min-h-0 flex-1 items-center justify-center px-6 text-center text-sm ${isLight ? 'text-slate-400' : 'text-gray-400'}`}>
+            <div className={`flex min-h-0 flex-1 items-center justify-center px-6 text-center text-sm ${useWalletSurfaceTheme ? 'text-gray-400' : isLight ? 'text-slate-400' : 'text-gray-400'}`}>
               Try adjusting your search or filters.
             </div>
           ) : (
@@ -320,16 +333,24 @@ export default function DiscoverPage() {
                   onDragStart={(event) => handleDAppDragStart(event, dapp)}
                   onClick={() => handleDAppClick(dapp)}
                   className={`flex min-w-[112px] flex-col items-center justify-center gap-2 rounded-[1.45rem] border px-3 py-4 text-center transition-all hover:-translate-y-[1px] ${
-                    isLight
-                      ? 'border-slate-200/80 bg-transparent hover:bg-slate-50/55 shadow-[0_8px_24px_rgba(148,163,184,0.08)]'
-                      : 'border-white/10 bg-transparent hover:bg-white/[0.06]'
+                    useWalletSurfaceTheme
+                      ? 'border-white/10 bg-black hover:bg-white/[0.05]'
+                      : isLight
+                        ? 'border-slate-200/80 bg-transparent hover:bg-slate-50/55 shadow-[0_8px_24px_rgba(148,163,184,0.08)]'
+                        : 'border-white/10 bg-transparent hover:bg-white/[0.06]'
                   } ${isAiMode && AI_DAPP_MENTIONS[dapp.name] ? 'cursor-grab active:cursor-grabbing' : ''}`}
                 >
-                  <div className={`flex h-11 w-11 items-center justify-center overflow-hidden rounded-full p-2 ${isLight ? 'border border-slate-200/80 bg-transparent shadow-[0_8px_18px_rgba(148,163,184,0.10)]' : 'border border-white/10 bg-transparent shadow-[0_8px_18px_rgba(0,0,0,0.18)]'}`}>
+                  <div className={`flex h-11 w-11 items-center justify-center overflow-hidden rounded-full p-2 ${
+                    useWalletSurfaceTheme
+                      ? 'border border-white/10 bg-black shadow-[0_8px_18px_rgba(0,0,0,0.18)]'
+                      : isLight
+                        ? 'border border-slate-200/80 bg-transparent shadow-[0_8px_18px_rgba(148,163,184,0.10)]'
+                        : 'border border-white/10 bg-transparent shadow-[0_8px_18px_rgba(0,0,0,0.18)]'
+                  }`}>
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img src={dapp.icon} alt={dapp.name} className="h-full w-full object-contain" />
                   </div>
-                  <div className={`w-full truncate text-xs font-bold ${isLight ? 'text-slate-900' : 'text-white'}`}>{dapp.name}</div>
+                  <div className={`w-full truncate text-xs font-bold ${useWalletSurfaceTheme ? 'text-white' : isLight ? 'text-slate-900' : 'text-white'}`}>{dapp.name}</div>
                 </button>
               ))}
             </div>
