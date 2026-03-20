@@ -1795,7 +1795,7 @@ export default function DashboardPage() {
                     <div key={`wallet-overview-${walletNetworkMode}-${walletSurfaceMotionKey}`} className="dashboard-surface-enter flex h-full flex-col">
                       <div className="flex flex-col gap-6 xl:flex-row xl:items-end">
                         <div className="min-w-0 flex-1">
-                          <div className="mb-5">
+                          <div className="-translate-y-1 pl-3 md:pl-4">
                             <div className="flex items-end gap-3 md:gap-4 flex-wrap">
                               <span className="text-4xl md:text-5xl font-bold text-white font-mono tracking-tight">
                                 {balanceVisible ? <RollingBalanceNumber value={formattedBalance} /> : '••••••'}
