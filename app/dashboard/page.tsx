@@ -1473,6 +1473,47 @@ export default function DashboardPage() {
       contractValue: currentUsdtAddress ? truncateMiddle(currentUsdtAddress, 8, 6) : 'No contract yet',
     },
   ] as const;
+  const renderCompactAssetSurface = (surface: 'left' | 'right') => (
+    <div
+      key={`compact-assets-${surface}-${walletNetworkMode}-${assetSurfaceMotionKey}`}
+      className="dashboard-surface-enter relative flex min-h-0 flex-1 flex-col"
+    >
+      <div className="mb-4 flex items-center justify-between gap-3">
+        <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-gray-500">Assets</div>
+        {isTestnet && (
+          <div className="rounded-full border border-[#5d7690] bg-[#1d2432] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-100">
+            {currentNetworkShortLabel}
+          </div>
+        )}
+      </div>
+
+      <div className="space-y-3">
+        {dashboardTokenCards.map((token) => (
+          <div
+            key={`${surface}-compact-${token.symbol}`}
+            draggable
+            onDragStart={(event) => {
+              event.dataTransfer.effectAllowed = 'copy';
+              event.dataTransfer.setData('application/x-injpass-asset', token.symbol);
+              event.dataTransfer.setData('text/plain', `$${token.symbol}`);
+            }}
+            className="flex cursor-grab items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 transition-all hover:bg-white/[0.08] active:cursor-grabbing"
+          >
+            <div className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full bg-white/[0.04]">
+              <Image
+                src={token.icon}
+                alt={token.symbol}
+                width={40}
+                height={40}
+                className="h-full w-full object-contain"
+              />
+            </div>
+            <div className="min-w-0 flex-1 text-[13px] font-mono text-gray-300">{token.balance}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 
   return (
     <LoadingSpinner ready={isDashboardReady} progress={dashboardLoadProgress} statusLabel={dashboardLoadStatus}>
@@ -2591,42 +2632,7 @@ export default function DashboardPage() {
               >
                 <div className="bg-black rounded-2xl border border-white/10 relative overflow-hidden p-4 sm:p-5 h-full flex flex-col">
                   <div className="absolute bottom-0 left-0 w-32 h-32 rounded-full bg-gradient-to-tr from-cyan-500/5 to-transparent blur-2xl" />
-                  <div key={`compact-assets-${walletNetworkMode}-${assetSurfaceMotionKey}`} className="dashboard-surface-enter relative flex min-h-0 flex-1 flex-col">
-                    <div className="mb-4 flex items-center justify-between gap-3">
-                      <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-gray-500">Assets</div>
-                      {isTestnet && (
-                        <div className="rounded-full border border-[#5d7690] bg-[#1d2432] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-100">
-                          {currentNetworkShortLabel}
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="space-y-3">
-                      {dashboardTokenCards.map((token) => (
-                        <div
-                          key={`compact-${token.symbol}`}
-                          draggable
-                          onDragStart={(event) => {
-                            event.dataTransfer.effectAllowed = 'copy';
-                            event.dataTransfer.setData('application/x-injpass-asset', token.symbol);
-                            event.dataTransfer.setData('text/plain', `$${token.symbol}`);
-                          }}
-                          className="flex cursor-grab items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 transition-all hover:bg-white/[0.08] active:cursor-grabbing"
-                        >
-                          <div className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full bg-white/[0.04]">
-                            <Image
-                              src={token.icon}
-                              alt={token.symbol}
-                              width={40}
-                              height={40}
-                              className="h-full w-full object-contain"
-                            />
-                          </div>
-                          <div className="min-w-0 flex-1 text-[13px] font-mono text-gray-300">{token.balance}</div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
+                  {renderCompactAssetSurface('left')}
                 </div>
               </div>
             </div>
@@ -2643,6 +2649,9 @@ export default function DashboardPage() {
               >
             <div className="bg-black rounded-2xl border border-white/10 relative overflow-hidden p-4 sm:p-5 h-full flex flex-col">
               <div className="absolute bottom-0 left-0 w-32 h-32 bg-gradient-to-tr from-cyan-500/5 to-transparent rounded-full blur-2xl"></div>
+              {isCardPanel ? (
+                renderCompactAssetSurface('right')
+              ) : (
               <div key={`asset-surface-${walletNetworkMode}-${assetSurfaceMotionKey}`} className="dashboard-surface-enter relative flex flex-1 flex-col">
         {/* Asset Tabs - Smooth Sliding Background */}
         <div className="relative mb-4 p-1 bg-white/5 rounded-xl">
@@ -2959,6 +2968,7 @@ export default function DashboardPage() {
           )}
         </div>
       </div>
+              )}
             </div>
               </div>
 
