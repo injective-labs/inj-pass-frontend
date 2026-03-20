@@ -13,6 +13,7 @@ interface TapMinerState {
   cooldownEndsAt: number;
   sessionStartedAt: number;
   sessionEndsAt: number;
+  sessionEarned: number;
 }
 
 interface TapBurst {
@@ -42,6 +43,7 @@ function createInitialState(): TapMinerState {
     cooldownEndsAt: 0,
     sessionStartedAt: 0,
     sessionEndsAt: 0,
+    sessionEarned: 0,
   };
 }
 
@@ -80,6 +82,7 @@ function restoreState(walletAddress?: string): TapMinerState {
         cooldownEndsAt: typeof parsed.cooldownEndsAt === 'number' ? parsed.cooldownEndsAt : 0,
         sessionStartedAt: typeof parsed.sessionStartedAt === 'number' ? parsed.sessionStartedAt : 0,
         sessionEndsAt: typeof parsed.sessionEndsAt === 'number' ? parsed.sessionEndsAt : 0,
+        sessionEarned: typeof parsed.sessionEarned === 'number' ? roundTo(parsed.sessionEarned, 2) : 0,
       },
       now
     );
@@ -184,6 +187,7 @@ export default function NinjaMinerGame({ walletAddress }: NinjaMinerGameProps) {
         sessionStartedAt: sessionAlreadyActive ? synced.sessionStartedAt : tapAt,
         sessionEndsAt: sessionAlreadyActive ? synced.sessionEndsAt : tapAt + SESSION_DURATION_MS,
         cooldownEndsAt: sessionAlreadyActive ? synced.cooldownEndsAt : tapAt + SESSION_DURATION_MS + COOLDOWN_MS,
+        sessionEarned: roundTo((sessionAlreadyActive ? synced.sessionEarned : 0) + reward, 2),
       };
     });
 
@@ -209,6 +213,14 @@ export default function NinjaMinerGame({ walletAddress }: NinjaMinerGameProps) {
         isLight ? 'border-slate-300/70 bg-white/72' : 'border-white/10 bg-black/30'
       }`}
     >
+      <div className="mb-4 flex w-full justify-end">
+        <div className={`rounded-full border px-3 py-1.5 text-[12px] font-mono font-semibold ${
+          isLight ? 'border-slate-300/80 bg-white/88 text-slate-900' : 'border-white/10 bg-white/[0.05] text-white'
+        }`}>
+          +{normalizedState.sessionEarned.toFixed(2)} NINJA
+        </div>
+      </div>
+
       <div className="relative flex flex-1 items-center justify-center">
         {bursts.map((burst) => (
           <div
@@ -229,13 +241,13 @@ export default function NinjaMinerGame({ walletAddress }: NinjaMinerGameProps) {
           }`}
           aria-label={isCoolingDown ? 'NINJA tap cooldown active' : 'Tap NINJA'}
         >
-          <div className={`ninja-logo-wrap ${isLight ? 'bg-white/85' : 'bg-black/35'}`}>
+          <div className={`ninja-logo-wrap ${isLight ? 'bg-white/88' : 'bg-black/30'}`}>
             <Image
               src="/NIJIA.png"
               alt="NINJA"
               width={152}
               height={152}
-              className="h-32 w-32 select-none object-contain md:h-36 md:w-36"
+              className="h-32 w-32 select-none rounded-full object-cover ring-1 ring-white/10 md:h-36 md:w-36"
               priority={false}
             />
           </div>
@@ -243,22 +255,24 @@ export default function NinjaMinerGame({ walletAddress }: NinjaMinerGameProps) {
       </div>
 
       <div className="w-full max-w-[360px] space-y-2">
-        <div className={`h-2 overflow-hidden rounded-full ${isLight ? 'bg-slate-200/90' : 'bg-white/8'}`}>
-          <div
-            className={`h-full rounded-full transition-[width,background-color] duration-150 ${
-              isActive
-                ? 'bg-[#8f76ff]'
-                : isCoolingDown
-                  ? isLight
+        {!isActive && !isCoolingDown ? (
+          <div className={`text-center text-[11px] font-semibold uppercase tracking-[0.22em] ${isLight ? 'text-slate-500' : 'text-gray-500'}`}>
+            Tap NINJA to Earn
+          </div>
+        ) : (
+          <div className={`h-2 overflow-hidden rounded-full ${isLight ? 'bg-slate-200/90' : 'bg-white/8'}`}>
+            <div
+              className={`h-full rounded-full transition-[width,background-color] duration-150 ${
+                isActive
+                  ? 'bg-[#8f76ff]'
+                  : isLight
                     ? 'bg-slate-500/80'
                     : 'bg-white/28'
-                  : isLight
-                    ? 'bg-slate-900'
-                    : 'bg-white/90'
-            }`}
-            style={{ width: `${Math.max(0, Math.min(100, progressValue))}%` }}
-          />
-        </div>
+              }`}
+              style={{ width: `${Math.max(0, Math.min(100, progressValue))}%` }}
+            />
+          </div>
+        )}
 
         <div className={`text-center text-[11px] font-semibold uppercase tracking-[0.18em] ${isLight ? 'text-slate-500' : 'text-gray-500'}`}>
           {progressLabel}
@@ -273,7 +287,7 @@ export default function NinjaMinerGame({ walletAddress }: NinjaMinerGameProps) {
           justify-content: center;
           width: 15rem;
           height: 15rem;
-          border-radius: 2rem;
+          border-radius: 999px;
           transition: transform 180ms ease, opacity 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
           overflow: hidden;
           box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
@@ -319,6 +333,7 @@ export default function NinjaMinerGame({ walletAddress }: NinjaMinerGameProps) {
           height: 11rem;
           border-radius: 999px;
           backdrop-filter: blur(18px);
+          box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 16px 40px rgba(15, 23, 42, 0.14);
         }
 
         .tap-burst {
