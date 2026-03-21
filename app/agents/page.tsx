@@ -15,6 +15,7 @@ import { parseUnits } from 'viem';
 import type { Address } from 'viem';
 import { AGENT_CREDITS_STATS } from '@/config/agent-credits';
 import { useTheme } from '@/contexts/ThemeContext';
+import { recordChat } from '@/services/ai';
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
@@ -720,12 +721,20 @@ export default function AgentsPage() {
   const runLoop = useCallback(async (convId: string, history: ApiMessage[]) => {
     setIsRunning(true);
 
+    // Track total usage for billing
+    let totalInputTokens = 0;
+    let totalOutputTokens = 0;
+
     try {
       // eslint-disable-next-line no-constant-condition
       while (true) {
+        const authToken = localStorage.getItem('auth_token');
         const res = await fetch('/api/agents', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            ...(authToken ? { 'Authorization': `Bearer ${authToken}` } : {}),
+          },
           body: JSON.stringify({
             messages: history,
             model,
@@ -742,6 +751,12 @@ export default function AgentsPage() {
 
         const data = await res.json();
         const blocks: ApiBlock[] = data.content ?? [];
+
+        // Track usage for billing
+        if (data.usage) {
+          totalInputTokens += data.usage.input_tokens ?? 0;
+          totalOutputTokens += data.usage.output_tokens ?? 0;
+        }
 
         // Build the assistant api message and persist it
         const assistantApiMsg: ApiMessage = { role: 'assistant', content: blocks };
@@ -816,6 +831,61 @@ export default function AgentsPage() {
         }
 
         if (shouldPause) return; // resume handled by handleConfirm / handleCancel
+      }
+
+      // Loop completed successfully - sync to backend for billing and backup
+      const finalHistory = history;
+      const currentConv = conversations.find((c) => c.id === convId);
+
+      // Prepare messages for backend
+      const messagesForBackend = finalHistory.map((msg) => {
+        if (typeof msg.content === 'string') {
+          return { role: msg.role, content: msg.content };
+        }
+        // Handle tool_use and tool_result blocks
+        const toolUse = (msg.content as ApiBlock[])?.filter((b) => b.type === 'tool_use').map((b) => ({
+          name: b.name!,
+          id: b.id!,
+          input: b.input as Record<string, any>,
+        }));
+        const toolResult = (msg.content as ApiBlock[])?.filter((b) => b.type === 'tool_result').map((b) => ({
+          tool_use_id: b.tool_use_id!,
+          content: b.content ?? '',
+        }));
+        return { role: msg.role, content: JSON.stringify(msg.content), tool_use: toolUse, tool_result: toolResult };
+      });
+
+      // Record chat for billing
+      if (totalInputTokens > 0 || totalOutputTokens > 0) {
+        try {
+          const result = await recordChat({
+            conversationId: convId,
+            title: currentConv?.title || 'New Chat',
+            messages: messagesForBackend,
+            model,
+            usage: {
+              inputTokens: totalInputTokens,
+              outputTokens: totalOutputTokens,
+            },
+          });
+
+          if (result.ok) {
+            console.log('[AI] Chat recorded:', {
+              tokens: `${totalInputTokens} in / ${totalOutputTokens} out`,
+              cost: result.cost?.ninjiaDeducted,
+              balance: result.balance,
+            });
+          } else if (result.error === 'INSUFFICIENT_NINJA') {
+            appendDisplay(convId, {
+              id: uid(),
+              role: 'assistant',
+              content: `⚠️ Insufficient NINJIA balance. Current: ${result.current?.toFixed(2)} NINJIA, Required: ${result.required?.toFixed(2)} NINJIA. Please earn more NINJIA to continue using AI.`,
+              isError: true,
+            });
+          }
+        } catch (error) {
+          console.error('[AI] Failed to record chat:', error);
+        }
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Unknown error';

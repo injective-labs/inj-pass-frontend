@@ -1,8 +1,9 @@
 'use client';
 
 import Image from 'next/image';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTheme } from '@/contexts/ThemeContext';
+import { getBalance, syncPoints } from '@/services/points';
 
 interface NinjaMinerGameProps {
   walletAddress?: string;
@@ -111,6 +112,29 @@ export default function NinjaMinerGame({ walletAddress, onOpenMoreChance }: Ninj
   const [bursts, setBursts] = useState<TapBurst[]>([]);
   const [hydrated, setHydrated] = useState(false);
   const [now, setNow] = useState(() => Date.now());
+  const [isSyncing, setIsSyncing] = useState(false);
+  const prevIsActiveRef = useRef(false);
+  const lastSyncedSessionKeyRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    const fetchBackendBalance = async () => {
+      try {
+        const balance = await getBalance();
+        if (balance > 0) {
+          setGameState((prev) => ({
+            ...prev,
+            ninjaBalance: balance,
+          }));
+        }
+      } catch (error) {
+        console.error('[NinjaMiner] Failed to fetch backend balance:', error);
+      }
+    };
+
+    if (walletAddress) {
+      fetchBackendBalance();
+    }
+  }, [walletAddress]);
 
   useEffect(() => {
     const frame = window.requestAnimationFrame(() => {
@@ -132,6 +156,51 @@ export default function NinjaMinerGame({ walletAddress, onOpenMoreChance }: Ninj
     return () => window.clearInterval(timer);
   }, [hydrated]);
 
+  const normalizedState = useMemo(() => normalizeState(gameState, now), [gameState, now]);
+  const isActive = normalizedState.sessionEndsAt > now;
+  const isCoolingDown = !isActive && normalizedState.cooldownEndsAt > now;
+
+  useEffect(() => {
+    if (!hydrated) return;
+
+    const sessionKey = `${gameState.sessionStartedAt}:${gameState.sessionEndsAt}`;
+    const shouldSync =
+      prevIsActiveRef.current &&
+      !isActive &&
+      isCoolingDown &&
+      gameState.sessionEarned > 0 &&
+      !isSyncing &&
+      lastSyncedSessionKeyRef.current !== sessionKey;
+
+    prevIsActiveRef.current = isActive;
+
+    if (!shouldSync) {
+      return;
+    }
+
+    lastSyncedSessionKeyRef.current = sessionKey;
+    void (async () => {
+      setIsSyncing(true);
+      try {
+        const result = await syncPoints(gameState.sessionEarned);
+        if (result.success && result.balance !== undefined) {
+          setGameState((prev) => ({
+            ...prev,
+            ninjaBalance: result.balance!,
+          }));
+          console.log('[NinjaMiner] Synced to backend:', gameState.sessionEarned, 'NIJIA, new balance:', result.balance);
+        } else {
+          lastSyncedSessionKeyRef.current = null;
+        }
+      } catch (error) {
+        lastSyncedSessionKeyRef.current = null;
+        console.error('[NinjaMiner] Sync failed:', error);
+      } finally {
+        setIsSyncing(false);
+      }
+    })();
+  }, [hydrated, isActive, isCoolingDown, gameState.sessionEarned, gameState.sessionStartedAt, gameState.sessionEndsAt, isSyncing]);
+
   useEffect(() => {
     if (!hydrated) return;
 
@@ -142,9 +211,6 @@ export default function NinjaMinerGame({ walletAddress, onOpenMoreChance }: Ninj
     }));
   }, [gameState, hydrated, walletAddress]);
 
-  const normalizedState = useMemo(() => normalizeState(gameState, now), [gameState, now]);
-  const isActive = normalizedState.sessionEndsAt > now;
-  const isCoolingDown = !isActive && normalizedState.cooldownEndsAt > now;
   const activeRemainingMs = Math.max(0, normalizedState.sessionEndsAt - now);
   const cooldownRemainingMs = Math.max(0, normalizedState.cooldownEndsAt - now);
   const activeProgress = isActive ? (activeRemainingMs / SESSION_DURATION_MS) * 100 : 0;
@@ -182,6 +248,12 @@ export default function NinjaMinerGame({ walletAddress, onOpenMoreChance }: Ninj
 
     setGameState((current) => {
       const synced = normalizeState(current, tapAt);
+
+      // Block late taps after a session has ended but before the UI has rendered cooldown.
+      if (synced.cooldownEndsAt > tapAt && synced.sessionEndsAt === 0) {
+        return synced;
+      }
+
       const sessionAlreadyActive = synced.sessionEndsAt > tapAt;
       return {
         ninjaBalance: roundTo(synced.ninjaBalance + reward, 2),
@@ -320,62 +392,37 @@ export default function NinjaMinerGame({ walletAddress, onOpenMoreChance }: Ninj
         }
 
         .ninja-tap-shell.is-cooling {
-          opacity: 0.5;
+          opacity: 0.72;
           filter: grayscale(0.08);
-          cursor: not-allowed;
-        }
-
-        .ninja-tap-shell::after {
-          content: '';
-          position: absolute;
-          inset: -30%;
-          background: linear-gradient(115deg, transparent 28%, rgba(255,255,255,0.22) 48%, transparent 68%);
-          transform: translateX(-130%) rotate(12deg);
-          animation: crestSweep 6.8s linear infinite;
-          pointer-events: none;
         }
 
         .ninja-logo-wrap {
+          position: relative;
           display: flex;
           align-items: center;
           justify-content: center;
-          width: 11rem;
-          height: 11rem;
+          width: 12rem;
+          height: 12rem;
           border-radius: 999px;
+          background: radial-gradient(circle at top, rgba(255, 255, 255, 0.28), rgba(255, 255, 255, 0.08));
         }
 
         .tap-burst {
-          animation: tapBurstFloat 880ms cubic-bezier(0.2, 0.9, 0.18, 1) forwards;
-          text-shadow: 0 6px 18px rgba(143, 118, 255, 0.22);
+          animation: tap-float 900ms ease forwards;
+          text-shadow: 0 0 18px rgba(143, 118, 255, 0.35);
         }
 
-        @keyframes crestSweep {
-          0% {
-            transform: translateX(-130%) rotate(12deg);
-            opacity: 0;
-          }
-          18% {
-            opacity: 0.7;
-          }
-          52% {
-            opacity: 0.12;
-          }
-          100% {
-            transform: translateX(130%) rotate(12deg);
-            opacity: 0;
-          }
-        }
-
-        @keyframes tapBurstFloat {
+        @keyframes tap-float {
           0% {
             opacity: 0;
+            transform: translate(var(--tw-translate-x), 20px) scale(0.92);
           }
-          12% {
+          15% {
             opacity: 1;
           }
           100% {
             opacity: 0;
-            transform: translateY(-52px);
+            transform: translate(var(--tw-translate-x), -56px) scale(1.08);
           }
         }
       `}</style>
