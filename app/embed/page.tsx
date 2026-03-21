@@ -58,7 +58,6 @@ export default function EmbedPage() {
     }
   }, [hasPendingSign]);
 
-  // 监听页面卸载事件，当 DApp 关闭时关闭认证弹窗
   useEffect(() => {
     const handleUnload = () => {
       if (authPopup && !authPopup.closed) {
@@ -161,6 +160,10 @@ export default function EmbedPage() {
 
   const handleDisconnect = () => {
     if (authPopup && !authPopup.closed) authPopup.close();
+    const backdrop = document.getElementById('injpass-backdrop');
+    if (backdrop) {
+      backdrop.remove();
+    }
     setAuthPopup(null);
     setAddress('');
     setWalletName('');

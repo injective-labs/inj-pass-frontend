@@ -47,8 +47,8 @@ export async function getTxHistory(
   chain: ChainConfig = DEFAULT_CHAIN
 ): Promise<TransactionHistory[]> {
   try {
-    // Use our Next.js API route to avoid CORS issues
-    const apiUrl = `/api/transactions?address=${address}`;
+    const network = chain.id === 1439 ? 'testnet' : 'mainnet';
+    const apiUrl = `/api/transactions?address=${address}&network=${network}`;
     
     const response = await fetch(apiUrl, {
       headers: {
@@ -108,7 +108,7 @@ export async function getTransactionStatus(
     });
 
     return receipt.status === 'success' ? 'success' : 'failed';
-  } catch (error) {
+  } catch {
     // If receipt not found, transaction is likely pending
     return 'pending';
   }

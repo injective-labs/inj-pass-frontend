@@ -44,7 +44,7 @@ export default function PasskeyCreatePage() {
       const privateKey = await decryptKey(keystore.encryptedPrivateKey, entropy);
 
       unlock(privateKey, keystore);
-      router.push('/dashboard');
+      router.replace('/dashboard');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create passkey');
     } finally {

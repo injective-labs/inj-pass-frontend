@@ -1,14 +1,16 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { usePin } from '@/contexts/PinContext';
 import { useWallet } from '@/contexts/WalletContext';
+import { decryptKey } from '@/wallet/keystore';
 
 interface TransactionAuthModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSuccess: () => void;
   transactionType: 'send' | 'swap';
+  variant?: 'modal' | 'inline';
 }
 
 export default function TransactionAuthModal({
@@ -16,14 +18,32 @@ export default function TransactionAuthModal({
   onClose,
   onSuccess,
   transactionType,
+  variant = 'modal',
 }: TransactionAuthModalProps) {
-  const { defaultAuthMethod, hasPin, isPinLocked, verifyPin, resetActivity } = usePin();
-  const { keystore } = useWallet();
+  const { defaultAuthMethod, verifyPin, resetActivity } = usePin();
+  const { keystore, privateKey, unlock } = useWallet();
   const [pin, setPin] = useState('');
   const [error, setError] = useState('');
   const [verifying, setVerifying] = useState(false);
+  const pinInputRef = useRef<HTMLInputElement>(null);
+  const requiresPasskeyUnlock = !privateKey;
 
-  if (!isOpen) return null;
+  useEffect(() => {
+    if (!isOpen) {
+      setPin('');
+      setError('');
+      setVerifying(false);
+      return;
+    }
+
+    if (!requiresPasskeyUnlock && defaultAuthMethod === 'pin') {
+      window.requestAnimationFrame(() => {
+        pinInputRef.current?.focus();
+      });
+    }
+  }, [defaultAuthMethod, isOpen, requiresPasskeyUnlock]);
+
+  if (!isOpen && variant === 'modal') return null;
 
   const handlePinVerify = async () => {
     if (pin.length !== 6) {
@@ -43,7 +63,7 @@ export default function TransactionAuthModal({
       } else {
         setError('Incorrect PIN');
       }
-    } catch (err) {
+    } catch {
       setError('Failed to verify PIN');
     } finally {
       setVerifying(false);
@@ -61,7 +81,9 @@ export default function TransactionAuthModal({
         throw new Error('No passkey found');
       }
       
-      await unlockByPasskey(keystore.credentialId);
+      const decryptionEntropy = await unlockByPasskey(keystore.credentialId);
+      const decryptedPrivateKey = await decryptKey(keystore.encryptedPrivateKey, decryptionEntropy);
+      unlock(decryptedPrivateKey, keystore);
       resetActivity();
       onSuccess();
     } catch (err) {
@@ -72,19 +94,15 @@ export default function TransactionAuthModal({
   };
 
   const handleVerify = () => {
-    if (defaultAuthMethod === 'pin') {
+    if (!requiresPasskeyUnlock && defaultAuthMethod === 'pin') {
       handlePinVerify();
     } else {
       handlePasskeyVerify();
     }
   };
 
-  return (
-    <div 
-      className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4"
-      onClick={onClose}
-    >
-      <div 
+  const authCard = (
+      <div
         className="bg-black border border-white/10 rounded-2xl max-w-md w-full shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
@@ -101,19 +119,22 @@ export default function TransactionAuthModal({
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
             <p className="text-xs text-blue-400">
-              {defaultAuthMethod === 'pin' 
-                ? 'Enter your 6-digit PIN to authorize this transaction'
-                : 'Use your biometric authentication to authorize this transaction'
+              {requiresPasskeyUnlock
+                ? 'Your signing key needs to be re-unlocked with Passkey before this transaction can proceed'
+                : defaultAuthMethod === 'pin' 
+                  ? 'Enter your 6-digit PIN to authorize this transaction'
+                  : 'Use your biometric authentication to authorize this transaction'
               }
             </p>
           </div>
 
-          {defaultAuthMethod === 'pin' && (
+          {defaultAuthMethod === 'pin' && !requiresPasskeyUnlock && (
             <div>
               <label className="block text-sm font-bold text-gray-400 uppercase tracking-wider mb-3">
                 Enter PIN
               </label>
               <input
+                ref={pinInputRef}
                 type="password"
                 inputMode="numeric"
                 maxLength={6}
@@ -145,7 +166,7 @@ export default function TransactionAuthModal({
             </button>
             <button
               onClick={handleVerify}
-              disabled={verifying || (defaultAuthMethod === 'pin' && pin.length !== 6)}
+              disabled={verifying || (defaultAuthMethod === 'pin' && !requiresPasskeyUnlock && pin.length !== 6)}
               className="flex-1 py-3 rounded-xl bg-white text-black font-bold text-sm hover:bg-gray-100 transition-all disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center gap-2"
             >
               {verifying ? (
@@ -156,12 +177,44 @@ export default function TransactionAuthModal({
                   Verifying...
                 </>
               ) : (
-                'Verify'
+                requiresPasskeyUnlock ? 'Unlock with Passkey' : 'Verify'
               )}
             </button>
           </div>
         </div>
       </div>
+  );
+
+  if (variant === 'inline') {
+    return (
+      <div
+        className={`absolute inset-0 z-20 flex items-center justify-center p-4 transition-all duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${
+          isOpen ? 'opacity-100' : 'pointer-events-none opacity-0'
+        }`}
+      >
+        <div
+          className={`absolute inset-0 bg-black/30 transition-opacity duration-300 ${
+            isOpen ? 'opacity-100' : 'opacity-0'
+          }`}
+          onClick={onClose}
+        />
+        <div
+          className={`relative w-full max-w-md transition-all duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${
+            isOpen ? 'translate-y-0 scale-100' : 'translate-y-4 scale-[0.97]'
+          }`}
+        >
+          {authCard}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div 
+      className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+      onClick={onClose}
+    >
+      {authCard}
     </div>
   );
 }

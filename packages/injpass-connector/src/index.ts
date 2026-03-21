@@ -82,8 +82,8 @@ export class InjPassConnector {
   private embedOrigin: string;
   private connected = false;
   private pendingRequests = new Map<string, {
-    resolve: (value: any) => void;
-    reject: (reason: any) => void;
+    resolve: (value: unknown) => void;
+    reject: (reason?: unknown) => void;
   }>();
   private messageHandler: ((event: MessageEvent) => void) | null = null;
   private disconnectListeners: Set<() => void> = new Set();
@@ -309,7 +309,7 @@ export class InjPassConnector {
     if (this.config.mode === 'floating') {
       this.iframe.style.position = 'fixed';
       Object.entries(this.config.position).forEach(([key, value]) => {
-        (this.iframe!.style as any)[key] = value;
+        (this.iframe!.style as CSSStyleDeclaration & Record<string, string>)[key] = value;
       });
       // ⚠️ DO NOT set width/height here for floating mode!
       // The embed page controls size via INJPASS_RESIZE messages

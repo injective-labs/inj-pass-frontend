@@ -29,7 +29,18 @@ export default function HomePage() {
       console.log('[HomePage] Redirecting to /welcome');
       router.push('/welcome');
     }
-  }, [isUnlocked, isCheckingSession, keystore, router]);
+  }, [checkExistingWallet, isUnlocked, isCheckingSession, keystore, router]);
 
-  return <LoadingSpinner />;
+  return (
+    <LoadingSpinner
+      progress={isCheckingSession ? 42 : 100}
+      statusLabel={
+        isCheckingSession
+          ? 'Checking local session'
+          : isUnlocked
+            ? 'Opening wallet surface'
+            : 'Preparing route'
+      }
+    />
+  );
 }

@@ -1,39 +1,521 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { usePin } from '@/contexts/PinContext';
 import { useWallet } from '@/contexts/WalletContext';
-import { getBalance } from '@/wallet/chain';
-import { Balance, INJECTIVE_MAINNET } from '@/types/chain';
-import { getInjPrice, getTokenPrice } from '@/services/price';
-import { getTokenBalances } from '@/services/dex-swap';
+import { estimateGas, getBalance, getCosmosTxHistory, getTxHistory, sendTransaction } from '@/wallet/chain';
+import { Balance, GasEstimate, INJECTIVE_MAINNET } from '@/types/chain';
+import { getTokenPrice } from '@/services/price';
+import { executeSwap, getSwapQuote, ROUTER_ADDRESS } from '@/services/dex-swap';
 import { startQRScanner, stopQRScanner, clearQRScanner, isCameraSupported, isValidAddress } from '@/services/qr-scanner';
+import { isNFCSupported, readNFCCard, type NFCCardData } from '@/services/nfc';
 import { getN1NJ4NFTs, type NFT } from '@/services/nft';
 import { getUserStakingInfo, type StakingInfo } from '@/services/staking';
 import { QRCodeSVG } from 'qrcode.react';
-import type { Address } from 'viem';
+import { createPublicClient, formatEther, formatUnits, http, type Address } from 'viem';
 import Image from 'next/image';
 import LoadingSpinner from '@/components/LoadingSpinner';
 import NFTDetailModal from '@/components/NFTDetailModal';
+import TransactionAuthModal from '@/components/TransactionAuthModal';
+import ThemeToggleButton from '@/components/ThemeToggleButton';
+import NinjaMinerGame from '@/components/NinjaMinerGame';
+import EditableAccountIdentity from '@/components/EditableAccountIdentity';
+import { useTheme } from '@/contexts/ThemeContext';
+import { TOKENS_MAINNET, TOKENS_TESTNET } from '@/services/tokens';
+import { ERC20_ABI } from '@/services/dex-abi';
+import { FAUCET_NETWORKS } from '@/config/faucet';
+import SettingsPage from '../settings/page';
+import { privateKeyToHex } from '@/utils/wallet';
+import { getInjectiveAddress, getEthereumAddress } from '@injectivelabs/sdk-ts';
+import { INJECTIVE_TESTNET } from '@/types/chain';
+
+type AssetTab = 'tokens' | 'nfts' | 'defi' | 'earn';
+type WalletPanel = 'overview' | 'send' | 'receive' | 'swap' | 'history' | 'settings' | 'card' | 'chance';
+type AddressType = 'evm' | 'cosmos';
+type CardPanelTab = 'pay' | 'cards';
+type DashboardTransactionType = 'send' | 'receive' | 'swap';
+type DashboardTransactionStatus = 'completed' | 'pending' | 'failed';
+type DashboardHistoryFilter = 'all' | DashboardTransactionType;
+type DashboardChainType = 'EVM' | 'Cosmos';
+type SwapToken = 'INJ' | 'USDT' | 'USDC' | 'NINJA';
+type AssetSurfaceMode = 'assets' | 'ai' | 'faucet';
+type WalletNetworkMode = 'mainnet' | 'testnet';
+type FaucetCategory = 'popular' | 'others';
+type ChancePlanId = 'go' | 'pro' | 'max';
+
+interface BoundCardPreview {
+  uid: string;
+  name: string;
+  isActive: boolean;
+  boundAt: Date;
+  cardNumber: string;
+  cvv: string;
+}
+
+const NINJA_STORAGE_PREFIX = 'inj-pass:ninja-miner:';
+const NINJA_BALANCE_EVENT = 'inj-pass:ninja-balance-update';
+const DEFAULT_NINJA_BALANCE = 22;
+const POPULAR_FAUCET_IDS = new Set(['injective', 'sepolia', 'arbitrum', 'base']);
+const MORE_CHANCE_PLANS: Array<{
+  id: ChancePlanId;
+  name: string;
+  chances: number;
+  blurb: string;
+  accentClass: string;
+  surfaceClass: string;
+}> = [
+  {
+    id: 'go',
+    name: 'Go',
+    chances: 3,
+    blurb: 'Quick refill for a few extra tap runs.',
+    accentClass: 'text-emerald-300',
+    surfaceClass: 'border-emerald-400/18 bg-emerald-500/[0.08]',
+  },
+  {
+    id: 'pro',
+    name: 'Pro',
+    chances: 12,
+    blurb: 'Best balance for repeat NINJA farming.',
+    accentClass: 'text-violet-200',
+    surfaceClass: 'border-violet-400/22 bg-violet-500/[0.08]',
+  },
+  {
+    id: 'max',
+    name: 'Max',
+    chances: 30,
+    blurb: 'Longest session pack for power users.',
+    accentClass: 'text-amber-200',
+    surfaceClass: 'border-amber-400/18 bg-amber-500/[0.08]',
+  },
+];
+
+const NETWORK_META: Record<WalletNetworkMode, { label: string; shortLabel: string; chain: typeof INJECTIVE_MAINNET; tokenSet: typeof TOKENS_MAINNET }> = {
+  mainnet: {
+    label: 'Injective EVM Mainnet',
+    shortLabel: 'Mainnet',
+    chain: INJECTIVE_MAINNET,
+    tokenSet: TOKENS_MAINNET,
+  },
+  testnet: {
+    label: 'Injective EVM Testnet',
+    shortLabel: 'Testnet',
+    chain: INJECTIVE_TESTNET,
+    tokenSet: TOKENS_TESTNET as typeof TOKENS_MAINNET,
+  },
+};
+
+const FAUCET_ICON_BY_ID: Record<string, string> = {
+  injective: '/injswap.png',
+  sepolia: '/eth-logo.png',
+  arbitrum: '/arb-logo.png',
+  optimism: '/op-logo.png',
+  base: '/base-logo.png',
+  polygonzkevm: '/polygon-logo.png',
+};
+
+interface DashboardTransaction {
+  id: string;
+  type: DashboardTransactionType;
+  amount: string;
+  token: string;
+  address: string;
+  timestamp: Date;
+  status: DashboardTransactionStatus;
+  txHash?: string;
+  chainType: DashboardChainType;
+}
+
+function truncateMiddle(value: string, start = 6, end = 4) {
+  if (!value) return '';
+  if (value.length <= start + end + 3) return value;
+  return `${value.slice(0, start)}...${value.slice(-end)}`;
+}
+
+function formatDashboardTimestamp(date: Date) {
+  return date.toLocaleString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
+function getNinjaStorageKey(walletAddress?: string) {
+  return `${NINJA_STORAGE_PREFIX}${walletAddress || 'guest'}`;
+}
+
+function readStoredNinjaBalance(walletAddress?: string) {
+  if (typeof window === 'undefined') {
+    return DEFAULT_NINJA_BALANCE;
+  }
+
+  try {
+    const rawState = window.localStorage.getItem(getNinjaStorageKey(walletAddress));
+    if (!rawState) {
+      return DEFAULT_NINJA_BALANCE;
+    }
+
+    const parsed = JSON.parse(rawState) as { ninjaBalance?: number };
+    return typeof parsed.ninjaBalance === 'number' ? parsed.ninjaBalance : DEFAULT_NINJA_BALANCE;
+  } catch (error) {
+    console.error('Failed to restore ninja balance:', error);
+    return DEFAULT_NINJA_BALANCE;
+  }
+}
+
+function getFaucetClaimStorageKey(walletAddress?: string) {
+  if (!walletAddress) return null;
+  return `injpass:faucet-claim:${walletAddress.toLowerCase()}:${new Date().toISOString().split('T')[0]}`;
+}
+
+async function getDashboardTokenBalances(userAddress: Address, networkMode: WalletNetworkMode) {
+  const networkMeta = NETWORK_META[networkMode];
+  const client = createPublicClient({
+    transport: http(networkMeta.chain.rpcUrl),
+  });
+
+  const nativeBalance = await client.getBalance({ address: userAddress });
+  const results: Record<string, string> = {
+    INJ: formatUnits(nativeBalance, 18),
+    USDC: '0',
+    USDT: '0',
+  };
+
+  await Promise.all(
+    (['USDC', 'USDT'] as const).map(async (symbol) => {
+      const tokenInfo = networkMeta.tokenSet[symbol];
+      if (!tokenInfo) {
+        results[symbol] = '0';
+        return;
+      }
+
+      try {
+        const rawBalance = await client.readContract({
+          address: tokenInfo.address as Address,
+          abi: ERC20_ABI,
+          functionName: 'balanceOf',
+          args: [userAddress],
+        }) as bigint;
+
+        results[symbol] = formatUnits(rawBalance, tokenInfo.decimals);
+      } catch (error) {
+        console.error(`Failed to load ${symbol} balance on ${networkMode}:`, error);
+        results[symbol] = '0';
+      }
+    })
+  );
+
+  return results;
+}
+
+const ROLLING_DIGIT_STACK = Array.from({ length: 20 }, (_, index) => String(index % 10));
+
+function RollingDigit({ digit, delayMs = 0 }: { digit: string; delayMs?: number }) {
+  const isNumeric = /^\d$/.test(digit);
+  const hasAnimatedRef = useRef(false);
+  const [position, setPosition] = useState(0);
+
+  useEffect(() => {
+    if (!isNumeric) return;
+
+    const nextDigit = Number(digit);
+
+    setPosition((current) => {
+      if (!hasAnimatedRef.current) {
+        hasAnimatedRef.current = true;
+        return nextDigit;
+      }
+
+      const currentDigit = ((current % 10) + 10) % 10;
+      let nextPosition = current - currentDigit + nextDigit;
+
+      if (nextPosition <= current) {
+        nextPosition += 10;
+      }
+
+      return nextPosition;
+    });
+  }, [digit, isNumeric]);
+
+  if (!isNumeric) {
+    return (
+      <span className="inline-flex h-[1em] items-center justify-center leading-none text-white/70">
+        {digit}
+      </span>
+    );
+  }
+
+  return (
+    <span className="relative inline-flex h-[1em] min-w-[0.62em] overflow-hidden leading-none tabular-nums">
+      <span
+        className="flex flex-col will-change-transform transition-transform duration-700 ease-[cubic-bezier(0.22,1,0.36,1)]"
+        style={{
+          transform: `translateY(-${position}em)`,
+          transitionDelay: `${delayMs}ms`,
+        }}
+      >
+        {ROLLING_DIGIT_STACK.map((value, index) => (
+          <span
+            key={`${value}-${index}`}
+            className="flex h-[1em] items-center justify-center leading-none"
+          >
+            {value}
+          </span>
+        ))}
+      </span>
+    </span>
+  );
+}
+
+function RollingBalanceNumber({ value }: { value: string }) {
+  return (
+    <span className="inline-flex items-end" aria-label={value}>
+      <span className="sr-only">{value}</span>
+      <span className="inline-flex items-end" aria-hidden="true">
+        {value.split('').map((character, index) => (
+          <RollingDigit
+            key={`${character}-${index}`}
+            digit={character}
+            delayMs={index * 45}
+          />
+        ))}
+      </span>
+    </span>
+  );
+}
+
+function buildPixelTrendSeries(currentValue: number, changePct: number) {
+  const pointCount = 18;
+
+  if (!Number.isFinite(currentValue) || currentValue <= 0) {
+    return Array.from({ length: pointCount }, () => 0);
+  }
+
+  const safeFactor = Math.max(0.15, 1 + changePct / 100);
+  const startValue = currentValue / safeFactor;
+  const drift = currentValue - startValue;
+  const waveBase = Math.max(Math.abs(drift) * 0.16, currentValue * 0.018);
+  const rippleBase = Math.max(Math.abs(drift) * 0.05, currentValue * 0.008);
+
+  const series = Array.from({ length: pointCount }, (_, index) => {
+    const t = index / (pointCount - 1);
+    const eased = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+    const wave = Math.sin((t * 3.2 + 0.15) * Math.PI) * waveBase * (1 - t * 0.15);
+    const ripple = Math.cos((t * 6.4 + 0.2) * Math.PI) * rippleBase;
+
+    return Math.max(0, startValue + drift * eased + wave + ripple);
+  });
+
+  series[pointCount - 1] = currentValue;
+
+  return series;
+}
+
+function PixelTrendChart({
+  values,
+  hidden,
+  changePct,
+  currentValueLabel,
+  networkMode,
+  replayKey = 0,
+}: {
+  values: number[];
+  hidden: boolean;
+  changePct: number;
+  currentValueLabel: string;
+  networkMode: WalletNetworkMode;
+  replayKey?: number;
+}) {
+  const width = 320;
+  const height = 184;
+  const paddingLeft = 20;
+  const paddingRight = 18;
+  const paddingTop = 18;
+  const paddingBottom = 30;
+  const chartWidth = width - paddingLeft - paddingRight;
+  const chartHeight = height - paddingTop - paddingBottom;
+  const minValue = values.length > 0 ? Math.min(...values) : 0;
+  const maxValue = values.length > 0 ? Math.max(...values) : 0;
+  const range = maxValue - minValue;
+  const accentClass = networkMode === 'testnet' ? 'text-emerald-300' : 'text-amber-300';
+  const accentColor = networkMode === 'testnet' ? '#6ee7b7' : '#fbbf24';
+  const accentFill = networkMode === 'testnet' ? 'rgba(110,231,183,0.16)' : 'rgba(251,191,36,0.16)';
+  const chartAnimationKey = `${hidden ? 'hidden' : 'visible'}-${currentValueLabel}-${changePct.toFixed(2)}-${replayKey}`;
+  const gridDots = Array.from({ length: 11 }, (_, column) =>
+    Array.from({ length: 6 }, (_, row) => ({
+      x: paddingLeft + column * (chartWidth / 10),
+      y: paddingTop + row * (chartHeight / 5),
+      key: `${column}-${row}`,
+    }))
+  ).flat();
+
+  const points = values.map((value, index) => {
+    const x = paddingLeft + (index / Math.max(values.length - 1, 1)) * chartWidth;
+    const normalized = range < 0.0001 ? 0.55 : 1 - (value - minValue) / range;
+    const y = paddingTop + normalized * chartHeight;
+
+    return { x, y };
+  });
+
+  const stepPath = points
+    .map((point, index) => {
+      if (index === 0) {
+        return `M ${point.x} ${point.y}`;
+      }
+
+      return `H ${point.x} V ${point.y}`;
+    })
+    .join(' ');
+
+  const areaPath =
+    points.length > 0
+      ? `${stepPath} V ${paddingTop + chartHeight} H ${points[0].x} Z`
+      : '';
+
+  return (
+    <div className="relative h-full min-h-[220px] px-1 py-2 xl:pl-4">
+      <div className="relative flex items-start justify-between gap-3">
+        <div>
+          <div className="text-[10px] font-semibold uppercase tracking-[0.28em] text-gray-500">24H Trend</div>
+          <div className="mt-1 text-xs text-gray-400">Pixel asset movement</div>
+        </div>
+        <div className={`text-sm font-semibold ${accentClass}`}>
+          {changePct >= 0 ? '+' : ''}
+          {changePct.toFixed(2)}%
+        </div>
+      </div>
+
+      {hidden ? (
+        <div className="relative mt-4 flex h-[184px] items-center justify-center">
+          <div className="text-center">
+            <div className="text-[10px] font-semibold uppercase tracking-[0.3em] text-gray-500">Trend Hidden</div>
+            <div className="mt-2 text-sm text-gray-400">Unhide balance to view</div>
+          </div>
+        </div>
+      ) : (
+        <svg
+          key={chartAnimationKey}
+          className="relative mt-4 h-[184px] w-full"
+          viewBox={`0 0 ${width} ${height}`}
+          fill="none"
+          aria-label="24 hour asset movement chart"
+        >
+          {gridDots.map((dot) => (
+            <rect
+              key={dot.key}
+              x={dot.x - 1.5}
+              y={dot.y - 1.5}
+              width="3"
+              height="3"
+              rx="0.5"
+              fill="rgba(255,255,255,0.10)"
+              shapeRendering="crispEdges"
+            />
+          ))}
+          <path
+            d={areaPath}
+            fill={accentFill}
+            shapeRendering="crispEdges"
+            style={{
+              opacity: 0,
+              animation: 'pixelTrendAreaFade 700ms cubic-bezier(0.22,1,0.36,1) 220ms forwards',
+            }}
+          />
+          <path
+            d={stepPath}
+            pathLength={1}
+            stroke={accentColor}
+            strokeWidth="3"
+            strokeLinejoin="miter"
+            strokeLinecap="square"
+            shapeRendering="crispEdges"
+            style={{
+              strokeDasharray: 1,
+              strokeDashoffset: 1,
+              animation: 'pixelTrendDraw 1100ms cubic-bezier(0.22,1,0.36,1) forwards',
+            }}
+          />
+          {points.map((point, index) => (
+            <rect
+              key={`point-${index}`}
+              x={point.x - 3}
+              y={point.y - 3}
+              width="6"
+              height="6"
+              fill={accentColor}
+              shapeRendering="crispEdges"
+              style={{
+                opacity: 0,
+                animation: `pixelTrendPointIn 240ms cubic-bezier(0.22,1,0.36,1) ${320 + index * 28}ms forwards`,
+              }}
+            />
+          ))}
+        </svg>
+      )}
+
+      <div className="relative mt-3 flex items-center justify-between text-[11px] uppercase tracking-[0.2em] text-gray-500">
+        <span>Now</span>
+        <span className="font-mono text-gray-300">${hidden ? '••••' : currentValueLabel}</span>
+      </div>
+    </div>
+  );
+}
+
+function DashboardSurfaceFrame({
+  src,
+  title,
+  className,
+  loadingStrategy = 'lazy',
+}: {
+  src: string;
+  title: string;
+  className?: string;
+  loadingStrategy?: 'lazy' | 'eager';
+}) {
+  return (
+    <iframe
+      src={src}
+      title={title}
+      className={`h-full w-full border-0 ${className ?? 'bg-black'}`}
+      loading={loadingStrategy}
+    />
+  );
+}
 
 export default function DashboardPage() {
   const router = useRouter();
-  const { isUnlocked, address, lock, isCheckingSession } = useWallet();
+  const { theme } = useTheme();
+  const { isUnlocked, address, privateKey, resetTxAuth, isCheckingSession, keystore } = useWallet();
+  const { autoLockMinutes, isPinLocked } = usePin();
   const [balance, setBalance] = useState<Balance | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [walletNetworkMode, setWalletNetworkMode] = useState<WalletNetworkMode>('mainnet');
+  const [networkSwitching, setNetworkSwitching] = useState(false);
+  const [walletSurfaceMotionKey, setWalletSurfaceMotionKey] = useState(0);
+  const [assetSurfaceMotionKey, setAssetSurfaceMotionKey] = useState(0);
   const [injPrice, setInjPrice] = useState<number>(25);
   const [injPriceChange24h, setInjPriceChange24h] = useState<number>(0);
   const [usdtPriceChange24h, setUsdtPriceChange24h] = useState<number>(0);
   const [usdcPriceChange24h, setUsdcPriceChange24h] = useState<number>(0);
   const [balanceVisible, setBalanceVisible] = useState(true);
   const [copied, setCopied] = useState(false);
-  const [activeTab, setActiveTab] = useState<'settings' | 'wallet' | 'discover'>('wallet');
-  const [assetTab, setAssetTab] = useState<'tokens' | 'nfts' | 'defi'>('tokens');
+  const [ninjaBalance, setNinjaBalance] = useState(DEFAULT_NINJA_BALANCE);
+  const [assetTab, setAssetTab] = useState<AssetTab>('tokens');
+  const [faucetCategory, setFaucetCategory] = useState<FaucetCategory>('popular');
+  const [assetSurfaceMode, setAssetSurfaceMode] = useState<AssetSurfaceMode>('assets');
+  const [assetTrendReplayKey, setAssetTrendReplayKey] = useState(0);
+  const [faucetClaimingId, setFaucetClaimingId] = useState<string | null>(null);
+  const [faucetClaimedId, setFaucetClaimedId] = useState<string | null>(null);
+  const [faucetClaimLocked, setFaucetClaimLocked] = useState(false);
+  const [faucetError, setFaucetError] = useState('');
   const [tokenBalances, setTokenBalances] = useState<Record<string, string>>({
     INJ: '0.0000',
-    USDT: '0.00',
     USDC: '0.00',
+    NINJA: '0.00',
+    USDT: '0.00',
   });
   
   // QR Scanner states
@@ -53,8 +535,61 @@ export default function DashboardPage() {
   // Staking states
   const [stakingInfo, setStakingInfo] = useState<StakingInfo | null>(null);
   const [stakingLoading, setStakingLoading] = useState(false);
+  
+  // Wallet action states
+  const [walletPanel, setWalletPanel] = useState<WalletPanel>('overview');
+  const [receiveAddressType, setReceiveAddressType] = useState<AddressType>('evm');
+  const [receiveCopied, setReceiveCopied] = useState(false);
+  const [sendRecipient, setSendRecipient] = useState('');
+  const [sendAmount, setSendAmount] = useState('');
+  const [sendGasEstimate, setSendGasEstimate] = useState<GasEstimate | null>(null);
+  const [sendEstimating, setSendEstimating] = useState(false);
+  const [sendSubmitting, setSendSubmitting] = useState(false);
+  const [sendError, setSendError] = useState('');
+  const [sendTxHash, setSendTxHash] = useState('');
+  const [swapFromToken, setSwapFromToken] = useState<SwapToken>('INJ');
+  const [swapToToken, setSwapToToken] = useState<SwapToken>('USDT');
+  const [swapAmount, setSwapAmount] = useState('');
+  const [swapQuoteAmount, setSwapQuoteAmount] = useState('');
+  const [swapSlippage, setSwapSlippage] = useState('0.5');
+  const [swapQuoteLoading, setSwapQuoteLoading] = useState(false);
+  const [swapSubmitting, setSwapSubmitting] = useState(false);
+  const [swapPriceImpact, setSwapPriceImpact] = useState('0.00');
+  const [swapError, setSwapError] = useState('');
+  const [swapTxHash, setSwapTxHash] = useState('');
+  const [historyFilter, setHistoryFilter] = useState<DashboardHistoryFilter>('all');
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyError, setHistoryError] = useState('');
+  const [historyItems, setHistoryItems] = useState<DashboardTransaction[]>([]);
+  const [selectedChancePlan, setSelectedChancePlan] = useState<ChancePlanId>('pro');
+  const [showAuthModal, setShowAuthModal] = useState(false);
+  const [showInlineSendAuth, setShowInlineSendAuth] = useState(false);
+  const [pendingAuthAction, setPendingAuthAction] = useState<'send' | 'swap' | null>(null);
+  const [postAuthAction, setPostAuthAction] = useState<'send' | 'swap' | null>(null);
+  const [cardPanelTab, setCardPanelTab] = useState<CardPanelTab>('pay');
+  const [boundCards, setBoundCards] = useState<BoundCardPreview[]>([]);
+  const [cardScanState, setCardScanState] = useState<'idle' | 'scanning' | 'success' | 'error'>('idle');
+  const [cardScanData, setCardScanData] = useState<NFCCardData | null>(null);
+  const [cardScanError, setCardScanError] = useState('');
+  const [flippedTokenCard, setFlippedTokenCard] = useState<string | null>(null);
+  const [copiedTokenInfo, setCopiedTokenInfo] = useState<string | null>(null);
+  const [sendAmountAlertActive, setSendAmountAlertActive] = useState(false);
+  const tokenFlipTimerRef = useRef<number | null>(null);
+  const aiCompactPromoteTimerRef = useRef<number | null>(null);
+  const cardScanSessionRef = useRef(0);
+  const isLight = theme === 'light';
+  const sendAmountAlertTimerRef = useRef<number | null>(null);
+  const redirectTimerRef = useRef<number | null>(null);
+  const hasLoadedOnceRef = useRef(false);
+  const currentNetworkMeta = NETWORK_META[walletNetworkMode];
+  const [aiCompactNinjaPromoted, setAiCompactNinjaPromoted] = useState(false);
 
   useEffect(() => {
+    if (redirectTimerRef.current) {
+      window.clearTimeout(redirectTimerRef.current);
+      redirectTimerRef.current = null;
+    }
+
     // Wait for session check to complete
     if (isCheckingSession) {
       console.log('[Dashboard] Still checking session, waiting...');
@@ -63,27 +598,250 @@ export default function DashboardPage() {
 
     console.log('[Dashboard] isUnlocked:', isUnlocked, 'address:', address);
     if (!isUnlocked || !address) {
-      console.log('[Dashboard] Not unlocked, redirecting to /welcome');
-      router.push('/welcome');
+      redirectTimerRef.current = window.setTimeout(() => {
+        const fallbackRoute = keystore || address ? '/unlock' : '/welcome';
+        console.log(`[Dashboard] Wallet state not ready, redirecting to ${fallbackRoute}`);
+        router.replace(fallbackRoute);
+        redirectTimerRef.current = null;
+      }, 320);
       return;
     }
 
     console.log('[Dashboard] Unlocked, loading data...');
-    loadData();
+    void loadData({ background: hasLoadedOnceRef.current });
+    hasLoadedOnceRef.current = true;
+    return () => {
+      if (redirectTimerRef.current) {
+        window.clearTimeout(redirectTimerRef.current);
+        redirectTimerRef.current = null;
+      }
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isUnlocked, address, isCheckingSession]);
+  }, [isUnlocked, address, isCheckingSession, keystore, router, walletNetworkMode]);
 
-  const loadData = async () => {
+  useEffect(() => {
+    const walletAddress = address || undefined;
+    const syncNinjaBalance = () => {
+      setNinjaBalance(readStoredNinjaBalance(walletAddress));
+    };
+
+    syncNinjaBalance();
+
+    const interval = window.setInterval(syncNinjaBalance, 1500);
+    const handleStorage = (event: StorageEvent) => {
+      if (!event.key || event.key === getNinjaStorageKey(walletAddress)) {
+        syncNinjaBalance();
+      }
+    };
+    const handleNinjaBalanceUpdate = () => {
+      syncNinjaBalance();
+    };
+
+    window.addEventListener('storage', handleStorage);
+    window.addEventListener(NINJA_BALANCE_EVENT, handleNinjaBalanceUpdate);
+
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener('storage', handleStorage);
+      window.removeEventListener(NINJA_BALANCE_EVENT, handleNinjaBalanceUpdate);
+    };
+  }, [address]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const storageKey = getFaucetClaimStorageKey(address || undefined);
+    if (!storageKey) {
+      setFaucetClaimedId(null);
+      setFaucetClaimLocked(false);
+      return;
+    }
+
+    try {
+      const raw = window.localStorage.getItem(storageKey);
+      if (!raw) {
+        setFaucetClaimedId(null);
+        setFaucetClaimLocked(false);
+        return;
+      }
+
+      const parsed = JSON.parse(raw) as { targetId?: string };
+      setFaucetClaimedId(parsed.targetId || null);
+      setFaucetClaimLocked(true);
+    } catch (error) {
+      console.error('Failed to restore faucet claim state:', error);
+      setFaucetClaimedId(null);
+      setFaucetClaimLocked(false);
+    }
+  }, [address]);
+
+  useEffect(() => {
+    setTokenBalances((current) => ({
+      ...current,
+      NINJA: walletNetworkMode === 'mainnet' ? ninjaBalance.toFixed(2) : '0.00',
+    }));
+  }, [ninjaBalance, walletNetworkMode]);
+
+  useEffect(() => {
+    if (tokenFlipTimerRef.current) {
+      window.clearTimeout(tokenFlipTimerRef.current);
+      tokenFlipTimerRef.current = null;
+    }
+
+    if (!flippedTokenCard) {
+      return;
+    }
+
+    tokenFlipTimerRef.current = window.setTimeout(() => {
+      setFlippedTokenCard((current) => (current === flippedTokenCard ? null : current));
+      tokenFlipTimerRef.current = null;
+    }, 5000);
+
+    return () => {
+      if (tokenFlipTimerRef.current) {
+        window.clearTimeout(tokenFlipTimerRef.current);
+        tokenFlipTimerRef.current = null;
+      }
+    };
+  }, [flippedTokenCard]);
+
+  useEffect(() => {
+    if (aiCompactPromoteTimerRef.current) {
+      window.clearTimeout(aiCompactPromoteTimerRef.current);
+      aiCompactPromoteTimerRef.current = null;
+    }
+
+    if (assetSurfaceMode !== 'ai') {
+      setAiCompactNinjaPromoted(false);
+      return;
+    }
+
+    setAiCompactNinjaPromoted(false);
+    aiCompactPromoteTimerRef.current = window.setTimeout(() => {
+      setAiCompactNinjaPromoted(true);
+      aiCompactPromoteTimerRef.current = null;
+    }, 620);
+
+    return () => {
+      if (aiCompactPromoteTimerRef.current) {
+        window.clearTimeout(aiCompactPromoteTimerRef.current);
+        aiCompactPromoteTimerRef.current = null;
+      }
+    };
+  }, [assetSurfaceMode]);
+
+  useEffect(() => {
+    return () => {
+      if (sendAmountAlertTimerRef.current) {
+        window.clearTimeout(sendAmountAlertTimerRef.current);
+        sendAmountAlertTimerRef.current = null;
+      }
+      if (aiCompactPromoteTimerRef.current) {
+        window.clearTimeout(aiCompactPromoteTimerRef.current);
+        aiCompactPromoteTimerRef.current = null;
+      }
+      if (redirectTimerRef.current) {
+        window.clearTimeout(redirectTimerRef.current);
+        redirectTimerRef.current = null;
+      }
+    };
+  }, []);
+
+  const loadBoundCards = useCallback(() => {
+    if (!address || typeof window === 'undefined') {
+      setBoundCards([]);
+      return;
+    }
+
+    try {
+      const saved = window.localStorage.getItem(`nfc_cards_${address}`);
+      if (!saved) {
+        setBoundCards([]);
+        return;
+      }
+
+      const parsed = JSON.parse(saved) as Array<Omit<BoundCardPreview, 'boundAt'> & { boundAt: string }>;
+      setBoundCards(
+        parsed.map((card) => ({
+          ...card,
+          boundAt: new Date(card.boundAt),
+        }))
+      );
+    } catch (error) {
+      console.error('Failed to load bound cards:', error);
+      setBoundCards([]);
+    }
+  }, [address]);
+
+  const startCardScanner = useCallback(async () => {
+    const sessionId = cardScanSessionRef.current + 1;
+    cardScanSessionRef.current = sessionId;
+    setCardScanData(null);
+    setCardScanError('');
+
+    if (!isNFCSupported()) {
+      setCardScanState('error');
+      setCardScanError('NFC is not supported on this device. Please use an Android device with Chrome browser.');
+      return;
+    }
+
+    setCardScanState('scanning');
+
+    try {
+      const nextCardData = await readNFCCard();
+      if (cardScanSessionRef.current !== sessionId) {
+        return;
+      }
+
+      setCardScanData(nextCardData);
+      if (!nextCardData.address) {
+        setCardScanState('error');
+        setCardScanError('This card has no address stored yet. Open Manage Cards to bind or review it first.');
+        return;
+      }
+
+      setCardScanState('success');
+    } catch (error) {
+      if (cardScanSessionRef.current !== sessionId) {
+        return;
+      }
+
+      setCardScanState('error');
+      setCardScanError((error as Error).message || 'Failed to read NFC card. Please try again.');
+    }
+  }, []);
+
+  useEffect(() => {
+    loadBoundCards();
+  }, [loadBoundCards]);
+
+  useEffect(() => {
+    if (walletPanel !== 'card' || cardPanelTab !== 'pay') {
+      cardScanSessionRef.current += 1;
+      return;
+    }
+
+    if (cardScanState === 'idle') {
+      void startCardScanner();
+    }
+  }, [cardPanelTab, cardScanState, startCardScanner, walletPanel]);
+
+  const loadData = useCallback(async ({ background = false }: { background?: boolean } = {}) => {
     if (!address) return;
 
     try {
-      setLoading(true);
+      if (background) {
+        setRefreshing(true);
+        setNetworkSwitching(true);
+      } else {
+        setLoading(true);
+      }
       const [balanceData, injPriceData, usdtPriceData, usdcPriceData, tokenBalData] = await Promise.all([
-        getBalance(address, INJECTIVE_MAINNET),
+        getBalance(address, currentNetworkMeta.chain),
         getTokenPrice('injective-protocol'),
         getTokenPrice('tether'),
         getTokenPrice('usd-coin'),
-        getTokenBalances(['INJ', 'USDT', 'USDC'], address as Address),
+        getDashboardTokenBalances(address as Address, walletNetworkMode),
       ]);
       
       setBalance(balanceData);
@@ -93,16 +851,60 @@ export default function DashboardPage() {
       setUsdcPriceChange24h(usdcPriceData.usd24hChange || 0);
       setTokenBalances({
         INJ: parseFloat(tokenBalData.INJ).toFixed(4),
-        USDT: parseFloat(tokenBalData.USDT).toFixed(2),
         USDC: parseFloat(tokenBalData.USDC).toFixed(2),
+        NINJA: walletNetworkMode === 'mainnet' ? ninjaBalance.toFixed(2) : '0.00',
+        USDT: parseFloat(tokenBalData.USDT).toFixed(2),
       });
     } catch (error) {
       console.error('Failed to load data:', error);
     } finally {
       setLoading(false);
       setRefreshing(false);
+      setNetworkSwitching(false);
     }
-  };
+  }, [address, currentNetworkMeta.chain, ninjaBalance, walletNetworkMode]);
+
+  const handleFaucetTokenClaim = useCallback(async (networkId: string) => {
+    if (!address || faucetClaimLocked || faucetClaimingId) {
+      return;
+    }
+
+    setFaucetClaimingId(networkId);
+    setFaucetError('');
+
+    try {
+      const res = await fetch('/api/faucet/claim', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          address,
+          companion: networkId === 'injective' ? null : networkId,
+        }),
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || 'Claim failed');
+      }
+
+      setFaucetClaimedId(networkId);
+      setFaucetClaimLocked(true);
+
+      const storageKey = getFaucetClaimStorageKey(address);
+      if (storageKey && typeof window !== 'undefined') {
+        window.localStorage.setItem(storageKey, JSON.stringify({
+          targetId: networkId,
+          claimedAt: new Date().toISOString(),
+        }));
+      }
+
+      void loadData({ background: true });
+    } catch (error) {
+      setFaucetError(error instanceof Error ? error.message : 'Claim failed');
+    } finally {
+      setFaucetClaimingId(null);
+    }
+  }, [address, faucetClaimLocked, faucetClaimingId, loadData]);
 
   // Load NFTs when switching to NFTs tab
   const loadNFTs = async () => {
@@ -156,7 +958,7 @@ export default function DashboardPage() {
 
   const handleRefresh = () => {
     setRefreshing(true);
-    loadData();
+    void loadData({ background: true });
     
     // Also refresh staking info if on DeFi tab
     if (assetTab === 'defi') {
@@ -169,13 +971,484 @@ export default function DashboardPage() {
     }
   };
 
-  const handleCopyAddress = () => {
-    if (address) {
-      navigator.clipboard.writeText(address);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+  const toggleWalletPanel = (panel: Exclude<WalletPanel, 'overview'>) => {
+    setWalletPanel((current) => (current === panel ? 'overview' : panel));
+  };
+
+  const getCosmosAddress = useCallback((evmAddress: string) => {
+    if (!evmAddress) return '';
+    try {
+      return getInjectiveAddress(evmAddress);
+    } catch (error) {
+      console.error('Failed to convert address to cosmos format:', error);
+      return '';
+    }
+  }, []);
+
+  const getEvmAddress = useCallback((value: string) => {
+    const trimmed = value.trim();
+    if (!trimmed) return '';
+    if (trimmed.startsWith('0x')) return trimmed;
+    if (trimmed.startsWith('inj1')) {
+      return getEthereumAddress(trimmed);
+    }
+    return trimmed;
+  }, []);
+
+  const receiveDisplayAddress = receiveAddressType === 'evm' ? (address || '') : getCosmosAddress(address || '');
+  const sendGasLimitLabel = sendGasEstimate ? sendGasEstimate.gasLimit.toString() : 'Awaiting input';
+  const sendMaxFeeLabel = sendGasEstimate ? `${Number(formatUnits(sendGasEstimate.maxFeePerGas, 9)).toFixed(2)} Gwei` : 'Awaiting input';
+  const sendPriorityFeeLabel = sendGasEstimate ? `${Number(formatUnits(sendGasEstimate.maxPriorityFeePerGas, 9)).toFixed(2)} Gwei` : 'Awaiting input';
+  const sendBalanceValue = parseFloat(tokenBalances.INJ || '0');
+  const sendAmountNumeric = Number(sendAmount);
+  const sendAmountExceedsBalance =
+    sendAmount.trim() !== '' && Number.isFinite(sendAmountNumeric) && sendAmountNumeric > sendBalanceValue;
+  const swapTokenOptions = [
+    { symbol: 'INJ' as const, name: 'Injective', icon: '/injswap.png', balance: tokenBalances.INJ, enabled: true },
+    { symbol: 'USDT' as const, name: 'Tether', icon: '/USDT_Logo.png', balance: tokenBalances.USDT, enabled: true },
+    { symbol: 'USDC' as const, name: 'USD Coin', icon: '/USDC_Logo.png', balance: tokenBalances.USDC, enabled: true },
+    { symbol: 'NINJA' as const, name: 'Ninja', icon: '/NIJIA.png', balance: walletNetworkMode === 'mainnet' ? ninjaBalance.toFixed(2) : '0.00', enabled: false },
+  ];
+  const swapFromMeta = swapTokenOptions.find((token) => token.symbol === swapFromToken) || swapTokenOptions[0];
+  const swapToMeta = swapTokenOptions.find((token) => token.symbol === swapToToken) || swapTokenOptions[1];
+  const getAlternateSwapToken = (current: SwapToken) => (
+    swapTokenOptions.find((token) => token.symbol !== current)?.symbol || 'INJ'
+  );
+  const sanitizeDecimalInput = useCallback((value: string) => {
+    const cleaned = value.replace(/[^\d.]/g, '');
+    const firstDot = cleaned.indexOf('.');
+
+    if (firstDot === -1) {
+      return cleaned;
+    }
+
+    return `${cleaned.slice(0, firstDot + 1)}${cleaned.slice(firstDot + 1).replace(/\./g, '')}`;
+  }, []);
+
+  const triggerSendAmountAlert = () => {
+    if (sendAmountAlertTimerRef.current) {
+      window.clearTimeout(sendAmountAlertTimerRef.current);
+      sendAmountAlertTimerRef.current = null;
+    }
+
+    setSendAmountAlertActive(false);
+    window.requestAnimationFrame(() => {
+      setSendAmountAlertActive(true);
+      sendAmountAlertTimerRef.current = window.setTimeout(() => {
+        setSendAmountAlertActive(false);
+        sendAmountAlertTimerRef.current = null;
+      }, 520);
+    });
+  };
+  const filteredHistoryItems = historyFilter === 'all'
+    ? historyItems
+    : historyItems.filter((item) => item.type === historyFilter);
+  const walletPanelMeta: Record<Exclude<WalletPanel, 'overview'>, { title: string; subtitle: string }> = {
+    card: {
+      title: 'Card Center',
+      subtitle: 'Tap a card, inject its address into Send, or manage bound NFC cards without leaving this wallet surface.',
+    },
+    send: {
+      title: 'Send INJ',
+      subtitle: 'Transfer directly from this wallet card without leaving the dashboard.',
+    },
+    receive: {
+      title: 'Receive Assets',
+      subtitle: 'Show your address and QR code inline for quick inbound transfers.',
+    },
+    swap: {
+      title: 'Swap Assets',
+      subtitle: 'Run a quick Injective swap inside your main wallet surface.',
+    },
+    history: {
+      title: 'Recent Activity',
+      subtitle: 'Review your latest on-chain transfers and swaps right here.',
+    },
+    settings: {
+      title: 'Wallet Settings',
+      subtitle: 'Manage security, PIN, keys, and wallet preferences without leaving this card.',
+    },
+    chance: {
+      title: 'More Chance',
+      subtitle: 'Choose an extra tap pack for the NINJA earn loop without leaving the wallet surface.',
+    },
+  };
+
+  const loadHistory = useCallback(async () => {
+    if (!address || !isUnlocked) {
+      setHistoryItems([]);
+      return;
+    }
+
+    setHistoryLoading(true);
+    setHistoryError('');
+
+    try {
+      const [evmTxHistory, cosmosTxHistory] = await Promise.all([
+        getTxHistory(address, 20, currentNetworkMeta.chain).catch((error) => {
+          console.error('Failed to fetch EVM transactions:', error);
+          return [];
+        }),
+        (async () => {
+          if (walletNetworkMode === 'testnet') {
+            return [];
+          }
+          try {
+            const cosmosAddress = getInjectiveAddress(address);
+            return await getCosmosTxHistory(cosmosAddress, 20);
+          } catch (error) {
+            console.error('Failed to fetch Cosmos transactions:', error);
+            return [];
+          }
+        })(),
+      ]);
+
+      const routerAddress = ROUTER_ADDRESS.toLowerCase();
+
+      const evmTransactions: DashboardTransaction[] = evmTxHistory.map((tx) => {
+        const isSwapTx = tx.to?.toLowerCase() === routerAddress;
+        const isSent = tx.from.toLowerCase() === address.toLowerCase();
+        const type: DashboardTransactionType = isSwapTx ? 'swap' : isSent ? 'send' : 'receive';
+        const targetAddress = type === 'send' || type === 'swap' ? (tx.to || 'Contract Creation') : tx.from;
+
+        return {
+          id: `evm-${tx.hash}`,
+          type,
+          amount: (Number(tx.value) / 10 ** 18).toFixed(3),
+          token: 'INJ',
+          address: targetAddress.startsWith('0x') ? truncateMiddle(targetAddress) : targetAddress,
+          timestamp: new Date(tx.timestamp * 1000),
+          status: tx.status === 'success' ? 'completed' : tx.status === 'failed' ? 'failed' : 'pending',
+          txHash: tx.hash,
+          chainType: 'EVM',
+        };
+      });
+
+      const cosmosAddress = getInjectiveAddress(address);
+      const cosmosTransactions: DashboardTransaction[] = cosmosTxHistory.map((tx) => {
+        const isSwapTx = (tx as { isSwap?: boolean }).isSwap === true;
+        const isSent = tx.from.toLowerCase() === cosmosAddress.toLowerCase();
+        const type: DashboardTransactionType = isSwapTx ? 'swap' : isSent ? 'send' : 'receive';
+        const targetAddress = type === 'send' || type === 'swap' ? (tx.to || '') : tx.from;
+
+        return {
+          id: `cosmos-${tx.hash}`,
+          type,
+          amount: (Number(tx.value) / 10 ** 18).toFixed(3),
+          token: 'INJ',
+          address: targetAddress.startsWith('inj') ? truncateMiddle(targetAddress, 8, 6) : targetAddress,
+          timestamp: new Date(tx.timestamp * 1000),
+          status: tx.status === 'success' ? 'completed' : tx.status === 'failed' ? 'failed' : 'pending',
+          txHash: tx.hash,
+          chainType: 'Cosmos',
+        };
+      });
+
+      const allTransactions = [...evmTransactions, ...cosmosTransactions].sort(
+        (left, right) => right.timestamp.getTime() - left.timestamp.getTime()
+      );
+
+      setHistoryItems(allTransactions);
+    } catch (error) {
+      console.error('Failed to load history:', error);
+      setHistoryError('Unable to load recent activity right now.');
+      setHistoryItems([]);
+    } finally {
+      setHistoryLoading(false);
+    }
+  }, [address, currentNetworkMeta.chain, isUnlocked, walletNetworkMode]);
+
+  const executeInlineSend = useCallback(async () => {
+    const trimmedRecipient = sendRecipient.trim();
+    const trimmedAmount = sendAmount.trim();
+    const numericAmount = Number(trimmedAmount);
+    const gasCost = sendGasEstimate ? Number(formatEther(sendGasEstimate.totalCost)) : 0;
+
+    if (!trimmedRecipient || !trimmedAmount) {
+      setSendError('Enter a recipient and amount.');
+      return;
+    }
+
+    if (!isValidAddress(trimmedRecipient)) {
+      setSendError('Enter a valid EVM or Injective address.');
+      return;
+    }
+
+    if (!Number.isFinite(numericAmount) || numericAmount <= 0) {
+      setSendError('Enter a valid transfer amount.');
+      return;
+    }
+
+    if (numericAmount + gasCost > sendBalanceValue) {
+      setSendError('Amount plus gas exceeds your INJ balance.');
+      return;
+    }
+
+    if (!privateKey) {
+      setSendError('Signing key is not loaded. Verify with Passkey and try again.');
+      return;
+    }
+
+    setSendSubmitting(true);
+    setSendError('');
+
+    try {
+      const recipientAddress = getEvmAddress(trimmedRecipient);
+      const hash = await sendTransaction(
+        privateKey,
+        recipientAddress,
+        trimmedAmount,
+        undefined,
+        currentNetworkMeta.chain
+      );
+
+      setSendTxHash(hash);
+      resetTxAuth();
+      await loadData();
+      await loadHistory();
+    } catch (error) {
+      setSendError(error instanceof Error ? error.message : 'Failed to send transaction');
+    } finally {
+      setSendSubmitting(false);
+    }
+  }, [currentNetworkMeta.chain, getEvmAddress, loadData, loadHistory, privateKey, resetTxAuth, sendAmount, sendBalanceValue, sendGasEstimate, sendRecipient]);
+
+  const executeInlineSwap = useCallback(async () => {
+    if (walletNetworkMode === 'testnet') {
+      setSwapError('Swap is unavailable on testnet right now.');
+      return;
+    }
+
+    const numericAmount = Number(swapAmount);
+    const availableBalance = Number(swapFromMeta.balance || '0');
+
+    if (swapFromToken === swapToToken) {
+      setSwapError('Choose two different assets.');
+      return;
+    }
+
+    if (!swapFromMeta.enabled || !swapToMeta.enabled) {
+      setSwapError('NINJA swap is coming soon.');
+      return;
+    }
+
+    if (!Number.isFinite(numericAmount) || numericAmount <= 0) {
+      setSwapError('Enter a valid amount to swap.');
+      return;
+    }
+
+    if (numericAmount > availableBalance) {
+      setSwapError(`Insufficient ${swapFromToken} balance.`);
+      return;
+    }
+
+    if (!privateKey || !address) {
+      setSwapError('Signing key is not loaded. Verify with Passkey and try again.');
+      return;
+    }
+
+    setSwapSubmitting(true);
+    setSwapError('');
+
+    try {
+      const hash = await executeSwap({
+        fromToken: swapFromToken,
+        toToken: swapToToken,
+        amountIn: swapAmount,
+        slippage: Number(swapSlippage),
+        userAddress: address as Address,
+        privateKey: privateKeyToHex(privateKey),
+      });
+
+      setSwapTxHash(hash);
+      resetTxAuth();
+      await loadData();
+      await loadHistory();
+    } catch (error) {
+      setSwapError(error instanceof Error ? error.message : 'Swap failed');
+    } finally {
+      setSwapSubmitting(false);
+    }
+  }, [address, loadData, loadHistory, privateKey, resetTxAuth, swapAmount, swapFromMeta.balance, swapFromMeta.enabled, swapFromToken, swapSlippage, swapToMeta.enabled, swapToToken, walletNetworkMode]);
+
+  const handleSendAction = () => {
+    if (isPinLocked || autoLockMinutes === 0 || !privateKey) {
+      setPendingAuthAction('send');
+      setShowInlineSendAuth(true);
+      return;
+    }
+
+    void executeInlineSend();
+  };
+
+  const handleSwapAction = () => {
+    if (isPinLocked || autoLockMinutes === 0 || !privateKey) {
+      setPendingAuthAction('swap');
+      setShowAuthModal(true);
+      return;
+    }
+
+    void executeInlineSwap();
+  };
+
+  const handleTransactionAuthSuccess = () => {
+    setShowAuthModal(false);
+    if (pendingAuthAction) {
+      setPostAuthAction(pendingAuthAction);
+      setPendingAuthAction(null);
     }
   };
+
+  const handleInlineSendAuthClose = () => {
+    setShowInlineSendAuth(false);
+    if (pendingAuthAction === 'send') {
+      setPendingAuthAction(null);
+    }
+  };
+
+  const handleInlineSendAuthSuccess = () => {
+    setShowInlineSendAuth(false);
+    setPostAuthAction('send');
+    setPendingAuthAction(null);
+  };
+
+  useEffect(() => {
+    if (!postAuthAction || !privateKey) return;
+
+    if (postAuthAction === 'send') {
+      void executeInlineSend();
+    } else {
+      void executeInlineSwap();
+    }
+
+    setPostAuthAction(null);
+  }, [executeInlineSend, executeInlineSwap, postAuthAction, privateKey]);
+
+  useEffect(() => {
+    if (walletPanel !== 'history') return;
+    void loadHistory();
+  }, [loadHistory, walletPanel]);
+
+  useEffect(() => {
+    if (walletPanel !== 'send' && showInlineSendAuth) {
+      setShowInlineSendAuth(false);
+      if (pendingAuthAction === 'send') {
+        setPendingAuthAction(null);
+      }
+    }
+  }, [pendingAuthAction, showInlineSendAuth, walletPanel]);
+
+  useEffect(() => {
+    if (walletPanel !== 'send') return;
+
+    const trimmedRecipient = sendRecipient.trim();
+    const trimmedAmount = sendAmount.trim();
+    const parsedAmount = Number(trimmedAmount);
+    const estimateRecipient = trimmedRecipient && isValidAddress(trimmedRecipient)
+      ? getEvmAddress(trimmedRecipient)
+      : '0x0000000000000000000000000000000000000000';
+    const estimateAmount = trimmedAmount !== '' && Number.isFinite(parsedAmount) && parsedAmount > 0
+      ? trimmedAmount
+      : '0.001';
+
+    if (!address) {
+      setSendGasEstimate(null);
+      setSendEstimating(false);
+      return;
+    }
+
+    let ignore = false;
+    const timer = window.setTimeout(async () => {
+      try {
+        setSendEstimating(true);
+        const estimate = await estimateGas(
+          address,
+          estimateRecipient,
+          estimateAmount,
+          undefined,
+          currentNetworkMeta.chain
+        );
+
+        if (!ignore) {
+          setSendGasEstimate(estimate);
+        }
+      } catch (error) {
+        if (!ignore) {
+          console.error('Failed to estimate gas:', error);
+          setSendGasEstimate(null);
+        }
+      } finally {
+        if (!ignore) {
+          setSendEstimating(false);
+        }
+      }
+    }, 350);
+
+    return () => {
+      ignore = true;
+      window.clearTimeout(timer);
+    };
+  }, [address, currentNetworkMeta.chain, getEvmAddress, sendAmount, sendRecipient, walletPanel]);
+
+  useEffect(() => {
+    if (walletPanel !== 'swap') return;
+
+    if (walletNetworkMode === 'testnet') {
+      setSwapQuoteAmount('');
+      setSwapQuoteLoading(false);
+      setSwapPriceImpact('0.00');
+      return;
+    }
+
+    if (!swapAmount || Number(swapAmount) <= 0 || swapFromToken === swapToToken) {
+      setSwapQuoteAmount('');
+      setSwapQuoteLoading(false);
+      setSwapPriceImpact('0.00');
+      return;
+    }
+
+    if (!swapFromMeta.enabled || !swapToMeta.enabled) {
+      setSwapQuoteAmount('');
+      setSwapQuoteLoading(false);
+      setSwapPriceImpact('0.00');
+      return;
+    }
+
+    let ignore = false;
+    const timer = window.setTimeout(async () => {
+      try {
+        setSwapQuoteLoading(true);
+        const quote = await getSwapQuote(
+          swapFromToken,
+          swapToToken,
+          swapAmount,
+          Number(swapSlippage)
+        );
+
+        if (!ignore) {
+          setSwapQuoteAmount(quote.expectedOutput);
+          setSwapPriceImpact(quote.priceImpact);
+        }
+      } catch (error) {
+        if (!ignore) {
+          console.error('Failed to get swap quote:', error);
+          setSwapQuoteAmount('');
+        }
+      } finally {
+        if (!ignore) {
+          setSwapQuoteLoading(false);
+        }
+      }
+    }, 400);
+
+    return () => {
+      ignore = true;
+      window.clearTimeout(timer);
+    };
+  }, [swapAmount, swapFromMeta.enabled, swapFromToken, swapSlippage, swapToMeta.enabled, swapToToken, walletNetworkMode, walletPanel]);
+
+  const assetTabOrder: AssetTab[] = ['tokens', 'nfts', 'defi', 'earn'];
+  const assetTabIndex = assetTabOrder.indexOf(assetTab);
 
   // QR Scanner handlers
   const openQRScanner = async () => {
@@ -263,230 +1536,1426 @@ export default function DashboardPage() {
     }, 350);
   };
 
-  if (isCheckingSession || loading) {
-    return <LoadingSpinner />;
-  }
+  const openCardPanel = () => {
+    setCardPanelTab('pay');
+    setCardScanData(null);
+    setCardScanError('');
+    setCardScanState('idle');
+    toggleWalletPanel('card');
+  };
 
+  const openMoreChancePanel = () => {
+    setWalletPanel('chance');
+  };
+
+  const openAiAssetSurface = () => {
+    setFlippedTokenCard(null);
+    setAssetSurfaceMode((current) => {
+      if (current === 'ai') {
+        setAssetTrendReplayKey((value) => value + 1);
+        return 'assets';
+      }
+
+      return 'ai';
+    });
+  };
+
+  const openFaucetAssetSurface = () => {
+    setFlippedTokenCard(null);
+    setFaucetError('');
+    setAssetSurfaceMode((current) => {
+      const nextMode = current === 'faucet' ? 'assets' : 'faucet';
+      setWalletNetworkMode(nextMode === 'faucet' ? 'testnet' : 'mainnet');
+      return nextMode;
+    });
+    setWalletSurfaceMotionKey((value) => value + 1);
+    setAssetSurfaceMotionKey((value) => value + 1);
+    setAssetTrendReplayKey((value) => value + 1);
+  };
+
+  const toggleWalletNetworkMode = () => {
+    setFlippedTokenCard(null);
+    setWalletNetworkMode((current) => {
+      const next = current === 'mainnet' ? 'testnet' : 'mainnet';
+      if (next === 'mainnet' && assetSurfaceMode === 'faucet') {
+        setAssetSurfaceMode('assets');
+      }
+      return next;
+    });
+    setWalletSurfaceMotionKey((value) => value + 1);
+    setAssetSurfaceMotionKey((value) => value + 1);
+    setAssetTrendReplayKey((value) => value + 1);
+  };
+
+  const isDashboardReady = !isCheckingSession && !loading && isUnlocked && !!address;
+  const dashboardLoadProgress = isCheckingSession ? 32 : !isUnlocked || !address ? 58 : loading ? 82 : 100;
+  const dashboardLoadStatus = isCheckingSession
+    ? 'Checking wallet session'
+    : !isUnlocked || !address
+      ? 'Restoring wallet identity'
+      : loading
+        ? 'Loading wallet surface'
+        : 'Wallet surface ready';
   const formattedBalance = balance ? parseFloat(balance.formatted).toFixed(4) : '0.0000';
   const injUsdValue = balance ? (parseFloat(balance.formatted) * injPrice) : 0;
   const usdtValue = parseFloat(tokenBalances.USDT);
   const usdcValue = parseFloat(tokenBalances.USDC);
-  const totalUsdValue = (injUsdValue + usdtValue + usdcValue).toFixed(2);
+  const totalUsdNumeric = injUsdValue + usdtValue + usdcValue;
+  const totalUsdValue = totalUsdNumeric.toFixed(2);
+  const assetTrendSeries = buildPixelTrendSeries(totalUsdNumeric, injPriceChange24h);
+  const isWalletOverview = walletPanel === 'overview';
+  const isAiStage = assetSurfaceMode === 'ai';
+  const isFaucetStage = assetSurfaceMode === 'faucet';
+  const isCardPanel = walletPanel === 'card';
+  const isTestnet = walletNetworkMode === 'testnet';
+  const activeWalletPanelMeta = walletPanel !== 'overview' ? walletPanelMeta[walletPanel] : null;
+  const formattedNinjaBalance = walletNetworkMode === 'mainnet' ? ninjaBalance.toFixed(2) : '0.00';
+  const overviewStageClassName = 'h-[510px] md:h-[482px]';
+  const detailStageClassName = 'h-[540px] md:h-[520px]';
+  const aiStageClassName = overviewStageClassName;
+  const walletStageClassName = isAiStage ? aiStageClassName : isWalletOverview ? overviewStageClassName : detailStageClassName;
+  const assetStageClassName = overviewStageClassName;
+  const currentNetworkLabel = currentNetworkMeta.label;
+  const currentNetworkShortLabel = currentNetworkMeta.shortLabel;
+  const currentTokenSet = currentNetworkMeta.tokenSet;
+  const currentWinjAddress = currentTokenSet.WINJ?.address || TOKENS_MAINNET.WINJ.address;
+  const currentUsdtAddress = currentTokenSet.USDT?.address || null;
+  const currentUsdcAddress = currentTokenSet.USDC?.address || null;
+  const swapUnavailableOnTestnet = walletNetworkMode === 'testnet';
+  const activeBoundCards = boundCards.filter((card) => card.isActive);
+  const recentBoundCards = boundCards.slice(0, 2);
+  const faucetCards = FAUCET_NETWORKS.map((network) => ({
+    id: network.id,
+    label: network.isBase ? 'INJ' : network.name,
+    amountLabel: `${network.amount} ${network.symbol}`,
+    icon: FAUCET_ICON_BY_ID[network.id] || '/injswap.png',
+    category: POPULAR_FAUCET_IDS.has(network.id) ? 'popular' as const : 'others' as const,
+  }));
+  const filteredFaucetCards = faucetCards.filter((token) => token.category === faucetCategory);
+  const dashboardTokenCards = [
+    {
+      symbol: 'INJ',
+      icon: '/injswap.png',
+      balance: `${tokenBalances.INJ} INJ`,
+      usdValue: `$${(parseFloat(tokenBalances.INJ) * injPrice).toFixed(2)}`,
+      change: `${injPriceChange24h >= 0 ? '+' : ''}${injPriceChange24h.toFixed(2)}%`,
+      changeClass: injPriceChange24h >= 0 ? 'text-green-400' : 'text-red-400',
+      copyValue: currentWinjAddress,
+      contractValue: truncateMiddle(currentWinjAddress, 8, 6),
+    },
+    {
+      symbol: 'USDC',
+      icon: '/USDC_Logo.png',
+      balance: `${tokenBalances.USDC} USDC`,
+      usdValue: `$${tokenBalances.USDC}`,
+      change: `${usdcPriceChange24h >= 0 ? '+' : ''}${usdcPriceChange24h.toFixed(2)}%`,
+      changeClass: usdcPriceChange24h >= 0 ? 'text-green-400' : 'text-red-400',
+      copyValue: currentUsdcAddress,
+      contractValue: currentUsdcAddress ? truncateMiddle(currentUsdcAddress, 8, 6) : 'No contract yet',
+    },
+    {
+      symbol: 'NINJA',
+      icon: '/NIJIA.png',
+      balance: `${formattedNinjaBalance} NINJA`,
+      usdValue: '$0.00',
+      change: '+0.00%',
+      changeClass: 'text-gray-500',
+      copyValue: null,
+      contractValue: 'No contract yet',
+    },
+    {
+      symbol: 'USDT',
+      icon: '/USDT_Logo.png',
+      balance: `${tokenBalances.USDT} USDT`,
+      usdValue: `$${tokenBalances.USDT}`,
+      change: `${usdtPriceChange24h >= 0 ? '+' : ''}${usdtPriceChange24h.toFixed(2)}%`,
+      changeClass: usdtPriceChange24h >= 0 ? 'text-green-400' : 'text-red-400',
+      copyValue: currentUsdtAddress,
+      contractValue: currentUsdtAddress ? truncateMiddle(currentUsdtAddress, 8, 6) : 'No contract yet',
+    },
+  ] as const;
+  const compactAssetCardHeight = 64;
+  const compactAssetCardGap = 12;
+  const renderCompactAssetSurface = (surface: 'left' | 'right') => {
+    const shouldPromoteNinja = surface === 'left' && isAiStage && aiCompactNinjaPromoted;
+    const compactDisplayOrder = shouldPromoteNinja
+      ? ['NINJA', 'INJ', 'USDC', 'USDT']
+      : dashboardTokenCards.map((token) => token.symbol);
+    const compactListHeight = dashboardTokenCards.length * compactAssetCardHeight + (dashboardTokenCards.length - 1) * compactAssetCardGap;
 
-  return (
-    <div className="min-h-screen pb-24 md:pb-8 bg-black">
-      <div>
-        {/* Modern Dashboard Header */}
-        <div className="bg-gradient-to-b from-white/5 to-transparent border-b border-white/5 backdrop-blur-sm">
-        <div className="max-w-7xl mx-auto px-4 py-6">
-          {/* Header Top */}
-          <div className="flex items-center justify-between mb-6">
-            {/* Account Info */}
-            <div className="flex items-center gap-3">
-              {/* Brand Logo */}
-              <div className="w-10 h-10 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center p-1.5">
-                <Image 
-                  src="/lambdalogo.png" 
-                  alt="Logo" 
-                  width={32} 
-                  height={32}
-                  className="w-full h-full object-contain"
-                />
-              </div>
-              
-              <div>
-                <div className="text-sm font-bold text-white mb-1">Account 1</div>
-                <div className="flex items-center gap-2">
-                  <span className="font-mono text-xs text-gray-400">
-                    {address?.slice(0, 6)}...{address?.slice(-4)}
-                  </span>
-                  <button 
-                    onClick={handleCopyAddress}
-                    className="p-1 rounded hover:bg-white/10 transition-all group"
-                    title="Copy address"
-                  >
-                    {copied ? (
-                      <svg className="w-3.5 h-3.5 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                      </svg>
-                    ) : (
-                      <svg className="w-3.5 h-3.5 text-gray-400 group-hover:text-white transition-colors" fill="none" stroke="currentColor" viewBox="0 0 16 16">
-                        <rect width="11" height="11" x="4" y="4" rx="1" ry="1" strokeWidth="1.5" />
-                        <path d="M2 10c-0.8 0-1.5-0.7-1.5-1.5V2c0-0.8 0.7-1.5 1.5-1.5h8.5c0.8 0 1.5 0.7 1.5 1.5" strokeWidth="1.5" />
-                      </svg>
-                    )}
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            {/* Scan QR Code Button */}
-            <button 
-              onClick={openQRScanner}
-              className="p-3 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 transition-all"
-              title="Scan QR Code"
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
-                {/* Top-left corner */}
-                <path d="M3 9V5a2 2 0 0 1 2-2h4" strokeLinecap="round" strokeLinejoin="round" />
-                {/* Top-right corner */}
-                <path d="M21 9V5a2 2 0 0 0-2-2h-4" strokeLinecap="round" strokeLinejoin="round" />
-                {/* Bottom-left corner */}
-                <path d="M3 15v4a2 2 0 0 0 2 2h4" strokeLinecap="round" strokeLinejoin="round" />
-                {/* Bottom-right corner */}
-                <path d="M21 15v4a2 2 0 0 1-2 2h-4" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-            </button>
+    return (
+    <div
+      key={`compact-assets-${surface}-${walletNetworkMode}-${assetSurfaceMotionKey}`}
+      className="dashboard-surface-enter relative flex min-h-0 flex-1 flex-col"
+    >
+      <div className="mb-4 flex items-center justify-between gap-3">
+        <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-gray-500">Assets</div>
+        {isTestnet && (
+          <div className="rounded-full border border-[#5d7690] bg-[#1d2432] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-100">
+            {currentNetworkShortLabel}
           </div>
-
-          {/* Total Balance Card - OKX Style */}
-          <div className="bg-black rounded-2xl p-6 border border-white/10 relative overflow-hidden">
-            {/* Subtle gradient accent */}
-            <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-green-500/5 to-transparent rounded-full blur-2xl"></div>
-            
-            <div className="relative">
-              {/* Header with Balance Label */}
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-2">
-                  <span className="text-gray-400 text-xs font-semibold uppercase tracking-wider">Total Balance</span>
-                  <button 
-                    onClick={() => setBalanceVisible(!balanceVisible)}
-                    className="p-1 rounded hover:bg-white/5 transition-colors"
-                  >
-                    {balanceVisible ? (
-                      <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                      </svg>
-                    ) : (
-                      <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
-                      </svg>
-                    )}
-                  </button>
-                </div>
-                <button 
-                  onClick={handleRefresh}
-                  disabled={refreshing}
-                  className="p-1 rounded hover:bg-white/5 transition-colors disabled:opacity-50"
-                >
-                  <svg className={`w-4 h-4 text-gray-400 ${refreshing ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                  </svg>
-                </button>
-              </div>
-
-              {/* Main Balance Display */}
-              <div className="mb-5">
-                <div className="flex items-baseline gap-3">
-                  <span className="text-4xl md:text-5xl font-bold text-white font-mono tracking-tight">
-                    {balanceVisible ? formattedBalance : '••••••'}
-                  </span>
-                  <span className="text-xl font-semibold text-gray-400">INJ</span>
-                </div>
-                <div className="flex items-center gap-4 mt-2">
-                  <div className="text-base text-gray-400 font-mono">
-                    ≈ ${balanceVisible ? totalUsdValue : '••••••'} USD
-                  </div>
-                  {/* 24h Change */}
-                  {balanceVisible && balance && (
-                    <div className="flex items-center gap-2">
-                      <span className={`text-sm font-semibold ${injPriceChange24h >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                        {injPriceChange24h >= 0 ? '+' : ''}${(parseFloat(balance.formatted) * injPrice * injPriceChange24h / 100).toFixed(2)}
-                      </span>
-                      <span className={`text-sm ${injPriceChange24h >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                        {injPriceChange24h >= 0 ? '+' : ''}{injPriceChange24h.toFixed(2)}%
-                      </span>
-                      <span className="text-gray-500 text-xs">24h</span>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Action Buttons - Circular White Style */}
-              <div className="grid grid-cols-4 gap-4">
-                {/* Send Button */}
-                <button 
-                  onClick={() => router.push('/send')}
-                  className="flex flex-col items-center gap-2 group"
-                >
-                  <div className="w-14 h-14 rounded-full bg-white hover:bg-gray-100 flex items-center justify-center shadow-lg transition-all group-hover:scale-105">
-                    <svg className="w-5 h-5 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <line x1="12" y1="19" x2="12" y2="5" strokeWidth={2.5} strokeLinecap="round" />
-                      <polyline points="5 12 12 5 19 12" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />
-                    </svg>
-                  </div>
-                  <span className="text-xs font-semibold text-gray-300">Send</span>
-                </button>
-
-                {/* Receive Button */}
-                <button 
-                  onClick={() => router.push('/receive')}
-                  className="flex flex-col items-center gap-2 group"
-                >
-                  <div className="w-14 h-14 rounded-full bg-white hover:bg-gray-100 flex items-center justify-center shadow-lg transition-all group-hover:scale-105">
-                    <svg className="w-5 h-5 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <line x1="12" y1="5" x2="12" y2="19" strokeWidth={2.5} strokeLinecap="round" />
-                      <polyline points="19 12 12 19 5 12" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />
-                    </svg>
-                  </div>
-                  <span className="text-xs font-semibold text-gray-300">Receive</span>
-                </button>
-
-                {/* Swap Button */}
-                <button 
-                  onClick={() => router.push('/swap')}
-                  className="flex flex-col items-center gap-2 group"
-                >
-                  <div className="w-14 h-14 rounded-full bg-white hover:bg-gray-100 flex items-center justify-center shadow-lg transition-all group-hover:scale-105">
-                    <svg className="w-5 h-5 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <polyline points="16 3 21 3 21 8" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />
-                      <line x1="4" y1="20" x2="21" y2="3" strokeWidth={2.5} strokeLinecap="round" />
-                      <polyline points="21 16 21 21 16 21" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />
-                      <line x1="15" y1="15" x2="21" y2="21" strokeWidth={2.5} strokeLinecap="round" />
-                      <line x1="4" y1="4" x2="9" y2="9" strokeWidth={2.5} strokeLinecap="round" />
-                    </svg>
-                  </div>
-                  <span className="text-xs font-semibold text-gray-300">Swap</span>
-                </button>
-
-                {/* History Button */}
-                <button 
-                  onClick={() => router.push('/history')}
-                  className="flex flex-col items-center gap-2 group"
-                >
-                  <div className="w-14 h-14 rounded-full bg-white hover:bg-gray-100 flex items-center justify-center shadow-lg transition-all group-hover:scale-105">
-                    <svg className="w-5 h-5 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <circle cx="12" cy="12" r="10" strokeWidth={2.5} strokeLinecap="round" />
-                      <polyline points="12 6 12 12 16 14" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />
-                    </svg>
-                  </div>
-                  <span className="text-xs font-semibold text-gray-300">History</span>
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+        )}
       </div>
 
-      {/* Assets Section - No Container */}
-      <div className="max-w-7xl mx-auto px-4 pt-3 pb-6">
+      <div className="relative" style={{ height: `${compactListHeight}px` }}>
+        {dashboardTokenCards.map((token) => (
+          <div
+            key={`${surface}-compact-${token.symbol}`}
+            draggable
+            onDragStart={(event) => {
+              event.dataTransfer.effectAllowed = 'copy';
+              event.dataTransfer.setData('application/x-injpass-asset', token.symbol);
+              event.dataTransfer.setData('text/plain', `$${token.symbol}`);
+            }}
+            className={`absolute left-0 right-0 flex h-16 cursor-grab items-center gap-3 rounded-2xl border px-4 py-3 transition-[top,transform,border-color,box-shadow,background-color] duration-700 ease-[cubic-bezier(0.22,1,0.36,1)] hover:bg-white/[0.08] active:cursor-grabbing ${
+              shouldPromoteNinja && token.symbol === 'NINJA'
+                ? isLight
+                  ? 'border-black/45 bg-white/[0.05] shadow-[0_0_0_1px_rgba(0,0,0,0.18)]'
+                  : 'border-black/75 bg-white/[0.06] shadow-[0_0_0_1px_rgba(0,0,0,0.48)]'
+                : 'border-white/10 bg-white/[0.04]'
+            }`}
+            style={{
+              top: `${compactDisplayOrder.indexOf(token.symbol) * (compactAssetCardHeight + compactAssetCardGap)}px`,
+              transform: shouldPromoteNinja && token.symbol === 'NINJA' ? 'translateY(-3px)' : 'translateY(0)',
+              zIndex: shouldPromoteNinja && token.symbol === 'NINJA' ? 2 : 1,
+            }}
+          >
+            <div className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full bg-white/[0.04]">
+              <Image
+                src={token.icon}
+                alt={token.symbol}
+                width={40}
+                height={40}
+                className="h-full w-full object-contain"
+              />
+            </div>
+            <div className="min-w-0 flex-1 text-[13px] font-mono text-gray-300">{token.balance}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+    );
+  };
+
+  return (
+    <LoadingSpinner ready={isDashboardReady} progress={dashboardLoadProgress} statusLabel={dashboardLoadStatus}>
+      {isDashboardReady ? (
+        <>
+        <div className="min-h-screen bg-black">
+          <div>
+            {/* Modern Dashboard Header */}
+            <div className="bg-gradient-to-b from-white/5 to-transparent border-b border-white/5 backdrop-blur-sm">
+            <div className="max-w-7xl mx-auto px-4 py-6">
+          {/* Header Top */}
+          <div className="mb-6 flex items-center justify-between">
+            <EditableAccountIdentity key={address || 'default'} address={address || undefined} />
+
+            {/* Scan QR Code Button */}
+            <div className="flex items-center gap-2">
+              <ThemeToggleButton compact />
+              <button
+                onClick={openAiAssetSurface}
+                className={`rounded-lg border px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.22em] transition-all ${
+                  !isAiStage
+                    ? 'border-white/10 bg-white/5 text-gray-300 hover:border-violet-500/40 hover:bg-violet-600/15 hover:text-white'
+                    : 'border-fuchsia-400/35 bg-[linear-gradient(135deg,rgba(139,92,246,0.24),rgba(59,130,246,0.14))] text-white shadow-[0_10px_30px_rgba(99,102,241,0.22)]'
+                }`}
+                title="Open AI workspace"
+              >
+                AI
+              </button>
+              <button
+                onClick={openFaucetAssetSurface}
+                className={`rounded-lg border p-2.5 transition-all group ${
+                  isFaucetStage
+                    ? 'border-violet-400/35 bg-[linear-gradient(135deg,rgba(124,58,237,0.20),rgba(59,130,246,0.14))] shadow-[0_10px_28px_rgba(99,102,241,0.16)]'
+                    : 'border-white/10 bg-white/5 hover:border-violet-500/40 hover:bg-violet-600/20'
+                }`}
+                title="Testnet Faucet"
+              >
+                <svg
+                  className={`h-[18px] w-[18px] transition-colors ${isFaucetStage ? 'text-violet-200' : 'text-gray-400 group-hover:text-violet-300'}`}
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth={2}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M2 12h7" />
+                  <path d="M9 9h5a1 1 0 0 1 1 1v4a1 1 0 0 1-1 1H9V9z" />
+                  <path d="M10 9V7M13 9V7" />
+                  <path d="M15 10h2.5a3.5 3.5 0 1 1 0 7H15" />
+                  <path d="M18 17.5a2.5 2.5 0 1 1-5 0c0-1.1 1.2-2.4 2.1-3.4.5-.5.8-.9.9-1.1.1.2.5.6.9 1.1.9 1 2.1 2.3 2.1 3.4Z" />
+                </svg>
+              </button>
+              <button
+                onClick={openCardPanel}
+                className={`rounded-lg border p-2.5 transition-all ${
+                  isCardPanel
+                    ? 'border-amber-300/30 bg-[linear-gradient(135deg,rgba(245,158,11,0.18),rgba(234,88,12,0.12))] shadow-[0_10px_28px_rgba(245,158,11,0.12)]'
+                    : 'border-white/10 bg-white/5 hover:border-amber-500/35 hover:bg-amber-500/10'
+                }`}
+                title="Open Card Pay"
+              >
+                <svg className={`h-[18px] w-[18px] ${isCardPanel ? 'text-amber-100' : 'text-gray-300'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 10h18M7 15h1m4 0h5M5 6h14a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2Z" />
+                </svg>
+              </button>
+              <button 
+                onClick={openQRScanner}
+                className="rounded-lg border border-white/10 bg-white/5 p-2.5 transition-all hover:bg-white/10"
+                title="Scan QR Code"
+              >
+                <svg className="h-[18px] w-[18px]" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
+                  {/* Top-left corner */}
+                  <path d="M3 9V5a2 2 0 0 1 2-2h4" strokeLinecap="round" strokeLinejoin="round" />
+                  {/* Top-right corner */}
+                  <path d="M21 9V5a2 2 0 0 0-2-2h-4" strokeLinecap="round" strokeLinejoin="round" />
+                  {/* Bottom-left corner */}
+                  <path d="M3 15v4a2 2 0 0 0 2 2h4" strokeLinecap="round" strokeLinejoin="round" />
+                  {/* Bottom-right corner */}
+                  <path d="M21 15v4a2 2 0 0 1-2 2h-4" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </button>
+            </div>
+          </div>
+
+          <div
+            className="grid gap-5 transition-[grid-template-columns] duration-500 xl:[grid-template-columns:var(--dashboard-columns)]"
+            style={{
+              ['--dashboard-columns' as string]: isAiStage
+                ? 'minmax(232px,0.38fr) minmax(0,1.62fr)'
+                : isCardPanel
+                  ? 'minmax(0,1.42fr) minmax(320px,0.58fr)'
+                : 'minmax(0,1.18fr) minmax(360px,0.82fr)',
+            }}
+          >
+            <div className={`relative ${walletStageClassName}`}>
+              <div
+                className={`absolute inset-0 transition-all duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] ${
+                  isAiStage
+                    ? 'pointer-events-none -translate-x-6 scale-[0.96] opacity-0'
+                    : 'translate-x-0 scale-100 opacity-100'
+                }`}
+              >
+            {/* Total Balance Card - OKX Style */}
+            <div className="bg-black rounded-2xl p-6 border border-white/10 relative overflow-hidden flex h-full flex-col">
+              {/* Subtle gradient accent */}
+              <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-green-500/5 to-transparent rounded-full blur-2xl"></div>
+              
+              <div className="relative flex flex-1 flex-col">
+                {/* Header with Balance Label */}
+                {isWalletOverview && (
+                  <div className="mb-4 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="text-gray-400 text-xs font-semibold uppercase tracking-wider">Total Balance</span>
+                      {isTestnet && (
+                        <span className="rounded-full border border-[#5d7690] bg-[#1d2432] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-100">
+                          {currentNetworkShortLabel}
+                        </span>
+                      )}
+                      <button 
+                        onClick={() => setBalanceVisible(!balanceVisible)}
+                        className="p-1 rounded hover:bg-white/5 transition-colors"
+                      >
+                        {balanceVisible ? (
+                          <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                          </svg>
+                        ) : (
+                          <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
+                          </svg>
+                        )}
+                      </button>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        onClick={toggleWalletNetworkMode}
+                        disabled={networkSwitching}
+                        className={`flex h-6 w-6 items-center justify-center rounded p-1 text-[10px] font-semibold uppercase tracking-[0.16em] transition-all ${
+                          walletNetworkMode === 'testnet'
+                            ? 'border border-[#5c7899] bg-[linear-gradient(135deg,#1b2230,#2b435e)] text-slate-100 shadow-[0_8px_20px_rgba(35,74,118,0.18)]'
+                            : 'border border-white/10 bg-white/5 text-gray-300 hover:border-cyan-500/40 hover:bg-cyan-500/12 hover:text-white'
+                        } ${networkSwitching ? 'cursor-wait opacity-80' : ''}`}
+                        title={walletNetworkMode === 'testnet' ? 'Switch to mainnet wallet' : 'Switch to testnet wallet'}
+                      >
+                        {networkSwitching ? '...' : 'T'}
+                      </button>
+                      <button 
+                        onClick={handleRefresh}
+                        disabled={refreshing}
+                        className="p-1 rounded hover:bg-white/5 transition-colors disabled:opacity-50"
+                      >
+                        <svg className={`w-4 h-4 text-gray-400 ${refreshing ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                        </svg>
+                      </button>
+                      <button
+                        onClick={() => toggleWalletPanel('settings')}
+                        className="rounded p-1 transition-colors hover:bg-white/5"
+                        title="Open settings"
+                      >
+                        <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                <div className="relative flex-1 min-h-0">
+                  <div
+                    className={`absolute inset-0 transition-all duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${
+                      isWalletOverview
+                        ? 'opacity-100 translate-y-0'
+                        : 'opacity-0 translate-y-5 pointer-events-none'
+                    }`}
+                  >
+                    <div key={`wallet-overview-${walletNetworkMode}-${walletSurfaceMotionKey}`} className="dashboard-surface-enter flex h-full flex-col">
+                      <div className="flex flex-col gap-6 xl:flex-row xl:items-end">
+                        <div className="min-w-0 flex-1">
+                          <div className="-translate-y-1 pl-3 md:pl-4">
+                            <div className="flex items-end gap-3 md:gap-4 flex-wrap">
+                              <span className="text-4xl md:text-5xl font-bold text-white font-mono tracking-tight">
+                                {balanceVisible ? <RollingBalanceNumber value={formattedBalance} /> : '••••••'}
+                              </span>
+                              <span className="text-xl font-semibold text-gray-400">INJ</span>
+                            </div>
+                            <div className="flex items-center gap-4 mt-2">
+                              <div className="text-base text-gray-400 font-mono">
+                                ≈ ${balanceVisible ? totalUsdValue : '••••••'} USD
+                              </div>
+                              {balanceVisible && balance && (
+                                <div className="flex items-center gap-2">
+                                  <span className={`text-sm font-semibold ${injPriceChange24h >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                                    {injPriceChange24h >= 0 ? '+' : ''}${(parseFloat(balance.formatted) * injPrice * injPriceChange24h / 100).toFixed(2)}
+                                  </span>
+                                  <span className={`text-sm ${injPriceChange24h >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                                    {injPriceChange24h >= 0 ? '+' : ''}{injPriceChange24h.toFixed(2)}%
+                                  </span>
+                                  <span className="text-gray-500 text-xs">24h</span>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="xl:w-[320px] xl:flex-shrink-0">
+                          <PixelTrendChart
+                            values={assetTrendSeries}
+                            hidden={!balanceVisible}
+                            changePct={injPriceChange24h}
+                            currentValueLabel={totalUsdValue}
+                            networkMode={walletNetworkMode}
+                            replayKey={assetTrendReplayKey}
+                          />
+                        </div>
+                      </div>
+
+                      <div className="pointer-events-none relative flex min-h-[56px] flex-[0.62] items-center justify-center">
+                        <div className="absolute inset-x-12 top-1/2 h-40 -translate-y-1/2 rounded-full bg-[radial-gradient(circle_at_center,rgba(255,255,255,0.07),transparent_70%)] blur-3xl" />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div
+                    className={`absolute inset-0 transition-all duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${
+                      isWalletOverview
+                        ? 'opacity-0 translate-y-5 pointer-events-none'
+                        : 'opacity-100 translate-y-0'
+                    }`}
+                  >
+                    <div className="relative h-full">
+                    <div className={`h-full flex flex-col overflow-hidden transition-all duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${
+                      walletPanel === 'send' && showInlineSendAuth
+                        ? 'scale-[0.985] blur-[10px] opacity-25'
+                        : 'scale-100 blur-0 opacity-100'
+                    }`}>
+                      <div className="flex items-start justify-between gap-4 border-b border-white/6 pb-4">
+                        <div>
+                          <div className="text-sm font-bold text-white">{activeWalletPanelMeta?.title}</div>
+                          <div className="mt-1 text-xs text-gray-400">{activeWalletPanelMeta?.subtitle}</div>
+                        </div>
+                        <button
+                          onClick={() => setWalletPanel('overview')}
+                          className="w-9 h-9 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 flex items-center justify-center transition-all"
+                          title="Close panel"
+                        >
+                          <svg className="w-4 h-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.2} d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                        </button>
+                      </div>
+
+                      <div className={`min-h-0 flex-1 ${
+                        walletPanel === 'settings'
+                          ? 'overflow-hidden pr-0 pt-3'
+                          : walletPanel === 'send' || walletPanel === 'swap' || walletPanel === 'history' || walletPanel === 'card' || walletPanel === 'chance'
+                            ? 'overflow-hidden pt-4'
+                            : 'overflow-y-auto pt-4 pr-1'
+                      }`}>
+                        {walletPanel === 'send' && (
+                          <div className="grid h-full gap-4 md:grid-cols-[minmax(0,1.12fr)_280px]">
+                            <div className="flex min-h-0 flex-col gap-4">
+                              <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                                <div className="mb-2 flex items-center justify-between">
+                                  <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">Recipient</span>
+                                  <button
+                                    onClick={async () => {
+                                      try {
+                                        const text = await navigator.clipboard.readText();
+                                        setSendRecipient(text);
+                                        setSendError('');
+                                      } catch (error) {
+                                        console.error('Failed to read clipboard:', error);
+                                      }
+                                    }}
+                                    className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-400 transition-colors hover:text-white"
+                                  >
+                                    Paste
+                                  </button>
+                                </div>
+                                <input
+                                  value={sendRecipient}
+                                  onChange={(event) => {
+                                    setSendRecipient(event.target.value);
+                                    setSendError('');
+                                  }}
+                                  placeholder="0x... or inj1..."
+                                  className="w-full bg-transparent text-sm text-white placeholder:text-gray-600 outline-none font-mono"
+                                />
+                              </div>
+
+                              <div className="flex-1 rounded-2xl border border-white/10 bg-black/20 p-4">
+                                <div className="mb-3 flex items-center justify-between">
+                                  <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">Amount</span>
+                                  <button
+                                    onClick={() => {
+                                      setSendAmount(tokenBalances.INJ);
+                                      setSendError('');
+                                    }}
+                                    className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-400 transition-colors hover:text-white"
+                                  >
+                                    Max
+                                  </button>
+                                </div>
+                                <div className="flex h-full flex-col">
+                                  <div className={`flex items-end gap-3 ${sendAmountAlertActive ? 'animate-send-amount-shake' : ''}`}>
+                                    <input
+                                      type="text"
+                                      autoComplete="off"
+                                      spellCheck={false}
+                                      value={sendAmount}
+                                      onChange={(event) => {
+                                        const nextValue = sanitizeDecimalInput(event.target.value);
+                                        setSendAmount(nextValue);
+                                        setSendError('');
+                                        const nextNumeric = Number(nextValue);
+                                        if (nextValue.trim() !== '' && Number.isFinite(nextNumeric) && nextNumeric > sendBalanceValue) {
+                                          triggerSendAmountAlert();
+                                        }
+                                      }}
+                                      inputMode="decimal"
+                                      placeholder="0.0000"
+                                      className={`w-full appearance-none bg-transparent text-3xl font-mono outline-none transition-colors duration-200 selection:bg-transparent selection:text-current [-webkit-text-fill-color:currentColor] md:text-[2.35rem] ${
+                                        sendAmountExceedsBalance
+                                          ? 'text-[#8e3f3f] placeholder:text-[#8e3f3f]/20'
+                                          : 'text-white placeholder:text-gray-600'
+                                      }`}
+                                    />
+                                    <span className={`pb-1.5 text-sm font-semibold transition-colors duration-200 ${
+                                      sendAmountExceedsBalance ? 'text-[#8e3f3f]/85' : 'text-gray-400'
+                                    }`}>INJ</span>
+                                  </div>
+
+                                  <div className="mt-auto pt-3">
+                                    <div className="flex items-center gap-2 text-sm">
+                                      <span className="text-gray-500">Available</span>
+                                      <span className="font-mono text-white">{tokenBalances.INJ} INJ</span>
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+
+                              <div className="min-h-[56px]">
+                                {sendError ? (
+                                  <div className="rounded-2xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-300">
+                                    {sendError}
+                                  </div>
+                                ) : sendTxHash ? (
+                                  <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-3">
+                                    <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-200">Latest Transfer</div>
+                                    <div className="mt-2 text-sm font-mono text-white">{truncateMiddle(sendTxHash, 10, 8)}</div>
+                                  </div>
+                                ) : (
+                                  <div className="rounded-2xl border border-white/8 bg-white/[0.03] px-4 py-3 text-sm text-gray-500">
+                                    Review the destination and amount, then confirm the transfer from this card.
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+
+                            <div className="flex min-h-0 flex-col rounded-2xl border border-white/10 bg-black/15 p-4">
+                              <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">Summary</div>
+                              <div className="mt-4 space-y-3">
+                                <div className="flex items-center justify-between gap-3 text-sm">
+                                  <span className="text-gray-400">To</span>
+                                  <span className="font-mono text-right text-white">{sendRecipient ? truncateMiddle(sendRecipient, 8, 6) : 'Not set'}</span>
+                                </div>
+                                <div className="flex items-center justify-between gap-3 text-sm">
+                                  <span className="text-gray-400">Amount</span>
+                                  <span className="font-mono text-white">{sendAmount || '0.0000'} INJ</span>
+                                </div>
+                                <div className="flex items-center justify-between gap-3 text-sm">
+                                  <span className="text-gray-400">Network</span>
+                                  <span className="text-white">{currentNetworkLabel}</span>
+                                </div>
+                              </div>
+
+                              <div className="mt-5 rounded-2xl border border-white/8 bg-white/[0.02] px-4 py-3">
+                                <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">Gas</div>
+                                <div className="mt-3 space-y-3">
+                                  <div className="flex items-center justify-between gap-3 text-sm">
+                                    <span className="text-gray-500">Gas Limit</span>
+                                    <span className="font-mono text-white">{sendEstimating && !sendGasEstimate ? 'Estimating...' : sendGasLimitLabel}</span>
+                                  </div>
+                                  <div className="flex items-center justify-between gap-3 text-sm">
+                                    <span className="text-gray-500">Max Fee</span>
+                                    <span className="font-mono text-white">{sendEstimating && !sendGasEstimate ? 'Estimating...' : sendMaxFeeLabel}</span>
+                                  </div>
+                                  <div className="flex items-center justify-between gap-3 text-sm">
+                                    <span className="text-gray-500">Priority Fee</span>
+                                    <span className="font-mono text-white">{sendEstimating && !sendGasEstimate ? 'Estimating...' : sendPriorityFeeLabel}</span>
+                                  </div>
+                                </div>
+                              </div>
+
+                              <div className="mt-auto pt-4">
+                                <button
+                                  onClick={handleSendAction}
+                                  disabled={sendSubmitting || !sendRecipient || !sendAmount}
+                                  className="w-full rounded-2xl bg-white py-3.5 font-bold text-black transition-all hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-40"
+                                >
+                                  {sendSubmitting ? 'Sending...' : 'Send INJ'}
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
+                        {walletPanel === 'receive' && (
+                          <div className="flex h-full min-h-0 flex-col pt-5">
+                            <div className="grid min-h-0 flex-1 gap-5 lg:grid-cols-[220px_minmax(0,1fr)] lg:items-stretch">
+                              <div className="flex h-full items-center justify-center">
+                                <div className="rounded-[2rem] bg-white p-4 shadow-2xl">
+                                  <QRCodeSVG
+                                    value={receiveDisplayAddress || address || ''}
+                                    size={180}
+                                    level="H"
+                                    bgColor="#FFFFFF"
+                                    fgColor="#000000"
+                                    includeMargin={false}
+                                  />
+                                </div>
+                              </div>
+
+                              <div className="flex h-full min-h-0 flex-col">
+                                <div className="relative p-1 bg-white/5 rounded-2xl border border-white/10">
+                                  <div
+                                    className={`absolute top-1 bottom-1 w-[calc(50%-0.25rem)] rounded-[0.85rem] bg-white transition-all duration-300 ${
+                                      receiveAddressType === 'evm' ? 'left-1' : 'left-[calc(50%+0rem)]'
+                                    }`}
+                                  />
+                                  <div className="relative grid grid-cols-2 gap-2">
+                                    <button
+                                      onClick={() => setReceiveAddressType('evm')}
+                                      className={`rounded-[0.85rem] px-3 py-2.5 text-sm font-bold transition-all ${receiveAddressType === 'evm' ? 'text-black' : 'text-gray-400 hover:text-white'}`}
+                                    >
+                                      EVM
+                                    </button>
+                                    <button
+                                      onClick={() => setReceiveAddressType('cosmos')}
+                                      className={`rounded-[0.85rem] px-3 py-2.5 text-sm font-bold transition-all ${receiveAddressType === 'cosmos' ? 'text-black' : 'text-gray-400 hover:text-white'}`}
+                                    >
+                                      Cosmos
+                                    </button>
+                                  </div>
+                                </div>
+
+                                <div className="mt-4 rounded-2xl border border-white/10 bg-black/20 p-4">
+                                  <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">Wallet Address</div>
+                                  <div className="mt-3 flex items-center gap-3">
+                                    <div className="flex-1 overflow-x-auto scrollbar-hide font-mono text-sm text-white whitespace-nowrap">
+                                      {receiveDisplayAddress}
+                                    </div>
+                                    <button
+                                      onClick={() => {
+                                        if (!receiveDisplayAddress) return;
+                                        navigator.clipboard.writeText(receiveDisplayAddress);
+                                        setReceiveCopied(true);
+                                        setTimeout(() => setReceiveCopied(false), 2000);
+                                      }}
+                                      className={`flex-shrink-0 rounded-xl border px-3 py-2 text-xs font-bold transition-all ${
+                                        receiveCopied
+                                          ? 'border-emerald-400/30 bg-emerald-500/10 text-emerald-300'
+                                          : 'border-white/10 bg-white/5 text-white hover:bg-white/10'
+                                      }`}
+                                    >
+                                      {receiveCopied ? 'Copied' : 'Copy'}
+                                    </button>
+                                  </div>
+                                </div>
+
+                                <div className="mt-auto grid gap-3 pt-4 sm:grid-cols-2">
+                                  <div className="rounded-2xl border border-emerald-500/15 bg-emerald-500/5 px-4 py-3 text-sm text-gray-300">
+                                    Use <span className="text-white">{receiveAddressType === 'evm' ? 'EVM' : 'Cosmos'}</span> format depending on the sender you are receiving from.
+                                  </div>
+                                  <div className="rounded-2xl border border-yellow-500/15 bg-yellow-500/5 px-4 py-3 text-sm text-gray-300">
+                                    Double-check the network before sending assets in. Wrong network deposits may not be recoverable.
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
+                        {walletPanel === 'swap' && (
+                          <div className="grid h-full min-h-0 gap-4 md:grid-cols-[minmax(0,1fr)_260px]">
+                            <div className="grid h-full min-h-0 gap-4 md:grid-rows-[minmax(0,1.02fr)_minmax(0,0.98fr)]">
+                              <div className="h-full rounded-2xl border border-white/10 bg-black/20 p-4">
+                                <div className="mb-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">Pair</div>
+                                <div className="grid h-[calc(100%-1.75rem)] gap-3 lg:grid-cols-[minmax(0,1fr)_52px_minmax(0,1fr)] lg:items-center">
+                                  <div className="flex h-full flex-col justify-between rounded-2xl border border-white/10 bg-white/[0.03] p-3">
+                                    <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">From</div>
+                                    <select
+                                      value={swapFromToken}
+                                      onChange={(event) => {
+                                        const nextToken = event.target.value as SwapToken;
+                                        setSwapFromToken(nextToken);
+                                        if (nextToken === swapToToken) {
+                                          setSwapToToken(getAlternateSwapToken(nextToken));
+                                        }
+                                        setSwapError('');
+                                      }}
+                                      className="w-full bg-transparent text-sm font-semibold text-white outline-none"
+                                    >
+                                      {swapTokenOptions.map((token) => (
+                                        <option key={`from-${token.symbol}`} value={token.symbol} className="bg-[#0b0b0f] text-white">
+                                          {token.symbol} · {token.name}
+                                        </option>
+                                      ))}
+                                    </select>
+                                    <div className="mt-3 flex items-center justify-between gap-3">
+                                      <div className="flex items-center gap-2.5">
+                                        <div className="relative h-9 w-9 overflow-hidden rounded-full border border-white/10 bg-white/5">
+                                          <Image src={swapFromMeta.icon} alt={swapFromMeta.symbol} fill className="object-cover" />
+                                        </div>
+                                        <div>
+                                          <div className="text-sm font-semibold text-white">{swapFromMeta.symbol}</div>
+                                          <div className="text-xs text-gray-400">{swapFromMeta.name}</div>
+                                        </div>
+                                      </div>
+                                      <div className="text-right">
+                                        <div className="text-sm font-mono text-white">{swapFromMeta.balance}</div>
+                                        <div className="text-[11px] text-gray-500">Available</div>
+                                      </div>
+                                    </div>
+                                  </div>
+
+                                  <div className="flex items-center justify-center">
+                                    <div className="flex h-12 w-12 items-center justify-center rounded-full border border-white/10 bg-white/[0.04]">
+                                      <svg className="h-5 w-5 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h11m0 0-3-3m3 3-3 3M17 17H6m0 0 3 3m-3-3 3-3" />
+                                      </svg>
+                                    </div>
+                                  </div>
+
+                                  <div className="flex h-full flex-col justify-between rounded-2xl border border-white/10 bg-white/[0.03] p-3">
+                                    <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">To</div>
+                                    <select
+                                      value={swapToToken}
+                                      onChange={(event) => {
+                                        const nextToken = event.target.value as SwapToken;
+                                        setSwapToToken(nextToken);
+                                        if (nextToken === swapFromToken) {
+                                          setSwapFromToken(getAlternateSwapToken(nextToken));
+                                        }
+                                        setSwapError('');
+                                      }}
+                                      className="w-full bg-transparent text-sm font-semibold text-white outline-none"
+                                    >
+                                      {swapTokenOptions.map((token) => (
+                                        <option key={`to-${token.symbol}`} value={token.symbol} className="bg-[#0b0b0f] text-white">
+                                          {token.symbol} · {token.name}
+                                        </option>
+                                      ))}
+                                    </select>
+                                    <div className="mt-3 flex items-center justify-between gap-3">
+                                      <div className="flex items-center gap-2.5">
+                                        <div className="relative h-9 w-9 overflow-hidden rounded-full border border-white/10 bg-white/5">
+                                          <Image src={swapToMeta.icon} alt={swapToMeta.symbol} fill className="object-cover" />
+                                        </div>
+                                        <div>
+                                          <div className="text-sm font-semibold text-white">{swapToMeta.symbol}</div>
+                                          <div className="text-xs text-gray-400">{swapToMeta.name}</div>
+                                        </div>
+                                      </div>
+                                      <div className="text-right">
+                                        <div className="text-sm font-mono text-white">{swapToMeta.balance}</div>
+                                        <div className="text-[11px] text-gray-500">Wallet</div>
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+
+                              <div className="flex h-full min-h-0 flex-col rounded-2xl border border-white/10 bg-black/20 p-4">
+                                <div className="mb-3 flex items-center justify-between">
+                                  <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">Swap Amount</span>
+                                  <button
+                                    onClick={() => {
+                                      setSwapAmount(swapFromMeta.balance);
+                                      setSwapError('');
+                                    }}
+                                    className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-400 transition-colors hover:text-white"
+                                  >
+                                    Max
+                                  </button>
+                                </div>
+                                <div className="flex h-full flex-1 flex-col justify-between">
+                                  <div className="flex items-end gap-3">
+                                    <input
+                                      value={swapAmount}
+                                      onChange={(event) => {
+                                        setSwapAmount(event.target.value);
+                                        setSwapError('');
+                                      }}
+                                      inputMode="decimal"
+                                      placeholder="0.0000"
+                                      className="w-full bg-transparent text-4xl font-mono text-white placeholder:text-gray-600 outline-none md:text-[2.7rem]"
+                                    />
+                                    <span className="pb-1.5 text-sm font-semibold text-gray-400">{swapFromToken}</span>
+                                  </div>
+
+                                  <div className="pt-4">
+                                    <div className="mb-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">Slippage</div>
+                                    <div className="flex flex-wrap gap-2">
+                                      {['0.5', '1.0', '2.0'].map((value) => (
+                                        <button
+                                          key={value}
+                                          onClick={() => setSwapSlippage(value)}
+                                          className={`rounded-full px-3 py-1.5 text-xs font-semibold transition-all ${
+                                            swapSlippage === value
+                                              ? 'bg-white text-black'
+                                              : 'bg-white/5 text-gray-300 hover:bg-white/10'
+                                          }`}
+                                        >
+                                          {value}% Slippage
+                                        </button>
+                                      ))}
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="flex h-full min-h-0 flex-col rounded-2xl border border-white/10 bg-black/25 p-4">
+                              <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">Quote</div>
+                              <div className="mt-4 flex h-full flex-1 flex-col">
+                                <div className="space-y-3">
+                                  <div className="flex items-center justify-between gap-3 text-sm">
+                                    <span className="text-gray-400">From</span>
+                                    <span className="font-mono text-white">{swapAmount || '0.0000'} {swapFromToken}</span>
+                                  </div>
+                                  <div className="flex items-center justify-between gap-3 text-sm">
+                                    <span className="text-gray-400">Expected Out</span>
+                                    <span className="font-mono text-white">
+                                      {swapUnavailableOnTestnet
+                                        ? 'Unavailable on testnet'
+                                        : !swapFromMeta.enabled || !swapToMeta.enabled
+                                        ? 'Coming soon'
+                                        : swapQuoteLoading
+                                          ? 'Quoting...'
+                                          : swapQuoteAmount
+                                            ? `${Number(swapQuoteAmount).toFixed(4)} ${swapToToken}`
+                                            : 'Awaiting input'}
+                                    </span>
+                                  </div>
+                                  <div className="flex items-center justify-between gap-3 text-sm">
+                                    <span className="text-gray-400">Price Impact</span>
+                                    <span className="text-white">{swapPriceImpact}%</span>
+                                  </div>
+                                  <div className="flex items-center justify-between gap-3 text-sm">
+                                    <span className="text-gray-400">Available</span>
+                                    <span className="font-mono text-white">{swapFromMeta.balance} {swapFromToken}</span>
+                                  </div>
+                                </div>
+
+                                <div className="mt-5 rounded-2xl border border-white/8 bg-white/[0.03] px-4 py-3">
+                                  <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">Route</div>
+                                  <div className="mt-3 space-y-2 text-sm text-gray-300">
+                                    <p>Pair: {swapFromToken} → {swapToToken}</p>
+                                    <p>Slippage: {swapSlippage}%</p>
+                                    <p>Network: {currentNetworkLabel}</p>
+                                  </div>
+                                </div>
+
+                                <div className="mt-auto min-h-[88px]">
+                                  {swapError ? (
+                                    <div className="rounded-2xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-300">
+                                      {swapError}
+                                    </div>
+                                  ) : swapTxHash ? (
+                                    <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-3">
+                                      <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-200">Latest Swap</div>
+                                      <div className="mt-2 text-sm font-mono text-white">{truncateMiddle(swapTxHash, 10, 8)}</div>
+                                    </div>
+                                  ) : (
+                                    <div className="rounded-2xl border border-white/8 bg-white/[0.03] px-4 py-3 text-sm text-gray-500">
+                                      {swapUnavailableOnTestnet
+                                        ? 'Switch back to mainnet to use swap inside this wallet surface.'
+                                        : 'Set the pair and amount, then review the quote before confirming the swap.'}
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+
+                              <div className="mt-auto pt-4">
+                                <button
+                                  onClick={handleSwapAction}
+                                  disabled={swapUnavailableOnTestnet || swapSubmitting || !swapAmount || swapFromToken === swapToToken || !swapFromMeta.enabled || !swapToMeta.enabled}
+                                  className="w-full rounded-2xl bg-white py-3.5 font-bold text-black transition-all hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-40"
+                                >
+                                  {swapUnavailableOnTestnet
+                                    ? 'Swap Unavailable on Testnet'
+                                    : swapSubmitting
+                                      ? 'Swapping...'
+                                      : !swapFromMeta.enabled || !swapToMeta.enabled
+                                        ? 'NINJA Swap Coming Soon'
+                                        : `Swap to ${swapToMeta.symbol}`}
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
+                        {walletPanel === 'history' && (
+                          <div className="flex h-full min-h-0 flex-col">
+                            <div className="flex flex-wrap gap-2">
+                              {(['all', 'send', 'receive', 'swap'] as DashboardHistoryFilter[]).map((filter) => (
+                                <button
+                                  key={filter}
+                                  onClick={() => setHistoryFilter(filter)}
+                                  className={`rounded-full px-3 py-1.5 text-xs font-semibold transition-all ${
+                                    historyFilter === filter
+                                      ? 'bg-white text-black'
+                                      : 'bg-white/5 text-gray-300 hover:bg-white/10'
+                                  }`}
+                                >
+                                  {filter === 'all' ? 'All' : filter.charAt(0).toUpperCase() + filter.slice(1)}
+                                </button>
+                              ))}
+                            </div>
+
+                            {historyError && (
+                              <div className="mt-4 rounded-2xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-300">
+                                {historyError}
+                              </div>
+                            )}
+
+                            <div className="mt-5 flex min-h-0 flex-1 flex-col">
+                              {historyLoading ? (
+                                <div className="flex flex-1 items-center justify-center">
+                                  <div className="w-10 h-10 rounded-full border-4 border-white/10 border-t-white animate-spin" />
+                                </div>
+                              ) : filteredHistoryItems.length === 0 ? (
+                                <div className="flex flex-1 items-center justify-center text-center text-sm text-gray-400">
+                                  No transactions yet. Your recent wallet activity will appear here.
+                                </div>
+                              ) : (
+                                <div className="min-h-0 flex-1 space-y-3 overflow-y-auto pr-1 scrollbar-hide">
+                                  {filteredHistoryItems.map((item) => (
+                                    <div
+                                      key={item.id}
+                                      className="rounded-2xl border border-white/10 bg-white/5 px-4 py-4"
+                                    >
+                                      <div className="flex items-start justify-between gap-4">
+                                        <div className="min-w-0">
+                                          <div className="flex items-center gap-2">
+                                            <span className="text-sm font-bold text-white capitalize">{item.type}</span>
+                                            <span className="rounded-full border border-white/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.16em] text-gray-400">
+                                              {item.chainType}
+                                            </span>
+                                          </div>
+                                          <div className="mt-1 text-sm text-gray-400">{item.address}</div>
+                                          <div className="mt-2 text-xs text-gray-500">{formatDashboardTimestamp(item.timestamp)}</div>
+                                        </div>
+                                        <div className="text-right">
+                                          <div className="text-sm font-mono text-white">{item.amount} {item.token}</div>
+                                          <div className={`mt-1 text-xs font-semibold ${
+                                            item.status === 'completed'
+                                              ? 'text-emerald-300'
+                                              : item.status === 'failed'
+                                                ? 'text-red-300'
+                                                : 'text-amber-300'
+                                          }`}>
+                                            {item.status}
+                                          </div>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        )}
+
+                        {walletPanel === 'card' && (
+                          <div className="grid h-full min-h-0 gap-4 md:grid-cols-[minmax(0,1.1fr)_280px]">
+                            <div className="flex min-h-0 flex-col gap-4">
+                              <div className="relative rounded-2xl border border-white/10 bg-white/5 p-1">
+                                <div
+                                  className={`absolute bottom-1 top-1 w-[calc(50%-0.25rem)] rounded-[0.85rem] bg-white transition-all duration-300 ${
+                                    cardPanelTab === 'pay' ? 'left-1' : 'left-[calc(50%+0rem)]'
+                                  }`}
+                                />
+                                <div className="relative grid grid-cols-2 gap-2">
+                                  <button
+                                    onClick={() => {
+                                      setCardPanelTab('pay');
+                                      setCardScanData(null);
+                                      setCardScanError('');
+                                      setCardScanState('idle');
+                                    }}
+                                    className={`rounded-[0.85rem] px-3 py-2.5 text-sm font-bold transition-all ${
+                                      cardPanelTab === 'pay' ? 'text-black' : 'text-gray-400 hover:text-white'
+                                    }`}
+                                  >
+                                    Pay
+                                  </button>
+                                  <button
+                                    onClick={() => {
+                                      setCardPanelTab('cards');
+                                      loadBoundCards();
+                                    }}
+                                    className={`rounded-[0.85rem] px-3 py-2.5 text-sm font-bold transition-all ${
+                                      cardPanelTab === 'cards' ? 'text-black' : 'text-gray-400 hover:text-white'
+                                    }`}
+                                  >
+                                    Cards
+                                  </button>
+                                </div>
+                              </div>
+
+                              {cardPanelTab === 'pay' ? (
+                                <div className="flex min-h-0 flex-1 flex-col rounded-2xl border border-white/10 bg-black/25 p-5">
+                                  <div className="flex h-full flex-col items-center justify-center text-center">
+                                    <div className="mb-6 flex items-center justify-center gap-6">
+                                      <div className="relative">
+                                        <div className="flex h-36 w-56 items-center justify-between rounded-[1.75rem] border border-white/12 bg-[linear-gradient(135deg,rgba(255,255,255,0.08),rgba(255,255,255,0.02))] p-5 shadow-[0_24px_60px_rgba(0,0,0,0.25)]">
+                                          <div className="flex h-full flex-col justify-between text-left">
+                                            <div className="h-10 w-12 rounded bg-gradient-to-br from-cyan-300/20 to-blue-500/10" />
+                                            <div>
+                                              <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-gray-500">Pass Card</div>
+                                              <div className="mt-2 h-3 w-24 rounded bg-white/8" />
+                                              <div className="mt-2 h-2.5 w-16 rounded bg-white/6" />
+                                            </div>
+                                          </div>
+                                          <svg className="h-8 w-8 text-white/40" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                                            <path strokeLinecap="round" strokeLinejoin="round" d="M8.111 16.404a5.5 5.5 0 017.778 0M12 20h.01m-7.08-7.071c3.904-3.905 10.236-3.905 14.141 0" />
+                                          </svg>
+                                        </div>
+                                      </div>
+                                      {cardScanState === 'scanning' && (
+                                        <div className="flex flex-col gap-3">
+                                          <span className="h-2.5 w-2.5 rounded-full bg-white/90 animate-pulse" />
+                                          <span className="h-2.5 w-2.5 rounded-full bg-white/70 animate-pulse [animation-delay:160ms]" />
+                                          <span className="h-2.5 w-2.5 rounded-full bg-white/50 animate-pulse [animation-delay:320ms]" />
+                                        </div>
+                                      )}
+                                    </div>
+
+                                    {cardScanState === 'success' ? (
+                                      <>
+                                        <h4 className="text-lg font-bold text-white">Card Ready</h4>
+                                        <p className="mt-2 max-w-md text-sm text-gray-400">
+                                          Card address detected. You can inject it straight into the dashboard send flow.
+                                        </p>
+
+                                        <div className="mt-5 w-full max-w-xl rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-4 text-left">
+                                          <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">Card Address</div>
+                                          <div className="mt-2 break-all font-mono text-sm text-white">{cardScanData?.address}</div>
+                                          {cardScanData?.uid && (
+                                            <div className="mt-4 border-t border-white/6 pt-3">
+                                              <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">Card UID</div>
+                                              <div className="mt-2 font-mono text-xs text-gray-400">{cardScanData.uid}</div>
+                                            </div>
+                                          )}
+                                        </div>
+
+                                        <div className="mt-5 flex flex-wrap items-center justify-center gap-3">
+                                          <button
+                                            onClick={() => {
+                                              if (!cardScanData?.address) return;
+                                              setSendRecipient(cardScanData.address);
+                                              setSendError('');
+                                              setWalletPanel('send');
+                                            }}
+                                            className="rounded-2xl bg-white px-6 py-3 text-sm font-bold text-black transition-all hover:bg-gray-100"
+                                          >
+                                            Send to This Card
+                                          </button>
+                                          <button
+                                            onClick={() => {
+                                              setCardScanData(null);
+                                              setCardScanError('');
+                                              setCardScanState('idle');
+                                            }}
+                                            className="rounded-2xl border border-white/10 bg-white/5 px-6 py-3 text-sm font-semibold text-gray-200 transition-all hover:bg-white/10 hover:text-white"
+                                          >
+                                            Scan Another
+                                          </button>
+                                          <button
+                                            onClick={() => {
+                                              setCardPanelTab('cards');
+                                              loadBoundCards();
+                                            }}
+                                            className="rounded-2xl border border-white/10 bg-white/5 px-6 py-3 text-sm font-semibold text-gray-200 transition-all hover:bg-white/10 hover:text-white"
+                                          >
+                                            Manage Cards
+                                          </button>
+                                        </div>
+                                      </>
+                                    ) : (
+                                      <>
+                                        <h4 className="text-lg font-bold text-white">
+                                          {cardScanState === 'scanning' ? 'Scanning...' : cardScanState === 'error' ? 'Scan Interrupted' : 'Ready to Scan'}
+                                        </h4>
+                                        <p className="mt-2 max-w-md text-sm text-gray-400">
+                                          {cardScanState === 'error'
+                                            ? cardScanError
+                                            : cardScanState === 'scanning'
+                                              ? 'Hold your phone steady near the card. Once the scan completes, its address can be injected directly into Send.'
+                                              : 'Tap a bound NFC card to your device to start a direct card-pay flow.'}
+                                        </p>
+
+                                        <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
+                                          <button
+                                            onClick={() => {
+                                              setCardScanData(null);
+                                              setCardScanError('');
+                                              setCardScanState('idle');
+                                            }}
+                                            className="rounded-2xl bg-white px-6 py-3 text-sm font-bold text-black transition-all hover:bg-gray-100"
+                                          >
+                                            {cardScanState === 'error' ? 'Retry Scan' : cardScanState === 'scanning' ? 'Restart Scan' : 'Start Scan'}
+                                          </button>
+                                          <button
+                                            onClick={() => {
+                                              setCardPanelTab('cards');
+                                              loadBoundCards();
+                                            }}
+                                            className="rounded-2xl border border-white/10 bg-white/5 px-6 py-3 text-sm font-semibold text-gray-200 transition-all hover:bg-white/10 hover:text-white"
+                                          >
+                                            Open Cards
+                                          </button>
+                                        </div>
+                                      </>
+                                    )}
+                                  </div>
+                                </div>
+                              ) : (
+                                <div className="min-h-0 flex-1 overflow-hidden rounded-2xl border border-white/10 bg-black/25 p-2">
+                                  <div className="h-full overflow-hidden rounded-[1.35rem] border border-white/8 bg-black">
+                                    <DashboardSurfaceFrame
+                                      src="/cards?embed=1&entry=dashboard-card"
+                                      title="Embedded cards manager"
+                                      loadingStrategy="eager"
+                                    />
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+
+                            <div className="flex min-h-0 flex-col gap-4">
+                              <div className="rounded-2xl border border-white/10 bg-black/25 p-4">
+                                <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">Cards</div>
+                                <div className="mt-4 grid grid-cols-2 gap-3">
+                                  <div className="rounded-2xl border border-white/8 bg-white/[0.03] px-4 py-3">
+                                    <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">Bound</div>
+                                    <div className="mt-2 text-2xl font-bold text-white">{boundCards.length}</div>
+                                  </div>
+                                  <div className="rounded-2xl border border-white/8 bg-white/[0.03] px-4 py-3">
+                                    <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">Active</div>
+                                    <div className="mt-2 text-2xl font-bold text-white">{activeBoundCards.length}</div>
+                                  </div>
+                                </div>
+                              </div>
+
+                              <div className="rounded-2xl border border-white/10 bg-black/25 p-4">
+                                <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">Flow</div>
+                                <div className="mt-3 space-y-2 text-sm text-gray-300">
+                                  <p>1. Scan a card with NFC.</p>
+                                  <p>2. Inject its address into Send.</p>
+                                  <p>3. Manage or bind cards in the Cards view.</p>
+                                </div>
+                              </div>
+
+                              <div className="flex min-h-0 flex-1 flex-col rounded-2xl border border-white/10 bg-black/25 p-4">
+                                <div className="flex items-center justify-between gap-3">
+                                  <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">Recent Cards</div>
+                                  <button
+                                    onClick={loadBoundCards}
+                                    className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-400 transition-colors hover:text-white"
+                                  >
+                                    Refresh
+                                  </button>
+                                </div>
+
+                                <div className="mt-4 flex-1 space-y-3">
+                                  {recentBoundCards.length === 0 ? (
+                                    <div className="flex h-full items-center justify-center rounded-2xl border border-white/8 bg-white/[0.03] px-4 py-3 text-center text-sm text-gray-500">
+                                      No bound cards yet. Open Cards to bind and manage your NFC set.
+                                    </div>
+                                  ) : (
+                                    recentBoundCards.map((card) => (
+                                      <div key={card.uid} className="rounded-2xl border border-white/8 bg-white/[0.03] px-4 py-3">
+                                        <div className="flex items-center justify-between gap-3">
+                                          <div className="min-w-0">
+                                            <div className="truncate text-sm font-bold text-white">{card.name}</div>
+                                            <div className="mt-1 text-xs font-mono text-gray-400">{card.cardNumber}</div>
+                                          </div>
+                                          <span className={`rounded-full px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] ${
+                                            card.isActive ? 'border border-emerald-400/20 bg-emerald-500/10 text-emerald-300' : 'border border-white/10 bg-white/[0.04] text-gray-400'
+                                          }`}>
+                                            {card.isActive ? 'Active' : 'Frozen'}
+                                          </span>
+                                        </div>
+                                      </div>
+                                    ))
+                                  )}
+                                </div>
+
+                                <div className="mt-4 space-y-3">
+                                  <button
+                                    onClick={() => setCardPanelTab('cards')}
+                                    className="w-full rounded-2xl border border-white/10 bg-white/5 py-3 text-sm font-semibold text-white transition-all hover:bg-white/10"
+                                  >
+                                    Manage Cards
+                                  </button>
+                                  {cardScanData?.address && (
+                                    <button
+                                      onClick={() => {
+                                        setSendRecipient(cardScanData.address || '');
+                                        setSendError('');
+                                        setWalletPanel('send');
+                                      }}
+                                      className="w-full rounded-2xl bg-white py-3 text-sm font-bold text-black transition-all hover:bg-gray-100"
+                                    >
+                                      Send to Latest Card
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
+                        {walletPanel === 'chance' && (
+                          <div className="flex h-full min-h-0 flex-col">
+                            <div className="grid flex-1 gap-4 md:grid-cols-3">
+                              {MORE_CHANCE_PLANS.map((plan) => {
+                                const isSelected = selectedChancePlan === plan.id;
+
+                                return (
+                                  <button
+                                    key={plan.id}
+                                    type="button"
+                                    onClick={() => setSelectedChancePlan(plan.id)}
+                                    className={`flex h-full min-h-[220px] flex-col rounded-[1.65rem] border px-5 py-5 text-left transition-all ${
+                                      isSelected
+                                        ? `${plan.surfaceClass} shadow-[0_18px_44px_rgba(15,23,42,0.18)]`
+                                        : 'border-white/10 bg-black/20 hover:bg-white/[0.04]'
+                                    }`}
+                                  >
+                                    <div className="flex items-start justify-between gap-3">
+                                      <div>
+                                        <div className={`text-[11px] font-semibold uppercase tracking-[0.22em] ${isSelected ? plan.accentClass : 'text-gray-500'}`}>
+                                          {plan.name}
+                                        </div>
+                                        <div className="mt-3 text-4xl font-bold text-white">{plan.chances}</div>
+                                        <div className="mt-1 text-sm text-gray-400">extra chances</div>
+                                      </div>
+                                      <div className={`rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] ${
+                                        isSelected ? 'border-white/12 bg-white/10 text-white' : 'border-white/8 bg-white/[0.03] text-gray-400'
+                                      }`}>
+                                        {isSelected ? 'Selected' : 'Choose'}
+                                      </div>
+                                    </div>
+
+                                    <p className="mt-auto pt-8 text-sm leading-6 text-gray-400">
+                                      {plan.blurb}
+                                    </p>
+                                  </button>
+                                );
+                              })}
+                            </div>
+
+                            <div className="mt-4 rounded-2xl border border-white/10 bg-black/20 px-5 py-4">
+                              <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                                <div>
+                                  <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">Selected Pack</div>
+                                  <div className="mt-2 text-lg font-bold text-white">
+                                    {MORE_CHANCE_PLANS.find((plan) => plan.id === selectedChancePlan)?.name} · {MORE_CHANCE_PLANS.find((plan) => plan.id === selectedChancePlan)?.chances} chances
+                                  </div>
+                                </div>
+                                <button
+                                  type="button"
+                                  className="rounded-2xl border border-white/10 bg-white/5 px-5 py-3 text-sm font-semibold text-white transition-all hover:bg-white/10"
+                                >
+                                  Continue
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
+                        {walletPanel === 'settings' && (
+                          <SettingsPage embeddedOverride />
+                        )}
+                      </div>
+                    </div>
+
+                    {walletPanel === 'send' && (
+                      <TransactionAuthModal
+                        isOpen={showInlineSendAuth}
+                        onClose={handleInlineSendAuthClose}
+                        onSuccess={handleInlineSendAuthSuccess}
+                        transactionType="send"
+                        variant="inline"
+                      />
+                    )}
+                    </div>
+                  </div>
+                </div>
+
+                {isWalletOverview && (
+                <div className="mt-auto grid grid-cols-4 gap-3 pt-4">
+                  {/* Send Button */}
+                  <button 
+                    onClick={() => toggleWalletPanel('send')}
+                    className="flex flex-col items-center gap-2 group"
+                  >
+                    <div className="w-14 h-14 rounded-full flex items-center justify-center bg-white shadow-lg transition-all hover:bg-gray-100 group-hover:scale-105">
+                      <svg className="w-5 h-5 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <line x1="12" y1="19" x2="12" y2="5" strokeWidth={2.5} strokeLinecap="round" />
+                        <polyline points="5 12 12 5 19 12" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    </div>
+                    <span className="text-xs font-semibold text-gray-300 transition-colors group-hover:text-white">Send</span>
+                  </button>
+
+                  {/* Receive Button */}
+                  <button 
+                    onClick={() => toggleWalletPanel('receive')}
+                    className="flex flex-col items-center gap-2 group"
+                  >
+                    <div className="w-14 h-14 rounded-full flex items-center justify-center bg-white shadow-lg transition-all hover:bg-gray-100 group-hover:scale-105">
+                      <svg className="w-5 h-5 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <line x1="12" y1="5" x2="12" y2="19" strokeWidth={2.5} strokeLinecap="round" />
+                        <polyline points="19 12 12 19 5 12" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    </div>
+                    <span className="text-xs font-semibold text-gray-300 transition-colors group-hover:text-white">Receive</span>
+                  </button>
+
+                  {/* Swap Button */}
+                  <button 
+                    onClick={() => toggleWalletPanel('swap')}
+                    className="flex flex-col items-center gap-2 group"
+                  >
+                    <div className="w-14 h-14 rounded-full flex items-center justify-center bg-white shadow-lg transition-all hover:bg-gray-100 group-hover:scale-105">
+                      <svg className="w-5 h-5 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <polyline points="16 3 21 3 21 8" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />
+                        <line x1="4" y1="20" x2="21" y2="3" strokeWidth={2.5} strokeLinecap="round" />
+                        <polyline points="21 16 21 21 16 21" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />
+                        <line x1="15" y1="15" x2="21" y2="21" strokeWidth={2.5} strokeLinecap="round" />
+                        <line x1="4" y1="4" x2="9" y2="9" strokeWidth={2.5} strokeLinecap="round" />
+                      </svg>
+                    </div>
+                    <span className="text-xs font-semibold text-gray-300 transition-colors group-hover:text-white">Swap</span>
+                  </button>
+
+                  {/* History Button */}
+                  <button 
+                    onClick={() => toggleWalletPanel('history')}
+                    className="flex flex-col items-center gap-2 group"
+                  >
+                    <div className="w-14 h-14 rounded-full flex items-center justify-center bg-white shadow-lg transition-all hover:bg-gray-100 group-hover:scale-105">
+                      <svg className="w-5 h-5 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <circle cx="12" cy="12" r="10" strokeWidth={2.5} strokeLinecap="round" />
+                        <polyline points="12 6 12 12 16 14" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    </div>
+                    <span className="text-xs font-semibold text-gray-300 transition-colors group-hover:text-white">History</span>
+                  </button>
+                </div>
+                )}
+              </div>
+            </div>
+              </div>
+
+              <div
+                className={`absolute inset-0 transition-all duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] ${
+                  isAiStage
+                    ? 'translate-x-0 scale-100 opacity-100'
+                    : 'pointer-events-none translate-x-[calc(100%+1.25rem)] scale-[0.94] opacity-0'
+                }`}
+              >
+                <div className="bg-black rounded-2xl border border-white/10 relative overflow-hidden p-4 sm:p-5 h-full flex flex-col">
+                  <div className="absolute bottom-0 left-0 w-32 h-32 rounded-full bg-gradient-to-tr from-cyan-500/5 to-transparent blur-2xl" />
+                  {renderCompactAssetSurface('left')}
+                </div>
+              </div>
+            </div>
+
+            <div className={`relative ${assetStageClassName}`}>
+              <div
+                className={`absolute inset-0 transition-all duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] ${
+                  isAiStage || isFaucetStage
+                    ? 'pointer-events-none translate-x-10 scale-[0.96] opacity-0'
+                    : isCardPanel
+                      ? 'translate-x-6 scale-[0.97] opacity-100'
+                    : 'translate-x-0 scale-100 opacity-100'
+                }`}
+              >
+            <div className="bg-black rounded-2xl border border-white/10 relative overflow-hidden p-4 sm:p-5 h-full flex flex-col">
+              <div className="absolute bottom-0 left-0 w-32 h-32 bg-gradient-to-tr from-cyan-500/5 to-transparent rounded-full blur-2xl"></div>
+              {isCardPanel ? (
+                renderCompactAssetSurface('right')
+              ) : (
+              <div key={`asset-surface-${walletNetworkMode}-${assetSurfaceMotionKey}`} className="dashboard-surface-enter relative flex flex-1 flex-col">
         {/* Asset Tabs - Smooth Sliding Background */}
-        <div className="relative mb-6 p-1 bg-white/5 rounded-xl">
+        <div className="relative mb-4 p-1 bg-white/5 rounded-xl">
           {/* Sliding Background */}
           <div 
-            className={`absolute top-1 bottom-1 w-[calc(33.333%-0.333rem)] bg-white rounded-lg transition-all duration-300 ease-out shadow-lg ${
-              assetTab === 'tokens' ? 'left-1' : 
-              assetTab === 'nfts' ? 'left-[calc(33.333%+0.166rem)]' : 
-              'left-[calc(66.666%+0.333rem)]'
-            }`}
+            className="absolute top-1 bottom-1 bg-white rounded-lg transition-all duration-300 ease-out shadow-lg"
+            style={{
+              width: 'calc((100% - 1.5rem) / 4)',
+              left: `calc(0.25rem + ${assetTabIndex} * ((100% - 1.5rem) / 4 + 0.5rem))`,
+            }}
           />
           
           {/* Tab Buttons */}
           <div className="relative flex gap-2">
             <button 
               onClick={() => setAssetTab('tokens')}
-              className={`flex-1 flex items-center justify-center gap-2 py-3 px-4 rounded-lg font-bold text-sm transition-all duration-300 ${
+              className={`flex-1 flex items-center justify-center gap-1.5 py-3 px-2 sm:px-4 rounded-lg font-bold text-xs sm:text-sm transition-all duration-300 ${
                 assetTab === 'tokens' 
                   ? 'text-black' 
                   : 'text-gray-400 hover:text-white'
@@ -500,7 +2969,7 @@ export default function DashboardPage() {
             </button>
             <button 
               onClick={() => setAssetTab('nfts')}
-              className={`flex-1 flex items-center justify-center gap-2 py-3 px-4 rounded-lg font-bold text-sm transition-all duration-300 ${
+              className={`flex-1 flex items-center justify-center gap-1.5 py-3 px-2 sm:px-4 rounded-lg font-bold text-xs sm:text-sm transition-all duration-300 ${
                 assetTab === 'nfts' 
                   ? 'text-black' 
                   : 'text-gray-400 hover:text-white'
@@ -514,7 +2983,7 @@ export default function DashboardPage() {
             </button>
             <button 
               onClick={() => setAssetTab('defi')}
-              className={`flex-1 flex items-center justify-center gap-2 py-3 px-4 rounded-lg font-bold text-sm transition-all duration-300 ${
+              className={`flex-1 flex items-center justify-center gap-1.5 py-3 px-2 sm:px-4 rounded-lg font-bold text-xs sm:text-sm transition-all duration-300 ${
                 assetTab === 'defi' 
                   ? 'text-black' 
                   : 'text-gray-400 hover:text-white'
@@ -525,83 +2994,141 @@ export default function DashboardPage() {
               </svg>
               <span>DeFi</span>
             </button>
+            <button 
+              onClick={() => setAssetTab('earn')}
+              className={`flex-1 flex items-center justify-center gap-1.5 py-3 px-2 sm:px-4 rounded-lg font-bold text-xs sm:text-sm transition-all duration-300 ${
+                assetTab === 'earn' 
+                  ? 'text-black' 
+                  : 'text-gray-400 hover:text-white'
+              }`}
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v18M7.5 7.5h5.25a2.75 2.75 0 010 5.5h-1.5a2.75 2.75 0 000 5.5H17" />
+              </svg>
+              <span>Earn</span>
+            </button>
           </div>
         </div>
 
         {/* Asset List */}
-        <div className="space-y-3">
+        <div className="min-h-0 flex-1 overflow-y-auto pr-1">
           {assetTab === 'tokens' && (
-            <>
-              <div className="flex items-center gap-4 p-4 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10 transition-all cursor-pointer">
-                <div className="w-12 h-12 rounded-full flex items-center justify-center overflow-hidden">
-                  <Image 
-                    src="/injswap.png" 
-                    alt="INJ" 
-                    width={48} 
-                    height={48}
-                    className="w-full h-full object-contain"
-                  />
-                </div>
-                <div className="flex-1">
-                  <div className="font-bold mb-1">INJ</div>
-                  <div className="text-sm text-gray-400">{tokenBalances.INJ} INJ</div>
-                </div>
-                <div className="text-right">
-                  <div className="font-bold font-mono">${(parseFloat(tokenBalances.INJ) * injPrice).toFixed(2)}</div>
-                  <div className={`text-sm ${injPriceChange24h >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                    {injPriceChange24h >= 0 ? '+' : ''}{injPriceChange24h.toFixed(2)}%
-                  </div>
-                </div>
-              </div>
+            <div className="space-y-3">
+              {dashboardTokenCards.map((token) => (
+                <div key={token.symbol} className="relative" style={{ perspective: '1400px' }}>
+                  <div
+                    onClick={() => setFlippedTokenCard((current) => (current === token.symbol ? null : token.symbol))}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault();
+                        setFlippedTokenCard((current) => (current === token.symbol ? null : token.symbol));
+                      }
+                    }}
+                    className="relative h-[84px] w-full cursor-pointer text-left"
+                    role="button"
+                    tabIndex={0}
+                    style={{ transformStyle: 'preserve-3d' }}
+                  >
+                    <div
+                      className={`absolute inset-0 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 transition-all duration-500 [backface-visibility:hidden] ${
+                        flippedTokenCard === token.symbol ? 'pointer-events-none invisible z-0 opacity-0' : 'visible z-10 opacity-100'
+                      }`}
+                      style={{
+                        transform: flippedTokenCard === token.symbol ? 'rotateY(180deg)' : 'rotateY(0deg)',
+                        backfaceVisibility: 'hidden',
+                        WebkitBackfaceVisibility: 'hidden',
+                      }}
+                    >
+                      <div className="flex h-full items-center gap-3">
+                        <div className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full">
+                          <Image
+                            src={token.icon}
+                            alt={token.symbol}
+                            width={40}
+                            height={40}
+                            className="h-full w-full object-contain"
+                          />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="mb-0.5 flex items-center gap-1.5">
+                            <div className="font-bold">{token.symbol}</div>
+                            <span className="text-[9px] uppercase tracking-[0.16em] text-gray-500">Tap for info</span>
+                          </div>
+                          <div className="text-[13px] text-gray-400">{token.balance}</div>
+                        </div>
+                        <div className="text-right">
+                          <div className="font-bold font-mono text-[13px]">{token.usdValue}</div>
+                          <div className={`text-[13px] ${token.changeClass}`}>{token.change}</div>
+                        </div>
+                      </div>
+                    </div>
 
-              <div className="flex items-center gap-4 p-4 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10 transition-all cursor-pointer">
-                <div className="w-12 h-12 rounded-xl flex items-center justify-center overflow-hidden">
-                  <Image 
-                    src="/USDT_Logo.png" 
-                    alt="USDT" 
-                    width={48} 
-                    height={48}
-                    className="w-full h-full object-contain"
-                  />
-                </div>
-                <div className="flex-1">
-                  <div className="font-bold mb-1">USDT</div>
-                  <div className="text-sm text-gray-400">{tokenBalances.USDT} USDT</div>
-                </div>
-                <div className="text-right">
-                  <div className="font-bold font-mono">${tokenBalances.USDT}</div>
-                  <div className={`text-sm ${usdtPriceChange24h >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                    {usdtPriceChange24h >= 0 ? '+' : ''}{usdtPriceChange24h.toFixed(2)}%
+                    <div
+                      className={`absolute inset-0 rounded-2xl border px-4 py-3 transition-all duration-500 ${
+                        isLight
+                          ? 'border-slate-200/80 bg-[linear-gradient(180deg,rgba(255,255,255,0.96),rgba(241,245,255,0.92))] shadow-[0_12px_26px_rgba(148,163,184,0.12)]'
+                          : 'border-white/10 bg-[linear-gradient(180deg,rgba(8,10,18,0.98),rgba(10,13,20,0.96))]'
+                      } ${
+                        flippedTokenCard === token.symbol ? 'visible z-20 opacity-100' : 'pointer-events-none invisible z-0 opacity-0'
+                      }`}
+                      style={{
+                        transform: flippedTokenCard === token.symbol ? 'rotateY(0deg)' : 'rotateY(-180deg)',
+                        transformStyle: 'preserve-3d',
+                        backfaceVisibility: 'hidden',
+                        WebkitBackfaceVisibility: 'hidden',
+                      }}
+                    >
+                      <div className="flex h-full items-center gap-3">
+                        <div className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full">
+                          <Image
+                            src={token.icon}
+                            alt={token.symbol}
+                            width={40}
+                            height={40}
+                            className="h-full w-full object-contain"
+                          />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className={`mb-0.5 font-bold ${isLight ? 'text-slate-900' : 'text-white'}`}>{token.symbol}</div>
+                          <div className={`mb-0.5 text-[9px] uppercase tracking-[0.14em] ${isLight ? 'text-slate-400' : 'text-gray-500'}`}>Contract</div>
+                          <div className={`truncate font-mono text-[13px] ${isLight ? 'text-slate-900' : 'text-white'}`}>
+                            {token.contractValue}
+                          </div>
+                        </div>
+                          {token.copyValue && (
+                            <button
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                if (!token.copyValue) return;
+                                navigator.clipboard.writeText(token.copyValue);
+                                setCopiedTokenInfo(token.symbol);
+                                setTimeout(() => {
+                                  setCopiedTokenInfo((current) => (current === token.symbol ? null : current));
+                                }, 1600);
+                              }}
+                              className={`rounded-lg border px-2 py-1 text-[10px] font-semibold transition-all ${
+                                copiedTokenInfo === token.symbol
+                                  ? isLight
+                                    ? 'border-emerald-300/70 bg-emerald-500/10 text-emerald-700'
+                                    : 'border-emerald-400/30 bg-emerald-500/10 text-emerald-300'
+                                  : isLight
+                                    ? 'border-slate-200/80 bg-slate-900/[0.03] text-slate-700 hover:bg-slate-900/[0.06]'
+                                    : 'border-white/10 bg-white/5 text-white hover:bg-white/10'
+                              }`}
+                            >
+                              {copiedTokenInfo === token.symbol ? 'Copied' : 'Copy'}
+                            </button>
+                          )}
+                      </div>
+                    </div>
                   </div>
                 </div>
-              </div>
-
-              <div className="flex items-center gap-4 p-4 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10 transition-all cursor-pointer">
-                <div className="w-12 h-12 rounded-xl flex items-center justify-center overflow-hidden">
-                  <Image 
-                    src="/USDC_Logo.png" 
-                    alt="USDC" 
-                    width={48} 
-                    height={48}
-                    className="w-full h-full object-contain"
-                  />
-                </div>
-                <div className="flex-1">
-                  <div className="font-bold mb-1">USDC</div>
-                  <div className="text-sm text-gray-400">{tokenBalances.USDC} USDC</div>
-                </div>
-                <div className="text-right">
-                  <div className="font-bold font-mono">${tokenBalances.USDC}</div>
-                  <div className={`text-sm ${usdcPriceChange24h >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                    {usdcPriceChange24h >= 0 ? '+' : ''}{usdcPriceChange24h.toFixed(2)}%
-                  </div>
-                </div>
-              </div>
-            </>
+              ))}
+            </div>
           )}
 
           {assetTab === 'nfts' && (
-            <>
+            <div className="space-y-3">
               {nftsLoading ? (
                 <div className="flex items-center justify-center py-16">
                   <div className="w-12 h-12 border-4 border-white/20 border-t-white rounded-full animate-spin"></div>
@@ -654,11 +3181,11 @@ export default function DashboardPage() {
                   ))}
                 </>
               )}
-            </>
+            </div>
           )}
 
           {assetTab === 'defi' && (
-            <>
+            <div className="space-y-3">
               {stakingLoading ? (
                 <div className="flex items-center justify-center py-16">
                   <div className="w-12 h-12 border-4 border-white/20 border-t-white rounded-full animate-spin"></div>
@@ -717,10 +3244,208 @@ export default function DashboardPage() {
                   <p className="text-xs text-gray-500">Your DeFi positions and activities will appear here</p>
                 </div>
               )}
-            </>
+            </div>
+          )}
+
+          {assetTab === 'earn' && (
+            <div className="flex h-full items-start justify-center">
+              <div className="h-full w-full max-w-[760px]">
+                <NinjaMinerGame walletAddress={address} onOpenMoreChance={openMoreChancePanel} />
+              </div>
+            </div>
           )}
         </div>
       </div>
+              )}
+            </div>
+              </div>
+
+              <div
+                className={`absolute inset-0 transition-all duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] ${
+                  isFaucetStage
+                    ? 'translate-x-0 scale-100 opacity-100'
+                    : 'pointer-events-none translate-x-10 scale-[0.98] opacity-0'
+                }`}
+              >
+                <div className="bg-black rounded-2xl border border-white/10 relative overflow-hidden h-full flex flex-col p-4 sm:p-5">
+                  <div className="absolute bottom-0 left-0 h-32 w-32 rounded-full bg-gradient-to-tr from-cyan-500/8 to-transparent blur-2xl" />
+                  <div className="absolute top-0 right-0 h-32 w-32 rounded-full bg-gradient-to-bl from-violet-500/8 to-transparent blur-2xl" />
+                  <div className="relative flex min-h-0 flex-1 flex-col">
+                    <div className="relative mb-4 rounded-xl bg-white/5 p-1">
+                      <div
+                        className="absolute h-[calc(100%-0.5rem)] rounded-lg bg-white transition-all duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]"
+                        style={{
+                          width: 'calc((100% - 0.5rem) / 2)',
+                          left: faucetCategory === 'popular'
+                            ? '0.25rem'
+                            : 'calc(0.25rem + (100% - 0.5rem) / 2)',
+                        }}
+                      />
+                      <div className="relative flex gap-2">
+                        <button
+                          onClick={() => setFaucetCategory('popular')}
+                          className={`flex-1 rounded-lg px-3 py-3 text-xs font-bold transition-all duration-300 sm:text-sm ${
+                            faucetCategory === 'popular' ? 'text-black' : 'text-gray-400 hover:text-white'
+                          }`}
+                        >
+                          Popular
+                        </button>
+                        <button
+                          onClick={() => setFaucetCategory('others')}
+                          className={`flex-1 rounded-lg px-3 py-3 text-xs font-bold transition-all duration-300 sm:text-sm ${
+                            faucetCategory === 'others' ? 'text-black' : 'text-gray-400 hover:text-white'
+                          }`}
+                        >
+                          Others
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="grid gap-2.5">
+                      {filteredFaucetCards.map((token) => {
+                        const isClaiming = faucetClaimingId === token.id;
+                        const isClaimed = faucetClaimLocked && faucetClaimedId === token.id;
+                        const isLocked = faucetClaimLocked && faucetClaimedId !== token.id;
+
+                        return (
+                          <button
+                            key={token.id}
+                            onClick={() => void handleFaucetTokenClaim(token.id)}
+                            disabled={isClaiming || faucetClaimLocked || !address}
+                            className={`flex h-[84px] items-center gap-3 rounded-2xl border px-4 py-3 text-left transition-all ${
+                              isClaimed
+                                ? 'border-slate-500/20 bg-slate-500/10 text-gray-400'
+                                : isLocked
+                                  ? 'border-white/6 bg-white/[0.02] text-gray-500 opacity-45 grayscale'
+                                  : isClaiming
+                                    ? 'border-cyan-400/20 bg-cyan-500/10 text-white'
+                                    : 'border-white/10 bg-white/5 text-white hover:bg-white/[0.08] hover:border-white/18'
+                            } ${!address ? 'cursor-not-allowed opacity-50' : ''}`}
+                          >
+                            <div className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full">
+                              <Image
+                                src={token.icon}
+                                alt={token.label}
+                                width={40}
+                                height={40}
+                                className="h-full w-full object-contain"
+                              />
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <div className="mb-0.5 font-bold">{token.label}</div>
+                              <div className={`${isClaimed || isLocked ? 'text-gray-500' : 'text-gray-400'} text-[13px]`}>
+                                {token.amountLabel}
+                              </div>
+                            </div>
+                            <div className="text-right">
+                              <div className={`font-bold font-mono text-[13px] ${
+                                isClaimed || isLocked ? 'text-gray-500' : 'text-white'
+                              }`}>
+                                {isClaiming ? '...' : isClaimed ? 'Claimed' : isLocked ? 'Locked' : 'Claim'}
+                              </div>
+                              <div className={`text-[13px] ${
+                                isClaimed
+                                  ? 'text-gray-500'
+                                  : isLocked
+                                    ? 'text-gray-600'
+                                    : isClaiming
+                                      ? 'text-cyan-300'
+                                      : 'text-green-400'
+                              }`}>
+                                {isClaiming ? 'Processing' : isClaimed ? 'Done' : isLocked ? 'Unavailable' : 'Ready'}
+                              </div>
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    {faucetError && (
+                      <div className="mt-3 rounded-2xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-300">
+                        {faucetError}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <div
+                className={`absolute inset-0 transition-all duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] ${
+                  isAiStage
+                    ? 'translate-x-0 scale-100 opacity-100'
+                    : 'pointer-events-none translate-x-10 scale-[0.98] opacity-0'
+                }`}
+              >
+                <div className="bg-black rounded-2xl relative overflow-hidden h-full">
+                  <div className="absolute bottom-0 right-0 h-32 w-32 rounded-full bg-gradient-to-tl from-fuchsia-500/10 to-transparent blur-2xl" />
+                  <div className="absolute top-0 left-0 h-32 w-32 rounded-full bg-gradient-to-br from-cyan-500/8 to-transparent blur-2xl" />
+                  <div className="relative h-full overflow-hidden">
+                    <DashboardSurfaceFrame
+                      src="/agents?embed=1&compact=1"
+                      title="Embedded asset agent"
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div className="mt-6">
+            <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-black p-4 sm:p-5">
+              <div className="absolute bottom-0 left-0 h-32 w-32 rounded-full bg-gradient-to-tr from-cyan-500/5 to-transparent blur-2xl" />
+              <div className="absolute top-0 right-0 h-32 w-32 rounded-full bg-gradient-to-bl from-violet-500/5 to-transparent blur-2xl" />
+
+              <div className="relative">
+                <div className="overflow-hidden rounded-[1.5rem] border border-white/10 bg-black">
+                  <div className="relative h-[248px] overflow-hidden rounded-[1.35rem] bg-black sm:h-[228px] lg:h-[210px]">
+                    <div
+                      className={`absolute inset-0 transition-all duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] ${
+                        isAiStage
+                          ? 'pointer-events-none -translate-x-10 scale-[0.98] opacity-0'
+                          : 'translate-x-0 scale-100 opacity-100'
+                      }`}
+                    >
+                      <DashboardSurfaceFrame
+                        src="/discover?embed=1"
+                        title="Embedded discover"
+                        className="bg-black"
+                        loadingStrategy="eager"
+                      />
+                    </div>
+
+                    <div
+                      className={`absolute inset-0 transition-all duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] ${
+                        isAiStage
+                          ? 'translate-x-0 scale-100 opacity-100'
+                          : 'pointer-events-none translate-x-10 scale-[0.98] opacity-0'
+                      }`}
+                    >
+                      <DashboardSurfaceFrame
+                        src="/discover?embed=1&mode=ai"
+                        title="Embedded AI discover"
+                        className="bg-black"
+                        loadingStrategy="eager"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+        </div>
+      </div>
+
+      <TransactionAuthModal
+        isOpen={showAuthModal}
+        onClose={() => {
+          setShowAuthModal(false);
+          setPendingAuthAction(null);
+          setPostAuthAction(null);
+        }}
+        onSuccess={handleTransactionAuthSuccess}
+        transactionType={pendingAuthAction ?? 'send'}
+      />
 
       {/* NFT Detail Modal */}
       {selectedNFT && (
@@ -929,89 +3654,8 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* Bottom Navigation */}
-      <div className="fixed bottom-0 left-0 right-0 bg-black/95 border-t border-white/10 backdrop-blur-lg">
-        <div className="max-w-7xl mx-auto px-4">
-          <div className="grid grid-cols-3 gap-4 py-3">
-            {/* Settings */}
-            <button
-              onClick={() => {
-                setActiveTab('settings');
-                router.push('/settings');
-              }}
-              className={`flex flex-col items-center gap-1 py-2 rounded-xl transition-all ${
-                activeTab === 'settings' 
-                  ? 'text-white' 
-                  : 'text-gray-500 hover:text-gray-300'
-              }`}
-            >
-              <div className={`p-2 rounded-xl transition-all ${
-                activeTab === 'settings' 
-                  ? 'bg-white/10' 
-                  : 'bg-transparent'
-              }`}>
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                </svg>
-              </div>
-              <span className="text-xs font-semibold">Settings</span>
-            </button>
-
-            {/* Wallet (Default) */}
-            <button
-              onClick={() => setActiveTab('wallet')}
-              className={`flex flex-col items-center gap-1 py-2 rounded-xl transition-all ${
-                activeTab === 'wallet' 
-                  ? 'text-white' 
-                  : 'text-gray-500 hover:text-gray-300'
-              }`}
-            >
-              <div className={`p-2 rounded-xl transition-all ${
-                activeTab === 'wallet' 
-                  ? 'bg-white/10' 
-                  : 'bg-transparent'
-              }`}>
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <rect x="2" y="6" width="20" height="14" rx="2" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
-                  <path d="M2 10h20" strokeWidth={2} strokeLinecap="round" />
-                  <circle cx="18" cy="15" r="1.5" fill="currentColor" />
-                </svg>
-              </div>
-              <span className="text-xs font-semibold">Wallet</span>
-            </button>
-
-            {/* Discover */}
-            <button
-              onClick={() => {
-                setActiveTab('discover');
-                router.push('/discover');
-              }}
-              className={`flex flex-col items-center gap-1 py-2 rounded-xl transition-all ${
-                activeTab === 'discover' 
-                  ? 'text-white' 
-                  : 'text-gray-500 hover:text-gray-300'
-              }`}
-            >
-              <div className={`p-2 rounded-xl transition-all ${
-                activeTab === 'discover' 
-                  ? 'bg-white/10' 
-                  : 'bg-transparent'
-              }`}>
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <circle cx="12" cy="12" r="10" strokeWidth={2} strokeLinecap="round" />
-                  <path d="M8 12h8M12 8v8" strokeWidth={2} strokeLinecap="round" />
-                  <path d="M15 9l-3 3 3 3" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              </div>
-              <span className="text-xs font-semibold">Discover</span>
-            </button>
-          </div>
-        </div>
-      </div>
-      </div>
-    </div>
+        </>
+      ) : null}
+    </LoadingSpinner>
   );
 }
-
-const styles: Record<string, React.CSSProperties> = {};

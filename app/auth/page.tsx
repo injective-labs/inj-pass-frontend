@@ -1,7 +1,6 @@
 'use client';
 
-import { useEffect, useState, Suspense } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useEffect, useState } from 'react';
 import { unlockByPasskey } from '@/wallet/key-management/createByPasskey';
 import { loadWallet } from '@/wallet/keystore/storage';
 import { decryptKey } from '@/wallet/keystore';
@@ -28,10 +27,23 @@ function hashPersonalMessage(message: string): Uint8Array {
  */
 
 function AuthPageContent() {
-  const searchParams = useSearchParams();
-  const requestId = searchParams.get('requestId');
-  const originParam = searchParams.get('origin');
-  const action = searchParams.get('action') || 'connect'; // 'connect', 'sign', or 'sign_persistent'
+  const [query] = useState(() => {
+    if (typeof window === 'undefined') {
+      return {
+        requestId: null as string | null,
+        originParam: null as string | null,
+        action: 'connect',
+      };
+    }
+
+    const params = new URLSearchParams(window.location.search);
+    return {
+      requestId: params.get('requestId'),
+      originParam: params.get('origin'),
+      action: params.get('action') || 'connect',
+    };
+  });
+  const { requestId, originParam, action } = query;
   
   const [status, setStatus] = useState<'waiting' | 'sign_pending' | 'processing' | 'success' | 'error' | 'ready'>('waiting');
   const [error, setError] = useState('');
@@ -511,13 +523,5 @@ function AuthPageContent() {
 }
 
 export default function AuthPage() {
-  return (
-    <Suspense fallback={
-      <div className="min-h-screen bg-gradient-to-br from-purple-900 via-purple-800 to-indigo-900 flex items-center justify-center">
-        <div className="animate-spin h-16 w-16 border-4 border-white/20 border-t-white rounded-full"></div>
-      </div>
-    }>
-      <AuthPageContent />
-    </Suspense>
-  );
+  return <AuthPageContent />;
 }

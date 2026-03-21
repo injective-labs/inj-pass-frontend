@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { INJECTIVE_MAINNET } from '@/types/chain';
+import { INJECTIVE_MAINNET, INJECTIVE_TESTNET } from '@/types/chain';
 
 /**
  * API Route to proxy Blockscout API requests
@@ -8,6 +8,7 @@ import { INJECTIVE_MAINNET } from '@/types/chain';
 export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
   const address = searchParams.get('address');
+  const network = searchParams.get('network');
 
   if (!address) {
     return NextResponse.json(
@@ -17,9 +18,10 @@ export async function GET(request: NextRequest) {
   }
 
   try {
+    const activeChain = network === 'testnet' ? INJECTIVE_TESTNET : INJECTIVE_MAINNET;
     // Fetch from Blockscout API server-side - MAINNET
     // Note: Blockscout API is on a separate domain from the explorer frontend
-    const apiUrl = `${INJECTIVE_MAINNET.explorerApiUrl}/api/v2/addresses/${address}/transactions`;
+    const apiUrl = `${activeChain.explorerApiUrl}/api/v2/addresses/${address}/transactions`;
     
     console.log(`[API] Fetching transactions from: ${apiUrl}`);
     

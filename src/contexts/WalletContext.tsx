@@ -4,10 +4,13 @@
 
 'use client';
 
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import { LocalKeystore } from '@/types/wallet';
 import { loadWallet, hasWallet, deleteWallet } from '@/wallet/keystore';
 import { hasValidSession, autoRefreshToken, logout as logoutService } from '@/services/passkey';
+
+const LAST_TX_AUTH_KEY = 'injpass_last_tx_auth';
+const AUTO_LOCK_KEY = 'auto_lock_minutes';
 
 interface WalletContextType {
   isUnlocked: boolean;
@@ -20,6 +23,10 @@ interface WalletContextType {
   logout: () => Promise<void>;
   checkExistingWallet: () => boolean;
   hasValidToken: () => Promise<boolean>;
+  /** Extend the PIN-free transaction window (call after each signed tx). */
+  resetTxAuth: () => void;
+  /** Clear only the signing key from memory (session token stays valid). */
+  clearSigningKey: () => void;
 }
 
 const WalletContext = createContext<WalletContextType | undefined>(undefined);
@@ -67,12 +74,39 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     checkSession();
   }, []);
 
+  const resetTxAuth = useCallback(() => {
+    localStorage.setItem(LAST_TX_AUTH_KEY, Date.now().toString());
+  }, []);
+
+  const clearSigningKey = useCallback(() => {
+    setPrivateKey(null);
+  }, []);
+
   const unlock = (pk: Uint8Array, ks: LocalKeystore) => {
     setPrivateKey(pk);
     setKeystore(ks);
     setAddress(ks.address);
     setIsUnlocked(true);
+    // Stamp the tx-auth timestamp so the PIN-free window starts now
+    localStorage.setItem(LAST_TX_AUTH_KEY, Date.now().toString());
   };
+
+  // Auto-clear signing key when the PIN-free window expires
+  useEffect(() => {
+    if (!privateKey) return;
+
+    const tick = () => {
+      const autoLockMinutes = parseInt(localStorage.getItem(AUTO_LOCK_KEY) ?? '5', 10);
+      if (autoLockMinutes <= 0) return; // 0 = never auto-clear
+      const lastAuth = parseInt(localStorage.getItem(LAST_TX_AUTH_KEY) ?? '0', 10);
+      if (Date.now() - lastAuth > autoLockMinutes * 60 * 1000) {
+        setPrivateKey(null); // clear key; isUnlocked / session token unaffected
+      }
+    };
+
+    const id = setInterval(tick, 15_000);
+    return () => clearInterval(id);
+  }, [privateKey]);
 
   const lock = () => {
     setPrivateKey(null);
@@ -106,6 +140,8 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         logout,
         checkExistingWallet,
         hasValidToken,
+        resetTxAuth,
+        clearSigningKey,
       }}
     >
       {children}
