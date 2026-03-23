@@ -48,11 +48,16 @@ function getAuthHeader(): HeadersInit {
  * Sync NIJIA from tap game to backend
  */
 export async function syncPoints(earnedNinjia: number): Promise<SyncResponse> {
+  const safeEarnedNinjia = Number(earnedNinjia);
+  if (!Number.isFinite(safeEarnedNinjia) || safeEarnedNinjia <= 0) {
+    return { success: false, error: 'Invalid earnedNinjia' };
+  }
+
   try {
     const response = await fetch(`${API_BASE_URL}/points/sync`, {
       method: 'POST',
       headers: getAuthHeader(),
-      body: JSON.stringify({ earnedNinjia }),
+      body: JSON.stringify({ earnedNinjia: safeEarnedNinjia }),
     });
 
     if (!response.ok) {
@@ -82,7 +87,8 @@ export async function getBalance(): Promise<number> {
     }
 
     const data: BalanceResponse = await response.json();
-    return data.balance;
+    const safeBalance = Number((data as { balance?: unknown })?.balance);
+    return Number.isFinite(safeBalance) ? safeBalance : 0;
   } catch (error) {
     console.error('[Points] Get balance failed:', error);
     return 0;

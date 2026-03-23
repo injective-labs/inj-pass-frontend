@@ -72,6 +72,7 @@ export default function WelcomePage() {
   const [error, setError] = useState('');
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [walletNameInput, setWalletNameInput] = useState('');
+  const [inviteCodeInput, setInviteCodeInput] = useState('');
   const [walletExists, setWalletExists] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -117,6 +118,7 @@ export default function WelcomePage() {
   const closeCreatePanel = () => {
     setShowCreateModal(false);
     setWalletNameInput('');
+    setInviteCodeInput('');
     setError('');
   };
 
@@ -203,7 +205,11 @@ export default function WelcomePage() {
     setError('');
 
     try {
-      const result = await createByPasskey(walletNameInput.trim());
+      const normalizedInviteCode = inviteCodeInput.trim();
+      const result = await createByPasskey(
+        walletNameInput.trim(),
+        normalizedInviteCode.length > 0 ? normalizedInviteCode : undefined,
+      );
       const { loadWallet } = await import('@/wallet/keystore');
       const keystore = loadWallet();
 
@@ -579,6 +585,21 @@ export default function WelcomePage() {
                             }
                             if (e.key === 'Escape') {
                               closeCreatePanel();
+                            }
+                          }}
+                        />
+                      </div>
+
+                      <div className="mt-3 rounded-[1.25rem] border border-white/10 bg-black/25 px-4 py-3.5">
+                        <input
+                          type="text"
+                          value={inviteCodeInput}
+                          onChange={(e) => setInviteCodeInput(e.target.value)}
+                          placeholder="Invite code (optional)"
+                          className="w-full bg-transparent text-sm font-semibold text-white placeholder:text-slate-600 focus:outline-none"
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' && walletNameInput.trim()) {
+                              handleCreateWallet();
                             }
                           }}
                         />

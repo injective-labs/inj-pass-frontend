@@ -1,4 +1,4 @@
-import { getAuthToken } from './passkey';
+import { getAuthToken, refreshToken } from './passkey';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL;
 
@@ -89,12 +89,43 @@ export interface ConversationDetail {
 /**
  * Get auth header with Bearer token
  */
-function getAuthHeader(): HeadersInit {
-  const token = getAuthToken();
+function getAuthHeader(token?: string | null): HeadersInit {
+  const authToken = token ?? getAuthToken();
   return {
     'Content-Type': 'application/json',
-    ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+    ...(authToken ? { 'Authorization': `Bearer ${authToken}` } : {}),
   };
+}
+
+async function fetchWithAuthRetry(
+  url: string,
+  init: RequestInit,
+): Promise<Response> {
+  const token = getAuthToken();
+  const firstResponse = await fetch(url, {
+    ...init,
+    headers: {
+      ...getAuthHeader(token),
+      ...(init.headers || {}),
+    },
+  });
+
+  if (firstResponse.status !== 401 || !token) {
+    return firstResponse;
+  }
+
+  const newToken = await refreshToken(token);
+  if (!newToken) {
+    return firstResponse;
+  }
+
+  return fetch(url, {
+    ...init,
+    headers: {
+      ...getAuthHeader(newToken),
+      ...(init.headers || {}),
+    },
+  });
 }
 
 // ─── API Functions ────────────────────────────────────────────────────────────
@@ -105,11 +136,19 @@ function getAuthHeader(): HeadersInit {
  */
 export async function recordChat(request: ChatRecordRequest): Promise<ChatRecordResponse> {
   try {
-    const response = await fetch(`${API_BASE_URL}/ai/chat/record`, {
+    const response = await fetchWithAuthRetry(`${API_BASE_URL}/ai/chat/record`, {
       method: 'POST',
-      headers: getAuthHeader(),
       body: JSON.stringify(request),
     });
+
+    if (response.status === 401) {
+      return {
+        ok: false,
+        conversationId: request.conversationId || '',
+        balance: 0,
+        error: 'Unauthorized',
+      };
+    }
 
     if (!response.ok) {
       const error = await response.json().catch(() => ({ message: 'Record failed' }));
@@ -117,11 +156,21 @@ export async function recordChat(request: ChatRecordRequest): Promise<ChatRecord
         ok: false,
         conversationId: request.conversationId || '',
         balance: 0,
-        error: error.message || 'Record failed',
+        error: error.error || error.message || 'Record failed',
       };
     }
 
-    return response.json();
+    const result = await response.json();
+    if (result?.ok === false && result?.error === 'Unauthorized') {
+      return {
+        ok: false,
+        conversationId: request.conversationId || '',
+        balance: 0,
+        error: 'Unauthorized',
+      };
+    }
+
+    return result;
   } catch (error) {
     console.error('[AI] Record chat failed:', error);
     return {
@@ -139,9 +188,8 @@ export async function recordChat(request: ChatRecordRequest): Promise<ChatRecord
  */
 export async function syncConversation(request: SyncConversationRequest): Promise<{ success: boolean }> {
   try {
-    const response = await fetch(`${API_BASE_URL}/ai/sync-body`, {
+    const response = await fetchWithAuthRetry(`${API_BASE_URL}/ai/sync-body`, {
       method: 'POST',
-      headers: getAuthHeader(),
       body: JSON.stringify(request),
     });
 
@@ -161,9 +209,8 @@ export async function syncConversation(request: SyncConversationRequest): Promis
  */
 export async function getConversations(): Promise<Conversation[]> {
   try {
-    const response = await fetch(`${API_BASE_URL}/ai/conversations`, {
+    const response = await fetchWithAuthRetry(`${API_BASE_URL}/ai/conversations`, {
       method: 'GET',
-      headers: getAuthHeader(),
     });
 
     if (!response.ok) {
@@ -182,9 +229,8 @@ export async function getConversations(): Promise<Conversation[]> {
  */
 export async function getConversation(conversationId: string): Promise<ConversationDetail | null> {
   try {
-    const response = await fetch(`${API_BASE_URL}/ai/conversations/${conversationId}`, {
+    const response = await fetchWithAuthRetry(`${API_BASE_URL}/ai/conversations/${conversationId}`, {
       method: 'GET',
-      headers: getAuthHeader(),
     });
 
     if (!response.ok) {
@@ -203,9 +249,8 @@ export async function getConversation(conversationId: string): Promise<Conversat
  */
 export async function deleteConversation(conversationId: string): Promise<boolean> {
   try {
-    const response = await fetch(`${API_BASE_URL}/ai/conversations/${conversationId}`, {
+    const response = await fetchWithAuthRetry(`${API_BASE_URL}/ai/conversations/${conversationId}`, {
       method: 'DELETE',
-      headers: getAuthHeader(),
     });
 
     if (!response.ok) {

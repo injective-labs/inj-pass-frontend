@@ -16,6 +16,7 @@ import type { Address } from 'viem';
 import { AGENT_CREDITS_STATS } from '@/config/agent-credits';
 import { useTheme } from '@/contexts/ThemeContext';
 import { recordChat } from '@/services/ai';
+import { getInviteCode } from '@/services/referral';
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
@@ -274,6 +275,7 @@ export default function AgentsPage() {
   const [isCompactEmbedded] = useState(
     () => typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('compact') === '1'
   );
+  const [isHydrated, setIsHydrated] = useState(false);
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [input, setInput] = useState('');
@@ -303,6 +305,7 @@ export default function AgentsPage() {
   const [activeSettingsTab, setActiveSettingsTab] = useState<SettingsTab>('credits');
   const [inviteCopied, setInviteCopied] = useState(false);
   const [inviteLinkCopied, setInviteLinkCopied] = useState(false);
+  const [realInviteCode, setRealInviteCode] = useState<string | null>(null);
 
   // Sandbox
   const [sandboxBalances, setSandboxBalances] = useState<{ INJ: string; USDT: string; USDC: string } | null>(null);
@@ -315,7 +318,8 @@ export default function AgentsPage() {
 
   const activeConv = conversations.find((c) => c.id === activeId) ?? null;
   const messages = activeConv?.messages ?? [];
-  const inviteCode = address ? `INJ-${address.slice(2, 6).toUpperCase()}${address.slice(-4).toUpperCase()}` : 'INJ-PASS';
+  const fallbackInviteCode = address ? `INJ-${address.slice(2, 6).toUpperCase()}${address.slice(-4).toUpperCase()}` : 'INJ-PASS';
+  const inviteCode = realInviteCode && realInviteCode.trim().length > 0 ? realInviteCode : fallbackInviteCode;
   const inviteLink = `https://injpass.com/welcome?invite=${inviteCode}`;
   const totalInviteCredits = INVITED_FRIENDS.reduce((sum, friend) => sum + friend.credits, 0);
   const activeInviteCount = INVITED_FRIENDS.filter((friend) => friend.status === 'Active').length;
@@ -408,12 +412,40 @@ export default function AgentsPage() {
     window.setTimeout(() => setInviteLinkCopied(false), 1800);
   }, [inviteLink]);
 
+  // ── Client hydration ────────────────────────────────────────────────────
+  useEffect(() => {
+    setIsHydrated(true);
+  }, []);
+
   // ── Auth guard ──────────────────────────────────────────────────────────
   useEffect(() => {
     if (!isEmbedded && !isCheckingSession && !hasEmbeddedAgentAccess) {
       navigateApp('/welcome');
     }
   }, [hasEmbeddedAgentAccess, isCheckingSession, isEmbedded, navigateApp]);
+
+  // ── Load real invite code from backend ──────────────────────────────────
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadInviteCode = async () => {
+      if (!hasEmbeddedAgentAccess || isCheckingSession) {
+        if (!cancelled) setRealInviteCode(null);
+        return;
+      }
+
+      const code = await getInviteCode();
+      if (!cancelled) {
+        setRealInviteCode(code);
+      }
+    };
+
+    void loadInviteCode();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [hasEmbeddedAgentAccess, isCheckingSession]);
 
   // ── Load persisted history ──────────────────────────────────────────────
   useEffect(() => {
@@ -1133,6 +1165,14 @@ export default function AgentsPage() {
   }
 
   if (isCheckingSession) {
+    // Use neutral fallback styles during initial load to avoid hydration mismatch
+    if (!isHydrated) {
+      return (
+        <div className="min-h-screen flex items-center justify-center bg-[linear-gradient(180deg,#f8fbff,#eef4ff)]">
+          <div className="w-8 h-8 border-2 rounded-full animate-spin border-slate-300 border-t-slate-700" />
+        </div>
+      );
+    }
     return (
       <div className={`min-h-screen flex items-center justify-center ${isLight ? 'bg-[linear-gradient(180deg,#f8fbff,#eef4ff)]' : 'bg-black'}`}>
         <div className={`w-8 h-8 border-2 rounded-full animate-spin ${isLight ? 'border-slate-300 border-t-slate-700' : 'border-white/20 border-t-white'}`} />

@@ -4,7 +4,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { usePin } from '@/contexts/PinContext';
 import { useWallet } from '@/contexts/WalletContext';
-import { estimateGas, getBalance, getCosmosTxHistory, getTxHistory, sendTransaction } from '@/wallet/chain';
+import { estimateGas, getBalance as getChainBalance, getCosmosTxHistory, getTxHistory, sendTransaction } from '@/wallet/chain';
+import { getBalance as getNinjaBalanceFromBackend } from '@/services/points';
 import { Balance, GasEstimate, INJECTIVE_MAINNET } from '@/types/chain';
 import { getTokenPrice } from '@/services/price';
 import { executeSwap, getSwapQuote, ROUTER_ADDRESS } from '@/services/dex-swap';
@@ -53,7 +54,6 @@ interface BoundCardPreview {
   cvv: string;
 }
 
-const NINJA_STORAGE_PREFIX = 'inj-pass:ninja-miner:';
 const NINJA_BALANCE_EVENT = 'inj-pass:ninja-balance-update';
 const DEFAULT_NINJA_BALANCE = 22;
 const POPULAR_FAUCET_IDS = new Set(['injective', 'sepolia', 'arbitrum', 'base']);
@@ -140,29 +140,6 @@ function formatDashboardTimestamp(date: Date) {
     hour: '2-digit',
     minute: '2-digit',
   });
-}
-
-function getNinjaStorageKey(walletAddress?: string) {
-  return `${NINJA_STORAGE_PREFIX}${walletAddress || 'guest'}`;
-}
-
-function readStoredNinjaBalance(walletAddress?: string) {
-  if (typeof window === 'undefined') {
-    return DEFAULT_NINJA_BALANCE;
-  }
-
-  try {
-    const rawState = window.localStorage.getItem(getNinjaStorageKey(walletAddress));
-    if (!rawState) {
-      return DEFAULT_NINJA_BALANCE;
-    }
-
-    const parsed = JSON.parse(rawState) as { ninjaBalance?: number };
-    return typeof parsed.ninjaBalance === 'number' ? parsed.ninjaBalance : DEFAULT_NINJA_BALANCE;
-  } catch (error) {
-    console.error('Failed to restore ninja balance:', error);
-    return DEFAULT_NINJA_BALANCE;
-  }
 }
 
 function getFaucetClaimStorageKey(walletAddress?: string) {
@@ -620,32 +597,46 @@ export default function DashboardPage() {
   }, [isUnlocked, address, isCheckingSession, keystore, router, walletNetworkMode]);
 
   useEffect(() => {
-    const walletAddress = address || undefined;
-    const syncNinjaBalance = () => {
-      setNinjaBalance(readStoredNinjaBalance(walletAddress));
-    };
+    let cancelled = false;
 
-    syncNinjaBalance();
+    const syncNinjaBalance = async () => {
+      if (!address || walletNetworkMode !== 'mainnet') {
+        if (!cancelled) setNinjaBalance(0);
+        return;
+      }
 
-    const interval = window.setInterval(syncNinjaBalance, 1500);
-    const handleStorage = (event: StorageEvent) => {
-      if (!event.key || event.key === getNinjaStorageKey(walletAddress)) {
-        syncNinjaBalance();
+      try {
+        const balance = await getNinjaBalanceFromBackend();
+        const safeBalance = Number.isFinite(balance) ? balance : 0;
+        if (!cancelled) {
+          setNinjaBalance(safeBalance);
+        }
+      } catch (error) {
+        console.error('Failed to load NINJA balance from backend:', error);
+        if (!cancelled) {
+          setNinjaBalance(0);
+        }
       }
     };
+
+    void syncNinjaBalance();
+
+    const interval = window.setInterval(() => {
+      void syncNinjaBalance();
+    }, 1500);
+
     const handleNinjaBalanceUpdate = () => {
-      syncNinjaBalance();
+      void syncNinjaBalance();
     };
 
-    window.addEventListener('storage', handleStorage);
     window.addEventListener(NINJA_BALANCE_EVENT, handleNinjaBalanceUpdate);
 
     return () => {
+      cancelled = true;
       window.clearInterval(interval);
-      window.removeEventListener('storage', handleStorage);
       window.removeEventListener(NINJA_BALANCE_EVENT, handleNinjaBalanceUpdate);
     };
-  }, [address]);
+  }, [address, walletNetworkMode]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -837,7 +828,7 @@ export default function DashboardPage() {
         setLoading(true);
       }
       const [balanceData, injPriceData, usdtPriceData, usdcPriceData, tokenBalData] = await Promise.all([
-        getBalance(address, currentNetworkMeta.chain),
+        getChainBalance(address, currentNetworkMeta.chain),
         getTokenPrice('injective-protocol'),
         getTokenPrice('tether'),
         getTokenPrice('usd-coin'),

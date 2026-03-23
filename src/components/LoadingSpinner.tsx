@@ -70,15 +70,20 @@ interface LoadingSpinnerProps {
 export default function LoadingSpinner({ ready = false, children, progress, statusLabel }: LoadingSpinnerProps) {
   const pathname = usePathname();
   const { theme } = useTheme();
+  const [isMounted, setIsMounted] = useState(false);
   const destinationLabel = useMemo(() => getDestinationLabel(pathname), [pathname]);
   const resolvedStatusLabel = useMemo(() => statusLabel ?? getDefaultStatus(pathname), [pathname, statusLabel]);
   const isWrapped = children !== undefined;
   const targetProgress = clampProgress(progress ?? (ready ? 100 : isWrapped ? 84 : 68));
-  const isLight = theme === 'light';
+  const isLight = isMounted ? theme === 'light' : false;
 
   const [overlayVisible, setOverlayVisible] = useState(true);
   const [isLeaving, setIsLeaving] = useState(false);
   const [displayProgress, setDisplayProgress] = useState(0);
+
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
 
   useEffect(() => {
     const interval = window.setInterval(() => {

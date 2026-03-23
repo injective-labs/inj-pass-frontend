@@ -34,7 +34,8 @@ export interface CreateByPasskeyResult {
  * 6. Encrypt and save wallet
  */
 export async function createByPasskey(
-  walletName?: string
+  walletName?: string,
+  inviteCode?: string,
 ): Promise<CreateByPasskeyResult> {
   try {
     // 1. Request challenge
@@ -89,7 +90,7 @@ export async function createByPasskey(
         attestationObject: arrayBufferToBase64(response.attestationObject),
       },
       type: credential.type,
-    }, address, walletName); // Send wallet address and wallet name to backend
+    }, address, walletName, inviteCode); // Send wallet address, wallet name, and optional invite code to backend
 
     if (!verifyResult.success || !verifyResult.credentialId) {
       throw new Error('Passkey verification failed');
