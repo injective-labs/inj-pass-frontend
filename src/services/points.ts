@@ -26,11 +26,23 @@ export interface BalanceResponse {
   balance: number;
 }
 
+export interface NinjaMinerState {
+  ninjaBalance: number;
+  cooldownEndsAt: number;
+  sessionStartedAt: number;
+  sessionEndsAt: number;
+  sessionEarned: number;
+}
+
 export interface TransactionsResponse {
   transactions: PointsTransaction[];
   total: number;
   page: number;
   limit: number;
+}
+
+interface NinjaMinerStateResponse {
+  state: NinjaMinerState | null;
 }
 
 /**
@@ -119,5 +131,64 @@ export async function getTransactions(
   } catch (error) {
     console.error('[Points] Get transactions failed:', error);
     return { transactions: [], total: 0, page: 1, limit };
+  }
+}
+
+/**
+ * Read Ninja Miner state from backend Redis storage
+ */
+export async function getNinjaMinerState(walletAddress?: string): Promise<NinjaMinerState | null> {
+  try {
+    const query = walletAddress
+      ? `?walletAddress=${encodeURIComponent(walletAddress)}`
+      : '';
+
+    const response = await fetch(`${API_BASE_URL}/points/ninja-miner-state${query}`, {
+      method: 'GET',
+      headers: getAuthHeader(),
+    });
+
+    if (!response.ok) {
+      return null;
+    }
+
+    const data = await response.json() as NinjaMinerStateResponse;
+    const state = data?.state;
+
+    if (!state) {
+      return null;
+    }
+
+    return {
+      ninjaBalance: Number.isFinite(Number(state.ninjaBalance)) ? Number(state.ninjaBalance) : 0,
+      cooldownEndsAt: Number.isFinite(Number(state.cooldownEndsAt)) ? Number(state.cooldownEndsAt) : 0,
+      sessionStartedAt: Number.isFinite(Number(state.sessionStartedAt)) ? Number(state.sessionStartedAt) : 0,
+      sessionEndsAt: Number.isFinite(Number(state.sessionEndsAt)) ? Number(state.sessionEndsAt) : 0,
+      sessionEarned: Number.isFinite(Number(state.sessionEarned)) ? Number(state.sessionEarned) : 0,
+    };
+  } catch (error) {
+    console.error('[Points] Get Ninja Miner state failed:', error);
+    return null;
+  }
+}
+
+/**
+ * Persist Ninja Miner state to backend Redis storage
+ */
+export async function saveNinjaMinerState(
+  walletAddress: string,
+  state: NinjaMinerState,
+): Promise<boolean> {
+  try {
+    const response = await fetch(`${API_BASE_URL}/points/ninja-miner-state`, {
+      method: 'POST',
+      headers: getAuthHeader(),
+      body: JSON.stringify({ walletAddress, state }),
+    });
+
+    return response.ok;
+  } catch (error) {
+    console.error('[Points] Save Ninja Miner state failed:', error);
+    return false;
   }
 }

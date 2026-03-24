@@ -55,6 +55,7 @@ interface BoundCardPreview {
 }
 
 const NINJA_BALANCE_EVENT = 'inj-pass:ninja-balance-update';
+const NINJA_BALANCE_POLL_MS = 20_000;
 const DEFAULT_NINJA_BALANCE = 22;
 const POPULAR_FAUCET_IDS = new Set(['injective', 'sepolia', 'arbitrum', 'base']);
 const MORE_CHANCE_PLANS: Array<{
@@ -622,19 +623,35 @@ export default function DashboardPage() {
     void syncNinjaBalance();
 
     const interval = window.setInterval(() => {
-      void syncNinjaBalance();
-    }, 1500);
+      if (document.visibilityState === 'visible') {
+        void syncNinjaBalance();
+      }
+    }, NINJA_BALANCE_POLL_MS);
 
     const handleNinjaBalanceUpdate = () => {
       void syncNinjaBalance();
     };
 
+    const handleWindowFocus = () => {
+      void syncNinjaBalance();
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        void syncNinjaBalance();
+      }
+    };
+
     window.addEventListener(NINJA_BALANCE_EVENT, handleNinjaBalanceUpdate);
+    window.addEventListener('focus', handleWindowFocus);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
 
     return () => {
       cancelled = true;
       window.clearInterval(interval);
       window.removeEventListener(NINJA_BALANCE_EVENT, handleNinjaBalanceUpdate);
+      window.removeEventListener('focus', handleWindowFocus);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, [address, walletNetworkMode]);
 

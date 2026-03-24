@@ -3,7 +3,7 @@
 import Image from 'next/image';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTheme } from '@/contexts/ThemeContext';
-import { getBalance, syncPoints } from '@/services/points';
+import { getBalance, getNinjaMinerState, saveNinjaMinerState, syncPoints } from '@/services/points';
 
 interface NinjaMinerGameProps {
   walletAddress?: string;
@@ -25,18 +25,13 @@ interface TapBurst {
   y: number;
 }
 
-const STORAGE_PREFIX = 'inj-pass:ninja-miner:';
 const BALANCE_EVENT = 'inj-pass:ninja-balance-update';
 const DEFAULT_NINJA_BALANCE = 22;
 const SESSION_DURATION_MS = 15_000;
-const COOLDOWN_MS = 8 * 60 * 60 * 1000;
+const COOLDOWN_MS = 30 * 1000;
 
 function roundTo(value: number, digits = 2) {
   return Number(value.toFixed(digits));
-}
-
-function getStorageKey(walletAddress?: string) {
-  return `${STORAGE_PREFIX}${walletAddress || 'guest'}`;
 }
 
 function createInitialState(): TapMinerState {
@@ -64,36 +59,6 @@ function normalizeState(state: TapMinerState, now: number): TapMinerState {
   return next;
 }
 
-function restoreState(walletAddress?: string): TapMinerState {
-  if (typeof window === 'undefined') {
-    return createInitialState();
-  }
-
-  const now = Date.now();
-
-  try {
-    const raw = window.localStorage.getItem(getStorageKey(walletAddress));
-    if (!raw) {
-      return createInitialState();
-    }
-
-    const parsed = JSON.parse(raw) as Partial<TapMinerState> & { ninjaBalance?: number };
-    return normalizeState(
-      {
-        ninjaBalance: typeof parsed.ninjaBalance === 'number' ? roundTo(parsed.ninjaBalance, 2) : DEFAULT_NINJA_BALANCE,
-        cooldownEndsAt: typeof parsed.cooldownEndsAt === 'number' ? parsed.cooldownEndsAt : 0,
-        sessionStartedAt: typeof parsed.sessionStartedAt === 'number' ? parsed.sessionStartedAt : 0,
-        sessionEndsAt: typeof parsed.sessionEndsAt === 'number' ? parsed.sessionEndsAt : 0,
-        sessionEarned: typeof parsed.sessionEarned === 'number' ? roundTo(parsed.sessionEarned, 2) : 0,
-      },
-      now
-    );
-  } catch (error) {
-    console.error('Failed to restore ninja tap state:', error);
-    return createInitialState();
-  }
-}
-
 function formatDuration(ms: number) {
   const totalSeconds = Math.max(0, Math.ceil(ms / 1000));
   const hours = Math.floor(totalSeconds / 3600);
@@ -117,33 +82,60 @@ export default function NinjaMinerGame({ walletAddress, onOpenMoreChance }: Ninj
   const lastSyncedSessionKeyRef = useRef<string | null>(null);
 
   useEffect(() => {
-    const fetchBackendBalance = async () => {
+    let cancelled = false;
+
+    const hydrateFromBackend = async () => {
+      const currentNow = Date.now();
+
       try {
-        const balance = await getBalance();
-        if (balance > 0) {
-          setGameState((prev) => ({
-            ...prev,
-            ninjaBalance: balance,
-          }));
-        }
+        const [savedState, balance] = await Promise.all([
+          walletAddress ? getNinjaMinerState(walletAddress) : Promise.resolve(null),
+          walletAddress ? getBalance() : Promise.resolve(DEFAULT_NINJA_BALANCE),
+        ]);
+
+        if (cancelled) return;
+
+        const restored = normalizeState(
+          {
+            ninjaBalance: typeof savedState?.ninjaBalance === 'number'
+              ? roundTo(savedState.ninjaBalance, 2)
+              : DEFAULT_NINJA_BALANCE,
+            cooldownEndsAt: typeof savedState?.cooldownEndsAt === 'number' ? savedState.cooldownEndsAt : 0,
+            sessionStartedAt: typeof savedState?.sessionStartedAt === 'number' ? savedState.sessionStartedAt : 0,
+            sessionEndsAt: typeof savedState?.sessionEndsAt === 'number' ? savedState.sessionEndsAt : 0,
+            sessionEarned: typeof savedState?.sessionEarned === 'number' ? roundTo(savedState.sessionEarned, 2) : 0,
+          },
+          currentNow,
+        );
+
+        const safeBalance = Number(balance);
+        const nextBalance = Number.isFinite(safeBalance)
+          ? roundTo(Math.max(0, safeBalance), 2)
+          : restored.ninjaBalance;
+
+        setGameState({
+          ...restored,
+          ninjaBalance: nextBalance,
+        });
       } catch (error) {
-        console.error('[NinjaMiner] Failed to fetch backend balance:', error);
+        console.error('[NinjaMiner] Failed to hydrate state from backend:', error);
+        if (!cancelled) {
+          setGameState(createInitialState());
+        }
+      } finally {
+        if (!cancelled) {
+          setNow(currentNow);
+          setHydrated(true);
+        }
       }
     };
 
-    if (walletAddress) {
-      fetchBackendBalance();
-    }
-  }, [walletAddress]);
+    setHydrated(false);
+    void hydrateFromBackend();
 
-  useEffect(() => {
-    const frame = window.requestAnimationFrame(() => {
-      setGameState(restoreState(walletAddress));
-      setNow(Date.now());
-      setHydrated(true);
-    });
-
-    return () => window.cancelAnimationFrame(frame);
+    return () => {
+      cancelled = true;
+    };
   }, [walletAddress]);
 
   useEffect(() => {
@@ -184,9 +176,17 @@ export default function NinjaMinerGame({ walletAddress, onOpenMoreChance }: Ninj
       try {
         const result = await syncPoints(gameState.sessionEarned);
         if (result.success && result.balance !== undefined) {
+          const settledBalance = Number(result.balance);
           setGameState((prev) => ({
             ...prev,
-            ninjaBalance: result.balance!,
+            ninjaBalance: Number.isFinite(settledBalance) ? settledBalance : prev.ninjaBalance,
+          }));
+          window.dispatchEvent(new CustomEvent(BALANCE_EVENT, {
+            detail: {
+              walletAddress,
+              ninjaBalance: Number.isFinite(settledBalance) ? settledBalance : undefined,
+              reason: 'session-settled',
+            },
           }));
           console.log('[NinjaMiner] Synced to backend:', gameState.sessionEarned, 'NIJIA, new balance:', result.balance);
         } else {
@@ -202,13 +202,15 @@ export default function NinjaMinerGame({ walletAddress, onOpenMoreChance }: Ninj
   }, [hydrated, isActive, isCoolingDown, gameState.sessionEarned, gameState.sessionStartedAt, gameState.sessionEndsAt, isSyncing]);
 
   useEffect(() => {
-    if (!hydrated) return;
+    if (!hydrated || !walletAddress) return;
 
-    const storageKey = getStorageKey(walletAddress);
-    window.localStorage.setItem(storageKey, JSON.stringify(gameState));
-    window.dispatchEvent(new CustomEvent(BALANCE_EVENT, {
-      detail: { walletAddress, ninjaBalance: gameState.ninjaBalance },
-    }));
+    const saveTimer = window.setTimeout(() => {
+      void saveNinjaMinerState(walletAddress, gameState);
+    }, 600);
+
+    return () => {
+      window.clearTimeout(saveTimer);
+    };
   }, [gameState, hydrated, walletAddress]);
 
   const activeRemainingMs = Math.max(0, normalizedState.sessionEndsAt - now);
