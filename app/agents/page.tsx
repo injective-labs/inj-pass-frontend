@@ -17,6 +17,7 @@ import { AGENT_CREDITS_STATS } from '@/config/agent-credits';
 import { useTheme } from '@/contexts/ThemeContext';
 import { recordChat } from '@/services/ai';
 import { getInviteCode } from '@/services/referral';
+import { getBalance as getNinjaBalance } from '@/services/points';
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
@@ -753,10 +754,6 @@ export default function AgentsPage() {
   const runLoop = useCallback(async (convId: string, history: ApiMessage[]) => {
     setIsRunning(true);
 
-    // Track total usage for billing
-    let totalInputTokens = 0;
-    let totalOutputTokens = 0;
-
     try {
       // eslint-disable-next-line no-constant-condition
       while (true) {
@@ -784,16 +781,75 @@ export default function AgentsPage() {
         const data = await res.json();
         const blocks: ApiBlock[] = data.content ?? [];
 
-        // Track usage for billing
-        if (data.usage) {
-          totalInputTokens += data.usage.input_tokens ?? 0;
-          totalOutputTokens += data.usage.output_tokens ?? 0;
-        }
-
         // Build the assistant api message and persist it
         const assistantApiMsg: ApiMessage = { role: 'assistant', content: blocks };
         history = [...history, assistantApiMsg];
         appendApi(convId, assistantApiMsg);
+
+        const turnInputTokens = Number(data?.usage?.input_tokens ?? 0);
+        const turnOutputTokens = Number(data?.usage?.output_tokens ?? 0);
+
+        // Bill each model turn immediately so interrupted loops cannot skip charges.
+        if (turnInputTokens > 0 || turnOutputTokens > 0) {
+          const currentConv = conversations.find((c) => c.id === convId);
+          const messagesForBackend = history.map((msg) => {
+            if (typeof msg.content === 'string') {
+              return { role: msg.role, content: msg.content };
+            }
+
+            const toolUse = (msg.content as ApiBlock[])
+              ?.filter((b) => b.type === 'tool_use')
+              .map((b) => ({
+                name: b.name!,
+                id: b.id!,
+                input: b.input as Record<string, any>,
+              }));
+            const toolResult = (msg.content as ApiBlock[])
+              ?.filter((b) => b.type === 'tool_result')
+              .map((b) => ({
+                tool_use_id: b.tool_use_id!,
+                content: b.content ?? '',
+              }));
+
+            return {
+              role: msg.role,
+              content: JSON.stringify(msg.content),
+              tool_use: toolUse,
+              tool_result: toolResult,
+            };
+          });
+
+          try {
+            const result = await recordChat({
+              conversationId: convId,
+              title: currentConv?.title || 'New Chat',
+              messages: messagesForBackend,
+              model,
+              usage: {
+                inputTokens: turnInputTokens,
+                outputTokens: turnOutputTokens,
+              },
+            });
+
+            if (result.ok) {
+              console.log('[AI] Turn recorded:', {
+                tokens: `${turnInputTokens} in / ${turnOutputTokens} out`,
+                cost: result.cost?.ninjiaDeducted,
+                balance: result.balance,
+              });
+            } else if (result.error === 'INSUFFICIENT_NINJA') {
+              appendDisplay(convId, {
+                id: uid(),
+                role: 'assistant',
+                content: `⚠️ Insufficient NINJIA balance. Current: ${result.current?.toFixed(2)} NINJIA, Required: ${result.required?.toFixed(2)} NINJIA. Please earn more NINJIA to continue using AI.`,
+                isError: true,
+              });
+              return;
+            }
+          } catch (error) {
+            console.error('[AI] Failed to record turn:', error);
+          }
+        }
 
         // Render text blocks
         const textContent = blocks
@@ -865,60 +921,6 @@ export default function AgentsPage() {
         if (shouldPause) return; // resume handled by handleConfirm / handleCancel
       }
 
-      // Loop completed successfully - sync to backend for billing and backup
-      const finalHistory = history;
-      const currentConv = conversations.find((c) => c.id === convId);
-
-      // Prepare messages for backend
-      const messagesForBackend = finalHistory.map((msg) => {
-        if (typeof msg.content === 'string') {
-          return { role: msg.role, content: msg.content };
-        }
-        // Handle tool_use and tool_result blocks
-        const toolUse = (msg.content as ApiBlock[])?.filter((b) => b.type === 'tool_use').map((b) => ({
-          name: b.name!,
-          id: b.id!,
-          input: b.input as Record<string, any>,
-        }));
-        const toolResult = (msg.content as ApiBlock[])?.filter((b) => b.type === 'tool_result').map((b) => ({
-          tool_use_id: b.tool_use_id!,
-          content: b.content ?? '',
-        }));
-        return { role: msg.role, content: JSON.stringify(msg.content), tool_use: toolUse, tool_result: toolResult };
-      });
-
-      // Record chat for billing
-      if (totalInputTokens > 0 || totalOutputTokens > 0) {
-        try {
-          const result = await recordChat({
-            conversationId: convId,
-            title: currentConv?.title || 'New Chat',
-            messages: messagesForBackend,
-            model,
-            usage: {
-              inputTokens: totalInputTokens,
-              outputTokens: totalOutputTokens,
-            },
-          });
-
-          if (result.ok) {
-            console.log('[AI] Chat recorded:', {
-              tokens: `${totalInputTokens} in / ${totalOutputTokens} out`,
-              cost: result.cost?.ninjiaDeducted,
-              balance: result.balance,
-            });
-          } else if (result.error === 'INSUFFICIENT_NINJA') {
-            appendDisplay(convId, {
-              id: uid(),
-              role: 'assistant',
-              content: `⚠️ Insufficient NINJIA balance. Current: ${result.current?.toFixed(2)} NINJIA, Required: ${result.required?.toFixed(2)} NINJIA. Please earn more NINJIA to continue using AI.`,
-              isError: true,
-            });
-          }
-        } catch (error) {
-          console.error('[AI] Failed to record chat:', error);
-        }
-      }
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Unknown error';
       appendDisplay(convId, { id: uid(), role: 'assistant', content: `❌ Error: ${msg}`, isError: true });
@@ -1026,6 +1028,27 @@ export default function AgentsPage() {
     ].join(' ');
     const text = [mentionText, input.trim()].filter(Boolean).join(' ').trim();
     if (!text || isRunning) return;
+
+    const ninjaBalance = await getNinjaBalance();
+    if (!Number.isFinite(ninjaBalance) || ninjaBalance <= 0) {
+      let targetConvId = activeId;
+      if (!targetConvId) {
+        const id = uid();
+        const conv: Conversation = { id, title: text.slice(0, 40), createdAt: Date.now(), messages: [], apiHistory: [] };
+        setConversations((prev) => [conv, ...prev]);
+        setActiveId(id);
+        targetConvId = id;
+      }
+
+      appendDisplay(targetConvId, {
+        id: uid(),
+        role: 'assistant',
+        content: '⚠️ Your NINJIA balance must be greater than 0 before starting the next AI round. Please earn more NINJIA and try again.',
+        isError: true,
+      });
+      return;
+    }
+
     setInput('');
     setAssetMentions([]);
     setDappMentions([]);
