@@ -137,9 +137,9 @@ export default function EditableAccountIdentity({ address, className = '', defau
           )}
         </div>
 
-        <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+        <div className="mt-1.5 flex items-center gap-1.5">
           {address && (
-            <span className={`rounded-full border px-2 py-0.5 font-mono text-[10px] ${
+            <span className={`min-w-0 truncate rounded-full border px-2 py-0.5 font-mono text-[10px] ${
               isLight
                 ? 'border-slate-200/80 bg-white/78 text-slate-500'
                 : 'border-white/10 bg-white/[0.04] text-gray-400'
@@ -149,7 +149,7 @@ export default function EditableAccountIdentity({ address, className = '', defau
           )}
           <button
             onClick={handleCopyAddress}
-            className={`group flex h-6 w-6 items-center justify-center rounded-md border transition-all ${
+            className={`group flex h-6 w-6 shrink-0 items-center justify-center rounded-md border transition-all ${
               isLight
                 ? 'border-slate-200/80 bg-white/78 hover:bg-white'
                 : 'border-white/10 bg-white/[0.04] hover:bg-white/10'

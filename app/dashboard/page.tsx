@@ -375,7 +375,7 @@ function PixelTrendChart({
       : '';
 
   return (
-    <div className="relative h-full min-h-[220px] px-1 py-2 xl:pl-4">
+    <div className="relative h-full min-h-[148px] px-1 py-1 sm:min-h-[220px] sm:py-2 xl:pl-4">
       <div className="relative flex items-start justify-between gap-3">
         <div>
           <div className="text-[10px] font-semibold uppercase tracking-[0.28em] text-gray-500">24H Trend</div>
@@ -388,7 +388,7 @@ function PixelTrendChart({
       </div>
 
       {hidden ? (
-        <div className="relative mt-4 flex h-[184px] items-center justify-center">
+        <div className="relative mt-2 flex h-[120px] items-center justify-center sm:mt-4 sm:h-[184px]">
           <div className="text-center">
             <div className="text-[10px] font-semibold uppercase tracking-[0.3em] text-gray-500">Trend Hidden</div>
             <div className="mt-2 text-sm text-gray-400">Unhide balance to view</div>
@@ -397,7 +397,7 @@ function PixelTrendChart({
       ) : (
         <svg
           key={chartAnimationKey}
-          className="relative mt-4 h-[184px] w-full"
+          className="relative mt-2 h-[120px] w-full sm:mt-4 sm:h-[184px]"
           viewBox={`0 0 ${width} ${height}`}
           fill="none"
           aria-label="24 hour asset movement chart"
@@ -1751,11 +1751,11 @@ export default function DashboardPage() {
             <EditableAccountIdentity key={address || 'default'} address={address || undefined} />
 
             {/* Scan QR Code Button */}
-            <div className="flex w-full flex-wrap items-center justify-end gap-2 md:w-auto md:flex-nowrap">
+            <div className="flex w-full flex-wrap items-center justify-end gap-1.5 md:w-auto md:flex-nowrap md:gap-2">
               <ThemeToggleButton compact />
               <button
                 onClick={openAiAssetSurface}
-                className={`rounded-lg border px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.22em] transition-all ${
+                className={`rounded-lg border px-2.5 py-1.5 text-[10px] font-semibold uppercase tracking-[0.18em] transition-all sm:px-3 sm:py-2 sm:text-[11px] sm:tracking-[0.22em] ${
                   !isAiStage
                     ? 'border-white/10 bg-white/5 text-gray-300 hover:border-violet-500/40 hover:bg-violet-600/15 hover:text-white'
                     : 'border-fuchsia-400/35 bg-[linear-gradient(135deg,rgba(139,92,246,0.24),rgba(59,130,246,0.14))] text-white shadow-[0_10px_30px_rgba(99,102,241,0.22)]'
@@ -1766,7 +1766,7 @@ export default function DashboardPage() {
               </button>
               <button
                 onClick={openFaucetAssetSurface}
-                className={`rounded-lg border p-2.5 transition-all group ${
+                className={`rounded-lg border p-2 transition-all group sm:p-2.5 ${
                   isFaucetStage
                     ? 'border-violet-400/35 bg-[linear-gradient(135deg,rgba(124,58,237,0.20),rgba(59,130,246,0.14))] shadow-[0_10px_28px_rgba(99,102,241,0.16)]'
                     : 'border-white/10 bg-white/5 hover:border-violet-500/40 hover:bg-violet-600/20'
@@ -1774,7 +1774,7 @@ export default function DashboardPage() {
                 title="Testnet Faucet"
               >
                 <svg
-                  className={`h-[18px] w-[18px] transition-colors ${isFaucetStage ? 'text-violet-200' : 'text-gray-400 group-hover:text-violet-300'}`}
+                  className={`h-4 w-4 transition-colors sm:h-[18px] sm:w-[18px] ${isFaucetStage ? 'text-violet-200' : 'text-gray-400 group-hover:text-violet-300'}`}
                   viewBox="0 0 24 24"
                   fill="none"
                   stroke="currentColor"
@@ -1791,23 +1791,23 @@ export default function DashboardPage() {
               </button>
               <button
                 onClick={openCardPanel}
-                className={`rounded-lg border p-2.5 transition-all ${
+                className={`rounded-lg border p-2 transition-all sm:p-2.5 ${
                   isCardPanel
                     ? 'border-amber-300/30 bg-[linear-gradient(135deg,rgba(245,158,11,0.18),rgba(234,88,12,0.12))] shadow-[0_10px_28px_rgba(245,158,11,0.12)]'
                     : 'border-white/10 bg-white/5 hover:border-amber-500/35 hover:bg-amber-500/10'
                 }`}
                 title="Open Card Pay"
               >
-                <svg className={`h-[18px] w-[18px] ${isCardPanel ? 'text-amber-100' : 'text-gray-300'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                <svg className={`h-4 w-4 sm:h-[18px] sm:w-[18px] ${isCardPanel ? 'text-amber-100' : 'text-gray-300'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M3 10h18M7 15h1m4 0h5M5 6h14a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2Z" />
                 </svg>
               </button>
               <button 
                 onClick={openQRScanner}
-                className="rounded-lg border border-white/10 bg-white/5 p-2.5 transition-all hover:bg-white/10"
+                className="rounded-lg border border-white/10 bg-white/5 p-2 transition-all hover:bg-white/10 sm:p-2.5"
                 title="Scan QR Code"
               >
-                <svg className="h-[18px] w-[18px]" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
+                <svg className="h-4 w-4 sm:h-[18px] sm:w-[18px]" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
                   {/* Top-left corner */}
                   <path d="M3 9V5a2 2 0 0 1 2-2h4" strokeLinecap="round" strokeLinejoin="round" />
                   {/* Top-right corner */}
@@ -1916,7 +1916,7 @@ export default function DashboardPage() {
                     }`}
                   >
                     <div key={`wallet-overview-${walletNetworkMode}-${walletSurfaceMotionKey}`} className="dashboard-surface-enter flex h-full flex-col">
-                      <div className="flex h-full flex-col gap-4 md:gap-6 xl:flex-row xl:items-end">
+                      <div className="flex h-full flex-row items-start gap-3 sm:gap-4 md:gap-6 xl:flex-row xl:items-end">
                         <div className="min-w-0 flex-1">
                           <div className="pl-1 sm:pl-3 md:pl-4">
                             <div className="flex flex-wrap items-end gap-2.5 sm:gap-3 md:gap-4">
@@ -1944,7 +1944,7 @@ export default function DashboardPage() {
                           </div>
                         </div>
 
-                        <div className="w-full xl:w-[320px] xl:flex-shrink-0">
+                        <div className="w-[42%] min-w-[132px] max-w-[168px] flex-shrink-0 sm:w-[38%] sm:max-w-[196px] md:w-[320px] md:max-w-none xl:w-[320px] xl:flex-shrink-0">
                           <PixelTrendChart
                             values={assetTrendSeries}
                             hidden={!balanceVisible}
@@ -1956,7 +1956,7 @@ export default function DashboardPage() {
                         </div>
                       </div>
 
-                      <div className="pointer-events-none relative flex min-h-[18px] flex-[0.18] items-center justify-center sm:min-h-[28px] sm:flex-[0.28] md:min-h-[56px] md:flex-[0.62]">
+                      <div className="pointer-events-none relative hidden items-center justify-center md:flex md:min-h-[56px] md:flex-[0.62]">
                         <div className="absolute inset-x-12 top-1/2 h-40 -translate-y-1/2 rounded-full bg-[radial-gradient(circle_at_center,rgba(255,255,255,0.07),transparent_70%)] blur-3xl" />
                       </div>
                     </div>
@@ -2845,14 +2845,14 @@ export default function DashboardPage() {
                 </div>
 
                 {isWalletOverview && (
-                <div className="mt-auto grid grid-cols-2 gap-3 pt-4 sm:grid-cols-4">
+                <div className="mt-auto grid grid-cols-4 gap-2 pt-4 sm:gap-3">
                   {/* Send Button */}
                   <button 
                     onClick={() => toggleWalletPanel('send')}
-                    className="flex flex-col items-center gap-1.5 group sm:gap-2"
+                    className="flex flex-col items-center gap-1 group sm:gap-2"
                   >
-                    <div className="h-12 w-12 rounded-full flex items-center justify-center bg-white shadow-lg transition-all hover:bg-gray-100 group-hover:scale-105 sm:h-14 sm:w-14">
-                      <svg className="h-4 w-4 text-black sm:h-5 sm:w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <div className="h-10 w-10 rounded-full flex items-center justify-center bg-white shadow-lg transition-all hover:bg-gray-100 group-hover:scale-105 sm:h-14 sm:w-14">
+                      <svg className="h-3.5 w-3.5 text-black sm:h-5 sm:w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <line x1="12" y1="19" x2="12" y2="5" strokeWidth={2.5} strokeLinecap="round" />
                         <polyline points="5 12 12 5 19 12" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />
                       </svg>
@@ -2863,10 +2863,10 @@ export default function DashboardPage() {
                   {/* Receive Button */}
                   <button 
                     onClick={() => toggleWalletPanel('receive')}
-                    className="flex flex-col items-center gap-1.5 group sm:gap-2"
+                    className="flex flex-col items-center gap-1 group sm:gap-2"
                   >
-                    <div className="h-12 w-12 rounded-full flex items-center justify-center bg-white shadow-lg transition-all hover:bg-gray-100 group-hover:scale-105 sm:h-14 sm:w-14">
-                      <svg className="h-4 w-4 text-black sm:h-5 sm:w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <div className="h-10 w-10 rounded-full flex items-center justify-center bg-white shadow-lg transition-all hover:bg-gray-100 group-hover:scale-105 sm:h-14 sm:w-14">
+                      <svg className="h-3.5 w-3.5 text-black sm:h-5 sm:w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <line x1="12" y1="5" x2="12" y2="19" strokeWidth={2.5} strokeLinecap="round" />
                         <polyline points="19 12 12 19 5 12" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />
                       </svg>
@@ -2877,10 +2877,10 @@ export default function DashboardPage() {
                   {/* Swap Button */}
                   <button 
                     onClick={() => toggleWalletPanel('swap')}
-                    className="flex flex-col items-center gap-1.5 group sm:gap-2"
+                    className="flex flex-col items-center gap-1 group sm:gap-2"
                   >
-                    <div className="h-12 w-12 rounded-full flex items-center justify-center bg-white shadow-lg transition-all hover:bg-gray-100 group-hover:scale-105 sm:h-14 sm:w-14">
-                      <svg className="h-4 w-4 text-black sm:h-5 sm:w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <div className="h-10 w-10 rounded-full flex items-center justify-center bg-white shadow-lg transition-all hover:bg-gray-100 group-hover:scale-105 sm:h-14 sm:w-14">
+                      <svg className="h-3.5 w-3.5 text-black sm:h-5 sm:w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <polyline points="16 3 21 3 21 8" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />
                         <line x1="4" y1="20" x2="21" y2="3" strokeWidth={2.5} strokeLinecap="round" />
                         <polyline points="21 16 21 21 16 21" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />
@@ -2894,10 +2894,10 @@ export default function DashboardPage() {
                   {/* History Button */}
                   <button 
                     onClick={() => toggleWalletPanel('history')}
-                    className="flex flex-col items-center gap-1.5 group sm:gap-2"
+                    className="flex flex-col items-center gap-1 group sm:gap-2"
                   >
-                    <div className="h-12 w-12 rounded-full flex items-center justify-center bg-white shadow-lg transition-all hover:bg-gray-100 group-hover:scale-105 sm:h-14 sm:w-14">
-                      <svg className="h-4 w-4 text-black sm:h-5 sm:w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <div className="h-10 w-10 rounded-full flex items-center justify-center bg-white shadow-lg transition-all hover:bg-gray-100 group-hover:scale-105 sm:h-14 sm:w-14">
+                      <svg className="h-3.5 w-3.5 text-black sm:h-5 sm:w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <circle cx="12" cy="12" r="10" strokeWidth={2.5} strokeLinecap="round" />
                         <polyline points="12 6 12 12 16 14" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />
                       </svg>
