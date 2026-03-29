@@ -6,26 +6,18 @@ import { useEffect, useState } from 'react';
 import { useTheme } from '@/contexts/ThemeContext';
 import LoadingSpinner from '@/components/LoadingSpinner';
 import AccountHeader from '../components/AccountHeader';
-import { DAPPS, DApp, DAppCategory } from '@/config/dapps';
-import { NETWORK_CONFIG } from '@/config/network';
+import type { DApp } from '@/config/dapps';
+import { fetchDapps, type DAppTab } from '@/services/dapps';
 import { startQRScanner, stopQRScanner, clearQRScanner, isCameraSupported, isValidAddress } from '@/services/qr-scanner';
 import { QRCodeSVG } from 'qrcode.react';
 
-type DiscoverCategory = DAppCategory | 'ai';
+type DiscoverCategory = string | 'ai';
 
 const AI_DAPP_MENTIONS: Record<string, string> = {
   Omisper: '@Omisper',
   'Hash Mahjong': '@HashMahjong',
 };
 const AI_DRIVEN_DAPP_NAMES = new Set<keyof typeof AI_DAPP_MENTIONS>(['Omisper', 'Hash Mahjong']);
-
-const CATEGORIES = [
-  { id: 'all', name: 'New' },
-  { id: 'defi', name: 'DeFi' },
-  { id: 'nft', name: 'NFT' },
-  { id: 'game', name: 'Game' },
-  { id: 'social', name: 'Social' },
-] as const;
 
 const AI_CATEGORY = [{ id: 'ai', name: 'AI-Driven' }] as const;
 
@@ -99,23 +91,34 @@ export default function DiscoverPage() {
   const isAiMode = routeContext.aiMode;
   const isLight = theme === 'light';
   const useWalletSurfaceTheme = isEmbedded;
-  const [activeCategory, setActiveCategory] = useState<DiscoverCategory>(isAiMode ? 'ai' : 'all');
+  const [activeCategory, setActiveCategory] = useState<DiscoverCategory>(isAiMode ? 'ai' : '');
   const [searchQuery, setSearchQuery] = useState('');
   const [surfaceReady, setSurfaceReady] = useState(false);
-  const dapps: (DApp & { aiDriven?: boolean })[] = DAPPS.map((dapp) => ({
-    ...dapp,
-    icon:
-      dapp.icon.startsWith('http') || dapp.icon.startsWith('/')
-        ? dapp.icon
-        : `${NETWORK_CONFIG.faviconService}${dapp.icon}&sz=128`,
-    aiDriven: AI_DRIVEN_DAPP_NAMES.has(dapp.name as keyof typeof AI_DAPP_MENTIONS),
-  }));
+  const [dappDirectory, setDappDirectory] = useState<DApp[]>([]);
+  const [directoryTabs, setDirectoryTabs] = useState<DAppTab[]>([]);
 
   useEffect(() => {
     let frame = 0;
     frame = window.requestAnimationFrame(() => setSurfaceReady(true));
     return () => window.cancelAnimationFrame(frame);
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    void fetchDapps().then((payload) => {
+      if (cancelled) return;
+      setDappDirectory(payload.dapps);
+      setDirectoryTabs(payload.tabs);
+      if (!routeContext.aiMode && payload.tabs.length > 0) {
+        setActiveCategory(payload.tabs[0].id as DiscoverCategory);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [routeContext.aiMode]);
 
   const navigateApp = (path: string) => {
     if (typeof window !== 'undefined' && isEmbedded && window.top) {
@@ -219,17 +222,32 @@ export default function DiscoverPage() {
     return null;
   }
 
-  const categoryTabs = isAiMode ? AI_CATEGORY : CATEGORIES;
+  const categoryTabs = isAiMode
+    ? AI_CATEGORY
+    : directoryTabs.length > 0
+      ? directoryTabs.map((tab) => ({ id: tab.id, name: tab.label }))
+      : [];
+  const dapps: (DApp & { aiDriven?: boolean })[] = dappDirectory.map((dapp) => ({
+    ...dapp,
+    aiDriven: AI_DRIVEN_DAPP_NAMES.has(dapp.name as keyof typeof AI_DAPP_MENTIONS),
+  }));
   const visibleDapps = isAiMode ? dapps.filter((dapp) => dapp.aiDriven) : dapps;
+  const hasSearch = searchQuery.trim().length > 0;
   const filteredDapps = visibleDapps.filter((dapp) => {
-    const matchesCategory = activeCategory === 'all' || activeCategory === 'ai' || dapp.category === activeCategory;
+    const matchesCategory =
+      hasSearch ||
+      activeCategory === 'ai' ||
+      !activeCategory ||
+      dapp.categories.includes(activeCategory);
     const matchesSearch =
       dapp.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      dapp.description.toLowerCase().includes(searchQuery.toLowerCase());
+      dapp.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      dapp.url.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      dapp.categories.some((category) => category.toLowerCase().includes(searchQuery.toLowerCase()));
     return matchesCategory && matchesSearch;
   });
 
-  const featuredDapps = dapps.filter((dapp) => dapp.featured);
+  const featuredDapps = visibleDapps.filter((dapp) => dapp.featured);
   const activeCategoryIndex = Math.max(
     categoryTabs.findIndex((category) => category.id === activeCategory),
     0
@@ -279,8 +297,12 @@ export default function DiscoverPage() {
                       : 'bg-white shadow-lg'
                 }`}
                 style={{
-                  width: `calc((100% - ${(categoryTabs.length - 1) * 0.5}rem) / ${categoryTabs.length})`,
-                  left: `calc(0.25rem + ${activeCategoryIndex} * ((100% - ${(categoryTabs.length - 1) * 0.5}rem) / ${categoryTabs.length} + 0.5rem))`,
+                  width: categoryTabs.length > 0
+                    ? `calc((100% - ${(categoryTabs.length - 1) * 0.5}rem) / ${categoryTabs.length})`
+                    : '0',
+                  left: categoryTabs.length > 0
+                    ? `calc(0.25rem + ${activeCategoryIndex} * ((100% - ${(categoryTabs.length - 1) * 0.5}rem) / ${categoryTabs.length} + 0.5rem))`
+                    : '0.25rem',
                 }}
               />
               <div className="relative flex gap-2">
@@ -346,7 +368,7 @@ export default function DiscoverPage() {
         </div>
       ) : (
         <div className="max-w-7xl mx-auto px-4 py-6">
-          {!searchQuery && (
+          {!hasSearch && (
             <div className="mb-6">
               <div className="mb-4 flex items-center justify-between">
                 <h2 className="text-sm font-bold uppercase tracking-wider text-gray-400">Featured</h2>
@@ -375,25 +397,19 @@ export default function DiscoverPage() {
             <div
               className="absolute top-1 bottom-1 bg-white rounded-lg transition-all duration-300 ease-out shadow-lg"
               style={{
-                width: 'calc(20% - 0.2rem)',
+                width: categoryTabs.length > 0 ? `calc((100% - ${(categoryTabs.length - 1) * 0.25}rem) / ${categoryTabs.length})` : '0',
                 left:
-                  activeCategory === 'all'
-                    ? '0.25rem'
-                    : activeCategory === 'defi'
-                      ? 'calc(20% + 0.05rem)'
-                      : activeCategory === 'nft'
-                        ? 'calc(40% + 0.1rem)'
-                        : activeCategory === 'game'
-                          ? 'calc(60% + 0.15rem)'
-                          : 'calc(80% + 0.2rem)',
+                  categoryTabs.length > 0
+                    ? `calc(0.25rem + ${activeCategoryIndex} * ((100% - ${(categoryTabs.length - 1) * 0.25}rem) / ${categoryTabs.length} + 0.25rem))`
+                    : '0.25rem',
               }}
             />
 
             <div className="relative flex gap-1 overflow-x-auto scrollbar-hide">
-              {CATEGORIES.map((category) => (
+              {categoryTabs.map((category) => (
                 <button
                   key={category.id}
-                  onClick={() => setActiveCategory(category.id as DAppCategory)}
+                  onClick={() => setActiveCategory(category.id as DiscoverCategory)}
                   className={`flex min-w-0 flex-1 items-center justify-center whitespace-nowrap rounded-lg px-4 py-3 text-sm font-bold transition-all duration-300 ease-out ${
                     activeCategory === category.id ? 'text-black scale-105' : 'text-gray-400 hover:text-white'
                   }`}
@@ -406,10 +422,14 @@ export default function DiscoverPage() {
 
           <div>
             <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-sm font-bold uppercase tracking-wider text-gray-400">
-                {activeCategory === 'all' ? 'All dApps' : `${CATEGORIES.find((item) => item.id === activeCategory)?.name} dApps`}
-              </h2>
-            </div>
+                <h2 className="text-sm font-bold uppercase tracking-wider text-gray-400">
+                  {hasSearch
+                    ? 'Search Results'
+                    : activeCategory
+                      ? `${categoryTabs.find((item) => item.id === activeCategory)?.name ?? activeCategory} dApps`
+                      : 'DApps'}
+                </h2>
+              </div>
 
             {filteredDapps.length === 0 ? (
               <div className="py-16 text-center text-gray-500">
