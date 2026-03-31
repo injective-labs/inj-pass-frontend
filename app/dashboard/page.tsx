@@ -15,7 +15,6 @@ import { getUserStakingInfo, type StakingInfo } from '@/services/staking';
 import { QRCodeSVG } from 'qrcode.react';
 import { createPublicClient, formatEther, formatUnits, http, type Address } from 'viem';
 import Image from 'next/image';
-import LoadingSpinner from '@/components/LoadingSpinner';
 import NFTDetailModal from '@/components/NFTDetailModal';
 import TransactionAuthModal from '@/components/TransactionAuthModal';
 import ThemeToggleButton from '@/components/ThemeToggleButton';
@@ -481,6 +480,106 @@ function DashboardSurfaceFrame({
       className={`h-full w-full border-0 ${className ?? 'bg-black'}`}
       loading={loadingStrategy}
     />
+  );
+}
+
+function DashboardSkeleton({
+  isLight,
+  statusLabel,
+}: {
+  isLight: boolean;
+  statusLabel: string;
+}) {
+  return (
+    <div className={`min-h-screen ${isLight ? 'bg-[#eef4fb] text-slate-900' : 'bg-black text-white'}`}>
+      <div className={`${isLight ? 'border-b border-slate-200/70 bg-white/70' : 'border-b border-white/5 bg-gradient-to-b from-white/5 to-transparent'} backdrop-blur-sm`}>
+        <div className="mx-auto max-w-7xl px-4 py-6">
+          <div className="mb-5 flex flex-col gap-4 md:mb-6 md:flex-row md:items-start md:justify-between">
+            <div className="space-y-2">
+              <div className={`h-4 w-32 rounded-full animate-pulse ${isLight ? 'bg-slate-200' : 'bg-white/10'}`} />
+              <div className={`h-9 w-56 rounded-2xl animate-pulse ${isLight ? 'bg-slate-200/90' : 'bg-white/10'}`} />
+            </div>
+            <div className="flex w-full flex-wrap items-center justify-end gap-2 md:w-auto md:flex-nowrap">
+              {[0, 1, 2, 3].map((item) => (
+                <div
+                  key={item}
+                  className={`h-9 w-20 rounded-xl animate-pulse ${isLight ? 'bg-slate-200/90' : 'bg-white/10'}`}
+                />
+              ))}
+            </div>
+          </div>
+
+          <div className="grid gap-4 xl:grid-cols-[minmax(0,1.08fr)_minmax(320px,0.92fr)]">
+            <div className={`rounded-[28px] border p-5 ${isLight ? 'border-slate-200/70 bg-white/80' : 'border-white/10 bg-white/[0.04]'}`}>
+              <div className="mb-4 flex items-center justify-between">
+                <div className={`h-4 w-24 rounded-full animate-pulse ${isLight ? 'bg-slate-200' : 'bg-white/10'}`} />
+                <div className={`h-8 w-24 rounded-full animate-pulse ${isLight ? 'bg-slate-200/90' : 'bg-white/10'}`} />
+              </div>
+              <div className={`h-12 w-48 rounded-2xl animate-pulse ${isLight ? 'bg-slate-200/90' : 'bg-white/10'}`} />
+              <div className={`mt-3 h-4 w-40 rounded-full animate-pulse ${isLight ? 'bg-slate-200' : 'bg-white/10'}`} />
+              <div className="mt-6 grid gap-3 sm:grid-cols-3">
+                {[0, 1, 2].map((item) => (
+                  <div
+                    key={item}
+                    className={`rounded-2xl border p-4 ${isLight ? 'border-slate-200/70 bg-slate-50/90' : 'border-white/10 bg-white/[0.03]'}`}
+                  >
+                    <div className={`h-3 w-16 rounded-full animate-pulse ${isLight ? 'bg-slate-200' : 'bg-white/10'}`} />
+                    <div className={`mt-3 h-7 w-24 rounded-xl animate-pulse ${isLight ? 'bg-slate-200/90' : 'bg-white/10'}`} />
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className={`rounded-[28px] border p-5 ${isLight ? 'border-slate-200/70 bg-white/80' : 'border-white/10 bg-white/[0.04]'}`}>
+              <div className="mb-4 flex items-center justify-between">
+                <div className={`h-4 w-20 rounded-full animate-pulse ${isLight ? 'bg-slate-200' : 'bg-white/10'}`} />
+                <div className={`h-8 w-20 rounded-full animate-pulse ${isLight ? 'bg-slate-200/90' : 'bg-white/10'}`} />
+              </div>
+              <div className="space-y-3">
+                {[0, 1, 2, 3].map((item) => (
+                  <div
+                    key={item}
+                    className={`flex items-center gap-3 rounded-2xl border px-4 py-3 ${isLight ? 'border-slate-200/70 bg-slate-50/90' : 'border-white/10 bg-white/[0.03]'}`}
+                  >
+                    <div className={`h-11 w-11 rounded-full animate-pulse ${isLight ? 'bg-slate-200/90' : 'bg-white/10'}`} />
+                    <div className="min-w-0 flex-1 space-y-2">
+                      <div className={`h-3.5 w-28 rounded-full animate-pulse ${isLight ? 'bg-slate-200' : 'bg-white/10'}`} />
+                      <div className={`h-3.5 w-40 rounded-full animate-pulse ${isLight ? 'bg-slate-200/90' : 'bg-white/10'}`} />
+                    </div>
+                    <div className={`h-8 w-14 rounded-xl animate-pulse ${isLight ? 'bg-slate-200/90' : 'bg-white/10'}`} />
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-5 grid gap-4 xl:grid-cols-[minmax(0,1.08fr)_minmax(320px,0.92fr)]">
+            <div className={`rounded-[28px] border p-5 ${isLight ? 'border-slate-200/70 bg-white/80' : 'border-white/10 bg-white/[0.04]'}`}>
+              <div className={`mb-4 h-4 w-24 rounded-full animate-pulse ${isLight ? 'bg-slate-200' : 'bg-white/10'}`} />
+              <div className={`h-[420px] rounded-[24px] animate-pulse ${isLight ? 'bg-slate-100' : 'bg-white/[0.04]'}`} />
+            </div>
+            <div className={`rounded-[28px] border p-5 ${isLight ? 'border-slate-200/70 bg-white/80' : 'border-white/10 bg-white/[0.04]'}`}>
+              <div className={`mb-4 h-4 w-28 rounded-full animate-pulse ${isLight ? 'bg-slate-200' : 'bg-white/10'}`} />
+              <div className="space-y-3">
+                {[0, 1, 2].map((item) => (
+                  <div
+                    key={item}
+                    className={`rounded-2xl border p-4 ${isLight ? 'border-slate-200/70 bg-slate-50/90' : 'border-white/10 bg-white/[0.03]'}`}
+                  >
+                    <div className={`h-3 w-16 rounded-full animate-pulse ${isLight ? 'bg-slate-200' : 'bg-white/10'}`} />
+                    <div className={`mt-3 h-20 rounded-2xl animate-pulse ${isLight ? 'bg-slate-100' : 'bg-white/[0.04]'}`} />
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <div className={`mt-5 text-sm ${isLight ? 'text-slate-500' : 'text-gray-500'}`}>
+            {statusLabel}
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -1588,7 +1687,6 @@ export default function DashboardPage() {
   };
 
   const isDashboardReady = !isCheckingSession && !loading && isUnlocked && !!address;
-  const dashboardLoadProgress = isCheckingSession ? 32 : !isUnlocked || !address ? 58 : loading ? 82 : 100;
   const dashboardLoadStatus = isCheckingSession
     ? 'Checking wallet session'
     : !isUnlocked || !address
@@ -1737,9 +1835,11 @@ export default function DashboardPage() {
     );
   };
 
+  if (!isDashboardReady) {
+    return <DashboardSkeleton isLight={isLight} statusLabel={dashboardLoadStatus} />;
+  }
+
   return (
-    <LoadingSpinner ready={isDashboardReady} progress={dashboardLoadProgress} statusLabel={dashboardLoadStatus}>
-      {isDashboardReady ? (
         <>
         <div className="min-h-screen bg-black">
           <div>
@@ -3655,7 +3755,5 @@ export default function DashboardPage() {
       )}
 
         </>
-      ) : null}
-    </LoadingSpinner>
   );
 }
