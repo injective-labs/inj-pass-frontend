@@ -1769,7 +1769,7 @@ export default function DashboardPage() {
   const overviewStageClassName = 'h-[438px] sm:h-[470px] md:h-[482px]';
   const detailStageClassName = 'h-[500px] sm:h-[528px] md:h-[520px]';
   const aiStageClassName = overviewStageClassName;
-  const overviewSizedWalletPanels: WalletPanel[] = ['overview', 'send', 'receive', 'swap', 'history'];
+  const overviewSizedWalletPanels: WalletPanel[] = ['overview', 'send', 'receive', 'swap', 'history', 'settings'];
   const walletStageClassName = isAiStage
     ? aiStageClassName
     : overviewSizedWalletPanels.includes(walletPanel)
@@ -2080,7 +2080,7 @@ export default function DashboardPage() {
                   >
                     <div key={`wallet-overview-${walletNetworkMode}-${walletSurfaceMotionKey}`} className="dashboard-surface-enter flex h-full flex-col justify-center">
                       <div className="flex h-full flex-row items-center gap-3 sm:gap-4 md:gap-6 xl:flex-row xl:items-center">
-                          <div className="min-w-0 flex-1 translate-y-[6px] sm:translate-y-[2px] md:-translate-y-[6px]">
+                          <div className="min-w-0 flex-1 translate-y-[17px] sm:translate-y-[13px] md:translate-y-[5px]">
                           <div className="pl-1 sm:pl-3 md:pl-4">
                             <div className="flex flex-wrap items-end gap-2.5 sm:gap-3 md:gap-4">
                               <span className="text-[2rem] font-bold leading-none text-white font-mono tracking-tight sm:text-4xl md:text-5xl">
@@ -2451,7 +2451,7 @@ export default function DashboardPage() {
                             <div className="grid h-full min-h-0 gap-4 md:grid-rows-[minmax(0,1.02fr)_minmax(0,0.98fr)]">
                               <div className="h-full rounded-2xl border border-white/10 bg-black/20 p-4">
                                 <div className="mb-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">Pair</div>
-                                <div className="grid h-[calc(100%-1.75rem)] gap-3 lg:grid-cols-[minmax(0,1fr)_52px_minmax(0,1fr)] lg:items-center">
+                                <div className="grid h-[calc(100%-1.75rem)] gap-3 md:grid-cols-2">
                                   <div className="flex h-full flex-col justify-between rounded-2xl border border-white/10 bg-white/[0.03] p-3">
                                     <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">From</div>
                                     <select
@@ -2475,7 +2475,7 @@ export default function DashboardPage() {
                                     <div className="mt-3 flex items-center justify-between gap-3">
                                       <div className="flex items-center gap-2.5">
                                         <div className="relative h-9 w-9 overflow-hidden rounded-full border border-white/10 bg-white/5">
-                                          <Image src={swapFromMeta.icon} alt={swapFromMeta.symbol} fill className="object-cover" />
+                                          <Image src={swapFromMeta.icon} alt={swapFromMeta.symbol} fill className={swapFromMeta.symbol === 'LAM' ? 'object-cover object-center' : 'object-contain'} />
                                         </div>
                                         <div>
                                           <div className="text-sm font-semibold text-white">{swapFromMeta.symbol}</div>
@@ -2486,14 +2486,6 @@ export default function DashboardPage() {
                                         <div className="text-sm font-mono text-white">{swapFromMeta.balance}</div>
                                         <div className="text-[11px] text-gray-500">Available</div>
                                       </div>
-                                    </div>
-                                  </div>
-
-                                  <div className="flex items-center justify-center">
-                                    <div className="flex h-12 w-12 items-center justify-center rounded-full border border-white/10 bg-white/[0.04]">
-                                      <svg className="h-5 w-5 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h11m0 0-3-3m3 3-3 3M17 17H6m0 0 3 3m-3-3 3-3" />
-                                      </svg>
                                     </div>
                                   </div>
 
@@ -2520,7 +2512,7 @@ export default function DashboardPage() {
                                     <div className="mt-3 flex items-center justify-between gap-3">
                                       <div className="flex items-center gap-2.5">
                                         <div className="relative h-9 w-9 overflow-hidden rounded-full border border-white/10 bg-white/5">
-                                          <Image src={swapToMeta.icon} alt={swapToMeta.symbol} fill className="object-cover" />
+                                          <Image src={swapToMeta.icon} alt={swapToMeta.symbol} fill className={swapToMeta.symbol === 'LAM' ? 'object-cover object-center' : 'object-contain'} />
                                         </div>
                                         <div>
                                           <div className="text-sm font-semibold text-white">{swapToMeta.symbol}</div>
@@ -2618,48 +2610,6 @@ export default function DashboardPage() {
                                   </div>
                                 </div>
 
-                                <div className="mt-5 rounded-2xl border border-white/8 bg-white/[0.03] px-4 py-3">
-                                  <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">Route</div>
-                                  <div className="mt-3 space-y-3 text-sm text-gray-300">
-                                    <div className="flex items-center gap-3">
-                                      <div className="relative h-8 w-8 overflow-hidden rounded-full border border-white/10 bg-white/5">
-                                        <Image
-                                          src={swapFromMeta.icon}
-                                          alt={swapFromMeta.symbol}
-                                          fill
-                                          className={swapFromMeta.symbol === 'LAM' ? 'object-cover object-center' : 'object-contain'}
-                                        />
-                                      </div>
-                                      <div>
-                                        <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">From</div>
-                                        <div className="text-white">{swapFromToken}</div>
-                                      </div>
-                                    </div>
-                                    <div className="flex justify-center">
-                                      <div className="flex h-8 w-8 items-center justify-center rounded-full border border-white/8 bg-white/[0.04]">
-                                        <svg className="h-4 w-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v14m0 0-4-4m4 4 4-4" />
-                                        </svg>
-                                      </div>
-                                    </div>
-                                    <div className="flex items-center gap-3">
-                                      <div className="relative h-8 w-8 overflow-hidden rounded-full border border-white/10 bg-white/5">
-                                        <Image
-                                          src={swapToMeta.icon}
-                                          alt={swapToMeta.symbol}
-                                          fill
-                                          className={swapToMeta.symbol === 'LAM' ? 'object-cover object-center' : 'object-contain'}
-                                        />
-                                      </div>
-                                      <div>
-                                        <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">To</div>
-                                        <div className="text-white">{swapToToken}</div>
-                                      </div>
-                                    </div>
-                                    <div className="pt-1 text-xs text-gray-400">Slippage: {swapSlippage}%</div>
-                                  </div>
-                                </div>
-
                                 <div className="mt-auto min-h-[88px]">
                                   {swapError ? (
                                     <div className="rounded-2xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-300">
@@ -2671,11 +2621,7 @@ export default function DashboardPage() {
                                       <div className="mt-2 text-sm font-mono text-white">{truncateMiddle(swapTxHash, 10, 8)}</div>
                                     </div>
                                   ) : (
-                                    <div className="rounded-2xl border border-white/8 bg-white/[0.03] px-4 py-3 text-sm text-gray-500">
-                                      {swapUnavailableOnTestnet
-                                        ? 'Switch back to mainnet to use swap inside this wallet surface.'
-                                        : 'Set the pair and amount, then review the quote before confirming the swap.'}
-                                    </div>
+                                    <div className="min-h-[88px]" />
                                   )}
                                 </div>
                               </div>
