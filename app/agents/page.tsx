@@ -344,7 +344,7 @@ export default function AgentsPage() {
       : isEmbedded
       ? isLight
         ? 'grid h-full min-h-0 gap-4 bg-[radial-gradient(circle_at_top,rgba(56,189,248,0.08),transparent_36%),linear-gradient(180deg,#f8fbff,#eef4ff)] p-3 md:p-4 xl:grid-cols-[310px_minmax(0,1fr)]'
-        : 'grid h-full min-h-0 gap-4 bg-[radial-gradient(circle_at_top,rgba(76,58,249,0.08),transparent_34%),linear-gradient(180deg,#040811,#060b14)] p-3 md:p-4 xl:grid-cols-[310px_minmax(0,1fr)]'
+        : 'grid h-full min-h-0 gap-4 bg-[#060b14] p-3 md:p-4 xl:grid-cols-[310px_minmax(0,1fr)]'
       : isLight
         ? 'flex h-screen bg-[radial-gradient(circle_at_top,rgba(56,189,248,0.08),transparent_32%),linear-gradient(180deg,#f8fbff,#eef4ff)]'
         : 'flex h-screen bg-black'
@@ -1083,7 +1083,7 @@ export default function AgentsPage() {
     <div className={rootShellClass}>
 
       {/* Sidebar overlay (mobile) */}
-      {sidebarOpen && !isCompactStage && (!isEmbedded || isCompactEmbedded) && (
+      {sidebarOpen && (!isEmbedded || isCompactEmbedded) && (
         <div
           className={`${isCompactEmbedded ? 'absolute' : 'fixed'} inset-0 bg-black/60 z-20 md:hidden`}
           onClick={() => setSidebarOpen(false)}
@@ -1091,7 +1091,7 @@ export default function AgentsPage() {
       )}
 
       {/* Sidebar */}
-      {!isCompactStage && (
+      {(!isEmbedded || isCompactEmbedded) && (
       <aside className={sidebarShellClass}>
         <div className={`${isEmbedded ? 'p-5' : 'p-4'} border-b ${isLight ? 'border-slate-200/80' : 'border-white/10'}`}>
           <div className="flex items-start justify-between gap-3">
@@ -1243,13 +1243,25 @@ export default function AgentsPage() {
 
         {/* Top bar */}
         <header className={headerShellClass}>
-          {!isCompactStage && (
+          {(!isEmbedded || isCompactEmbedded) && (
             <button
               onClick={() => setSidebarOpen(true)}
               className={`p-2 rounded-lg hover:bg-white/10 transition-colors ${isCompactEmbedded ? '' : 'md:hidden'}`}
+              title={isCompactStage ? 'Conversation history' : 'Open conversations'}
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                {isCompactStage ? (
+                  <>
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 6h12" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h12" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 18h12" />
+                    <circle cx="4.5" cy="6" r="1.2" fill="currentColor" stroke="none" />
+                    <circle cx="4.5" cy="12" r="1.2" fill="currentColor" stroke="none" />
+                    <circle cx="4.5" cy="18" r="1.2" fill="currentColor" stroke="none" />
+                  </>
+                ) : (
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                )}
               </svg>
             </button>
           )}
@@ -1326,7 +1338,7 @@ export default function AgentsPage() {
         </header>
 
         {/* Messages */}
-          <div className={`flex-1 ${isCompactStage ? (messages.length === 0 ? 'overflow-hidden' : 'overflow-y-auto scrollbar-hide') : 'overflow-y-auto'} ${isCompactStage ? '' : isEmbedded ? (isLight ? 'bg-[radial-gradient(circle_at_top,rgba(56,189,248,0.05),transparent_36%)]' : 'bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.04),transparent_36%)]') : ''}`}>
+          <div className={`flex-1 ${isCompactStage ? (messages.length === 0 ? 'overflow-hidden' : 'overflow-y-auto scrollbar-hide') : 'overflow-y-auto'} ${isCompactStage ? '' : isEmbedded ? (isLight ? 'bg-[radial-gradient(circle_at_top,rgba(56,189,248,0.05),transparent_36%)]' : 'bg-transparent') : ''}`}>
           {messages.length === 0 ? (
             isCompactStage ? (
               <div className="flex h-full min-h-0 flex-col px-3 py-3 sm:px-4">

@@ -203,7 +203,7 @@ export default function NinjaMinerGame({ walletAddress, onOpenMoreChance }: Ninj
           isLight ? 'text-slate-500' : 'text-gray-500'
         }`}
       >
-        Preparing LAM...
+        Preparing NINJA...
       </div>
     );
   }
@@ -249,12 +249,12 @@ export default function NinjaMinerGame({ walletAddress, onOpenMoreChance }: Ninj
           className={`ninja-tap-shell ${isActive ? 'is-active' : ''} ${isCoolingDown ? 'is-cooling' : ''} ${
             isLight ? 'border-slate-300/75 bg-slate-100/80' : 'border-white/10 bg-white/[0.04]'
           }`}
-          aria-label={isCoolingDown ? 'LAM tap cooldown active' : 'Tap LAM'}
+          aria-label={isCoolingDown ? 'NINJA tap cooldown active' : 'Tap NINJA'}
         >
           <div className="ninja-logo-wrap">
             <Image
-              src="/lam-logo.png"
-              alt="LAM"
+              src="/NIJIA.png"
+              alt="NINJA"
               width={152}
               height={152}
               className="h-32 w-32 select-none rounded-full object-cover ring-1 ring-white/10 md:h-36 md:w-36"
@@ -267,7 +267,7 @@ export default function NinjaMinerGame({ walletAddress, onOpenMoreChance }: Ninj
       <div className="w-full max-w-[360px] space-y-2">
         {!isActive && !isCoolingDown ? (
           <div className={`text-center text-[11px] font-semibold uppercase tracking-[0.22em] ${isLight ? 'text-slate-500' : 'text-gray-500'}`}>
-            Tap LAM to Earn
+            Tap NINJA to Earn
           </div>
         ) : (
           <div className={`h-2 overflow-hidden rounded-full ${isLight ? 'bg-slate-200/90' : 'bg-white/8'}`}>

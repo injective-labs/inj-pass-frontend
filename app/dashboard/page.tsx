@@ -38,6 +38,7 @@ type DashboardTransactionStatus = 'completed' | 'pending' | 'failed';
 type DashboardHistoryFilter = 'all' | DashboardTransactionType;
 type DashboardChainType = 'EVM' | 'Cosmos';
 type SwapToken = 'INJ' | 'USDT' | 'USDC' | 'LAM';
+type BalanceDisplayUnit = 'INJ' | 'USD' | 'BTC';
 type AssetSurfaceMode = 'assets' | 'ai' | 'faucet';
 type WalletNetworkMode = 'mainnet' | 'testnet';
 type FaucetCategory = 'popular' | 'others';
@@ -55,6 +56,7 @@ interface BoundCardPreview {
 const NINJA_STORAGE_PREFIX = 'inj-pass:ninja-miner:';
 const NINJA_BALANCE_EVENT = 'inj-pass:ninja-balance-update';
 const DEFAULT_NINJA_BALANCE = 22;
+const LAM_USD_PRICE = 0.01;
 const POPULAR_FAUCET_IDS = new Set(['injective', 'sepolia', 'arbitrum', 'base']);
 const MORE_CHANCE_PLANS: Array<{
   id: ChancePlanId;
@@ -596,10 +598,13 @@ export default function DashboardPage() {
   const [walletSurfaceMotionKey, setWalletSurfaceMotionKey] = useState(0);
   const [assetSurfaceMotionKey, setAssetSurfaceMotionKey] = useState(0);
   const [injPrice, setInjPrice] = useState<number>(25);
+  const [btcPrice, setBtcPrice] = useState<number>(85000);
   const [injPriceChange24h, setInjPriceChange24h] = useState<number>(0);
   const [usdtPriceChange24h, setUsdtPriceChange24h] = useState<number>(0);
   const [usdcPriceChange24h, setUsdcPriceChange24h] = useState<number>(0);
   const [balanceVisible, setBalanceVisible] = useState(true);
+  const [balanceDisplayUnit, setBalanceDisplayUnit] = useState<BalanceDisplayUnit>('INJ');
+  const [balanceUnitMenuOpen, setBalanceUnitMenuOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const [ninjaBalance, setNinjaBalance] = useState(DEFAULT_NINJA_BALANCE);
   const [assetTab, setAssetTab] = useState<AssetTab>('tokens');
@@ -935,9 +940,10 @@ export default function DashboardPage() {
       } else {
         setLoading(true);
       }
-      const [balanceData, injPriceData, usdtPriceData, usdcPriceData, tokenBalData] = await Promise.all([
+      const [balanceData, injPriceData, btcPriceData, usdtPriceData, usdcPriceData, tokenBalData] = await Promise.all([
         getBalance(address, currentNetworkMeta.chain),
         getTokenPrice('injective-protocol'),
+        getTokenPrice('bitcoin'),
         getTokenPrice('tether'),
         getTokenPrice('usd-coin'),
         getDashboardTokenBalances(address as Address, walletNetworkMode),
@@ -945,6 +951,7 @@ export default function DashboardPage() {
       
       setBalance(balanceData);
       setInjPrice(injPriceData.usd);
+      setBtcPrice(btcPriceData.usd > 1000 ? btcPriceData.usd : 85000);
       setInjPriceChange24h(injPriceData.usd24hChange || 0);
       setUsdtPriceChange24h(usdtPriceData.usd24hChange || 0);
       setUsdcPriceChange24h(usdcPriceData.usd24hChange || 0);
@@ -1694,13 +1701,25 @@ export default function DashboardPage() {
       : loading
         ? 'Loading wallet surface'
         : 'Wallet surface ready';
-  const formattedBalance = balance ? parseFloat(balance.formatted).toFixed(4) : '0.0000';
-  const injUsdValue = balance ? (parseFloat(balance.formatted) * injPrice) : 0;
-  const usdtValue = parseFloat(tokenBalances.USDT);
-  const usdcValue = parseFloat(tokenBalances.USDC);
-  const totalUsdNumeric = injUsdValue + usdtValue + usdcValue;
+  const safeInjPrice = injPrice > 0 ? injPrice : 25;
+  const safeBtcPrice = btcPrice > 1000 ? btcPrice : 85000;
+  const injBalanceValue = balance ? parseFloat(balance.formatted) : parseFloat(tokenBalances.INJ);
+  const injUsdValue = Number.isFinite(injBalanceValue) ? injBalanceValue * safeInjPrice : 0;
+  const usdtValue = Number.isFinite(parseFloat(tokenBalances.USDT)) ? parseFloat(tokenBalances.USDT) : 0;
+  const usdcValue = Number.isFinite(parseFloat(tokenBalances.USDC)) ? parseFloat(tokenBalances.USDC) : 0;
+  const lamBalanceValue = walletNetworkMode === 'mainnet' ? ninjaBalance : 0;
+  const lamUsdValue = lamBalanceValue * LAM_USD_PRICE;
+  const totalUsdNumeric = injUsdValue + usdtValue + usdcValue + lamUsdValue;
   const totalUsdValue = totalUsdNumeric.toFixed(2);
-  const assetTrendSeries = buildPixelTrendSeries(totalUsdNumeric, injPriceChange24h);
+  const totalUsdChangeValue =
+    injUsdValue * (injPriceChange24h / 100) +
+    usdtValue * (usdtPriceChange24h / 100) +
+    usdcValue * (usdcPriceChange24h / 100);
+  const previousTotalUsdValue = totalUsdNumeric - totalUsdChangeValue;
+  const portfolioChangePct = previousTotalUsdValue > 0
+    ? (totalUsdChangeValue / previousTotalUsdValue) * 100
+    : 0;
+  const assetTrendSeries = buildPixelTrendSeries(totalUsdNumeric, portfolioChangePct);
   const isWalletOverview = walletPanel === 'overview';
   const isAiStage = assetSurfaceMode === 'ai';
   const isFaucetStage = assetSurfaceMode === 'faucet';
@@ -1708,6 +1727,44 @@ export default function DashboardPage() {
   const isTestnet = walletNetworkMode === 'testnet';
   const activeWalletPanelMeta = walletPanel !== 'overview' ? walletPanelMeta[walletPanel] : null;
   const formattedLamBalance = walletNetworkMode === 'mainnet' ? ninjaBalance.toFixed(2) : '0.00';
+  const formatUnitNumber = (value: number, unit: BalanceDisplayUnit) => {
+    const safeValue = Number.isFinite(value) ? value : 0;
+
+    if (unit === 'USD') return safeValue.toFixed(2);
+    if (unit === 'BTC') return safeValue.toFixed(6);
+    return safeValue.toFixed(4);
+  };
+  const formatUnitValue = (usdValue: number, unit: BalanceDisplayUnit) => {
+    if (unit === 'USD') return `$${formatUnitNumber(usdValue, 'USD')}`;
+    if (unit === 'BTC') return `${formatUnitNumber(usdValue / safeBtcPrice, 'BTC')} BTC`;
+    return `${formatUnitNumber(usdValue / safeInjPrice, 'INJ')} INJ`;
+  };
+  const formatSignedChangeValue = (usdValue: number, unit: BalanceDisplayUnit) => {
+    const sign = usdValue >= 0 ? '+' : '-';
+    const absoluteValue = Math.abs(usdValue);
+
+    if (unit === 'USD') {
+      return `${sign}$${formatUnitNumber(absoluteValue, 'USD')}`;
+    }
+
+    if (unit === 'BTC') {
+      return `${sign}${formatUnitNumber(absoluteValue / safeBtcPrice, 'BTC')}`;
+    }
+
+    return `${sign}${formatUnitNumber(absoluteValue / safeInjPrice, 'INJ')}`;
+  };
+  const totalBalanceValue =
+    balanceDisplayUnit === 'USD'
+      ? totalUsdNumeric
+      : balanceDisplayUnit === 'BTC'
+        ? totalUsdNumeric / safeBtcPrice
+        : totalUsdNumeric / safeInjPrice;
+  const formattedDisplayBalance = formatUnitNumber(totalBalanceValue, balanceDisplayUnit);
+  const displaySecondaryBalance =
+    balanceDisplayUnit === 'USD'
+      ? `≈ ${formatUnitNumber(totalUsdNumeric / safeInjPrice, 'INJ')} INJ`
+      : `≈ $${totalUsdValue} USD`;
+  const displayChangeValue = formatSignedChangeValue(totalUsdChangeValue, balanceDisplayUnit);
   const overviewStageClassName = 'h-[438px] sm:h-[470px] md:h-[482px]';
   const detailStageClassName = 'h-[500px] sm:h-[528px] md:h-[520px]';
   const aiStageClassName = overviewStageClassName;
@@ -1735,7 +1792,7 @@ export default function DashboardPage() {
       symbol: 'INJ',
       icon: '/injswap.png',
       balance: `${tokenBalances.INJ} INJ`,
-      usdValue: `$${(parseFloat(tokenBalances.INJ) * injPrice).toFixed(2)}`,
+      usdValue: formatUnitValue((parseFloat(tokenBalances.INJ) || 0) * safeInjPrice, balanceDisplayUnit),
       change: `${injPriceChange24h >= 0 ? '+' : ''}${injPriceChange24h.toFixed(2)}%`,
       changeClass: injPriceChange24h >= 0 ? 'text-green-400' : 'text-red-400',
       copyValue: currentWinjAddress,
@@ -1745,7 +1802,7 @@ export default function DashboardPage() {
       symbol: 'USDC',
       icon: '/USDC_Logo.png',
       balance: `${tokenBalances.USDC} USDC`,
-      usdValue: `$${tokenBalances.USDC}`,
+      usdValue: formatUnitValue(parseFloat(tokenBalances.USDC) || 0, balanceDisplayUnit),
       change: `${usdcPriceChange24h >= 0 ? '+' : ''}${usdcPriceChange24h.toFixed(2)}%`,
       changeClass: usdcPriceChange24h >= 0 ? 'text-green-400' : 'text-red-400',
       copyValue: currentUsdcAddress,
@@ -1755,7 +1812,7 @@ export default function DashboardPage() {
       symbol: 'LAM',
       icon: '/lam-logo.png',
       balance: `${formattedLamBalance} LAM`,
-      usdValue: '$0.00',
+      usdValue: formatUnitValue(lamUsdValue, balanceDisplayUnit),
       change: '+0.00%',
       changeClass: 'text-gray-500',
       copyValue: null,
@@ -1765,7 +1822,7 @@ export default function DashboardPage() {
       symbol: 'USDT',
       icon: '/USDT_Logo.png',
       balance: `${tokenBalances.USDT} USDT`,
-      usdValue: `$${tokenBalances.USDT}`,
+      usdValue: formatUnitValue(parseFloat(tokenBalances.USDT) || 0, balanceDisplayUnit),
       change: `${usdtPriceChange24h >= 0 ? '+' : ''}${usdtPriceChange24h.toFixed(2)}%`,
       changeClass: usdtPriceChange24h >= 0 ? 'text-green-400' : 'text-red-400',
       copyValue: currentUsdtAddress,
@@ -1947,7 +2004,7 @@ export default function DashboardPage() {
               <div className="relative flex flex-1 flex-col">
                 {/* Header with Balance Label */}
                 {isWalletOverview && (
-                  <div className="mb-3 flex items-start justify-between gap-3 sm:mb-4">
+                  <div className="mb-1 flex items-start justify-between gap-3 sm:mb-2">
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="text-gray-400 text-xs font-semibold uppercase tracking-wider">Total Balance</span>
                       {isTestnet && (
@@ -2015,27 +2072,65 @@ export default function DashboardPage() {
                         : 'opacity-0 translate-y-5 pointer-events-none'
                     }`}
                   >
-                    <div key={`wallet-overview-${walletNetworkMode}-${walletSurfaceMotionKey}`} className="dashboard-surface-enter flex h-full -translate-y-2 flex-col justify-center sm:-translate-y-3 md:-translate-y-4">
+                    <div key={`wallet-overview-${walletNetworkMode}-${walletSurfaceMotionKey}`} className="dashboard-surface-enter flex h-full flex-col justify-center">
                       <div className="flex h-full flex-row items-center gap-3 sm:gap-4 md:gap-6 xl:flex-row xl:items-center">
-                        <div className="min-w-0 flex-1">
+                        <div className="min-w-0 flex-1 -translate-y-4 sm:-translate-y-5 md:-translate-y-7">
                           <div className="pl-1 sm:pl-3 md:pl-4">
                             <div className="flex flex-wrap items-end gap-2.5 sm:gap-3 md:gap-4">
                               <span className="text-[2rem] font-bold leading-none text-white font-mono tracking-tight sm:text-4xl md:text-5xl">
-                                {balanceVisible ? <RollingBalanceNumber value={formattedBalance} /> : '••••••'}
+                                {balanceVisible ? <RollingBalanceNumber value={formattedDisplayBalance} /> : '••••••'}
                               </span>
-                              <span className="text-lg font-semibold text-gray-400 sm:text-xl">INJ</span>
+                              <div
+                                className="relative"
+                                onMouseEnter={() => setBalanceUnitMenuOpen(true)}
+                                onMouseLeave={() => setBalanceUnitMenuOpen(false)}
+                              >
+                                <button
+                                  type="button"
+                                  onClick={() => setBalanceUnitMenuOpen((current) => !current)}
+                                  className="inline-flex items-center gap-1 rounded-full px-1 py-0.5 text-lg font-semibold text-gray-400 transition-colors hover:text-white sm:text-xl"
+                                >
+                                  <span>{balanceDisplayUnit}</span>
+                                  <svg className={`h-3.5 w-3.5 transition-transform ${balanceUnitMenuOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="m6 9 6 6 6-6" />
+                                  </svg>
+                                </button>
+                                <div
+                                  className={`absolute left-0 top-full z-20 mt-2 min-w-[92px] rounded-xl border border-white/10 bg-black/90 p-1.5 shadow-[0_16px_40px_rgba(0,0,0,0.35)] backdrop-blur transition-all duration-200 ${
+                                    balanceUnitMenuOpen ? 'translate-y-0 opacity-100' : 'pointer-events-none -translate-y-1 opacity-0'
+                                  }`}
+                                >
+                                  {(['INJ', 'USD', 'BTC'] as const).map((unit) => (
+                                    <button
+                                      key={unit}
+                                      type="button"
+                                      onClick={() => {
+                                        setBalanceDisplayUnit(unit);
+                                        setBalanceUnitMenuOpen(false);
+                                      }}
+                                      className={`flex w-full items-center rounded-lg px-3 py-2 text-left text-xs font-semibold uppercase tracking-[0.18em] transition-colors ${
+                                        balanceDisplayUnit === unit
+                                          ? 'bg-white/10 text-white'
+                                          : 'text-gray-400 hover:bg-white/5 hover:text-white'
+                                      }`}
+                                    >
+                                      {unit}
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
                             </div>
                             <div className="mt-2 flex flex-wrap items-center gap-2.5 sm:gap-4">
                               <div className="text-sm text-gray-400 font-mono sm:text-base">
-                                ≈ ${balanceVisible ? totalUsdValue : '••••••'} USD
+                                {balanceVisible ? displaySecondaryBalance : '••••••'}
                               </div>
-                              {balanceVisible && balance && (
+                              {balanceVisible && (
                                 <div className="flex flex-wrap items-center gap-2">
-                                  <span className={`text-xs font-semibold sm:text-sm ${injPriceChange24h >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                                    {injPriceChange24h >= 0 ? '+' : ''}${(parseFloat(balance.formatted) * injPrice * injPriceChange24h / 100).toFixed(2)}
+                                  <span className={`text-xs font-semibold sm:text-sm ${totalUsdChangeValue >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                                    {displayChangeValue}
                                   </span>
-                                  <span className={`text-xs sm:text-sm ${injPriceChange24h >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                                    {injPriceChange24h >= 0 ? '+' : ''}{injPriceChange24h.toFixed(2)}%
+                                  <span className={`text-xs sm:text-sm ${portfolioChangePct >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                                    {portfolioChangePct >= 0 ? '+' : ''}{portfolioChangePct.toFixed(2)}%
                                   </span>
                                   <span className="text-gray-500 text-xs">24h</span>
                                 </div>
@@ -2048,7 +2143,7 @@ export default function DashboardPage() {
                           <PixelTrendChart
                             values={assetTrendSeries}
                             hidden={!balanceVisible}
-                            changePct={injPriceChange24h}
+                            changePct={portfolioChangePct}
                             currentValueLabel={totalUsdValue}
                             networkMode={walletNetworkMode}
                             replayKey={assetTrendReplayKey}
@@ -3152,7 +3247,6 @@ export default function DashboardPage() {
                         <div className="min-w-0 flex-1">
                           <div className="mb-0.5 flex items-center gap-1.5">
                             <div className="text-sm font-bold sm:text-base">{token.symbol}</div>
-                            <span className="text-[9px] uppercase tracking-[0.16em] text-gray-500">Tap for info</span>
                           </div>
                           <div className="text-[12px] text-gray-400 sm:text-[13px]">{token.balance}</div>
                         </div>
@@ -3195,7 +3289,7 @@ export default function DashboardPage() {
                             {token.contractValue}
                           </div>
                         </div>
-                          {token.copyValue && (
+                          {token.copyValue ? (
                             <button
                               onClick={(event) => {
                                 event.stopPropagation();
@@ -3218,7 +3312,22 @@ export default function DashboardPage() {
                             >
                               {copiedTokenInfo === token.symbol ? 'Copied' : 'Copy'}
                             </button>
-                          )}
+                          ) : token.symbol === 'LAM' ? (
+                            <button
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                setFlippedTokenCard(null);
+                                openMoreChancePanel();
+                              }}
+                              className={`rounded-lg border px-2 py-1 text-[10px] font-semibold transition-all ${
+                                isLight
+                                  ? 'border-slate-200/80 bg-slate-900/[0.03] text-slate-700 hover:bg-slate-900/[0.06]'
+                                  : 'border-white/10 bg-white/5 text-white hover:bg-white/10'
+                              }`}
+                            >
+                              Buy
+                            </button>
+                          ) : null}
                       </div>
                     </div>
                   </div>
@@ -3477,8 +3586,6 @@ export default function DashboardPage() {
                 }`}
               >
                 <div className="bg-black rounded-2xl relative overflow-hidden h-full">
-                  <div className="absolute bottom-0 right-0 h-32 w-32 rounded-full bg-gradient-to-tl from-fuchsia-500/10 to-transparent blur-2xl" />
-                  <div className="absolute top-0 left-0 h-32 w-32 rounded-full bg-gradient-to-br from-cyan-500/8 to-transparent blur-2xl" />
                   <div className="relative h-full overflow-hidden">
                     <DashboardSurfaceFrame
                       src="/agents?embed=1&compact=1"
