@@ -1109,8 +1109,12 @@ export default function DashboardPage() {
 
   const receiveDisplayAddress = receiveAddressType === 'evm' ? (address || '') : getCosmosAddress(address || '');
   const sendGasLimitLabel = sendGasEstimate ? sendGasEstimate.gasLimit.toString() : 'Awaiting input';
-  const sendMaxFeeLabel = sendGasEstimate ? `${Number(formatUnits(sendGasEstimate.maxFeePerGas, 9)).toFixed(2)} Gwei` : 'Awaiting input';
-  const sendPriorityFeeLabel = sendGasEstimate ? `${Number(formatUnits(sendGasEstimate.maxPriorityFeePerGas, 9)).toFixed(2)} Gwei` : 'Awaiting input';
+  const sendEstimatedGasCostInInj = sendGasEstimate ? Number(formatEther(sendGasEstimate.totalCost)) : null;
+  const sendEstimatedGasLabel = sendGasEstimate
+    ? sendEstimatedGasCostInInj !== null && sendEstimatedGasCostInInj > 0 && sendEstimatedGasCostInInj < 0.0001
+      ? '<0.0001 INJ'
+      : `${(sendEstimatedGasCostInInj ?? 0).toFixed(4)} INJ`
+    : 'Awaiting input';
   const sendBalanceValue = parseFloat(tokenBalances.INJ || '0');
   const sendAmountNumeric = Number(sendAmount);
   const sendAmountExceedsBalance =
@@ -1765,7 +1769,12 @@ export default function DashboardPage() {
   const overviewStageClassName = 'h-[438px] sm:h-[470px] md:h-[482px]';
   const detailStageClassName = 'h-[500px] sm:h-[528px] md:h-[520px]';
   const aiStageClassName = overviewStageClassName;
-  const walletStageClassName = isAiStage ? aiStageClassName : isWalletOverview ? overviewStageClassName : detailStageClassName;
+  const overviewSizedWalletPanels: WalletPanel[] = ['overview', 'send', 'receive', 'swap', 'history'];
+  const walletStageClassName = isAiStage
+    ? aiStageClassName
+    : overviewSizedWalletPanels.includes(walletPanel)
+      ? overviewStageClassName
+      : detailStageClassName;
   const assetStageClassName = 'h-[392px] sm:h-[430px] md:h-[482px]';
   const currentNetworkLabel = currentNetworkMeta.label;
   const currentNetworkShortLabel = currentNetworkMeta.shortLabel;
@@ -2071,7 +2080,7 @@ export default function DashboardPage() {
                   >
                     <div key={`wallet-overview-${walletNetworkMode}-${walletSurfaceMotionKey}`} className="dashboard-surface-enter flex h-full flex-col justify-center">
                       <div className="flex h-full flex-row items-center gap-3 sm:gap-4 md:gap-6 xl:flex-row xl:items-center">
-                          <div className="min-w-0 flex-1 -translate-y-[6px] sm:-translate-y-[10px] md:-translate-y-[18px]">
+                          <div className="min-w-0 flex-1 translate-y-[6px] sm:translate-y-[2px] md:-translate-y-[6px]">
                           <div className="pl-1 sm:pl-3 md:pl-4">
                             <div className="flex flex-wrap items-end gap-2.5 sm:gap-3 md:gap-4">
                               <span className="text-[2rem] font-bold leading-none text-white font-mono tracking-tight sm:text-4xl md:text-5xl">
@@ -2210,8 +2219,10 @@ export default function DashboardPage() {
                       <div className={`min-h-0 flex-1 ${
                         walletPanel === 'settings'
                           ? 'overflow-hidden pr-0 pt-3'
-                          : walletPanel === 'send' || walletPanel === 'swap' || walletPanel === 'history' || walletPanel === 'card' || walletPanel === 'chance'
-                            ? 'overflow-y-auto pr-1 pt-4 sm:overflow-hidden sm:pr-0'
+                          : walletPanel === 'send' || walletPanel === 'receive' || walletPanel === 'swap' || walletPanel === 'history'
+                            ? 'overflow-y-auto scrollbar-hide pr-1 pt-3 sm:pr-1'
+                            : walletPanel === 'card' || walletPanel === 'chance'
+                              ? 'overflow-y-auto scrollbar-hide pr-1 pt-4 sm:overflow-hidden sm:pr-0'
                             : 'overflow-y-auto pt-4 pr-1'
                       }`}>
                         {walletPanel === 'send' && (
@@ -2279,12 +2290,12 @@ export default function DashboardPage() {
                                       placeholder="0.0000"
                                       className={`w-full appearance-none bg-transparent text-3xl font-mono outline-none transition-colors duration-200 selection:bg-transparent selection:text-current [-webkit-text-fill-color:currentColor] md:text-[2.35rem] ${
                                         sendAmountExceedsBalance
-                                          ? 'text-[#8e3f3f] placeholder:text-[#8e3f3f]/20'
+                                          ? 'text-[#ff5a6b] placeholder:text-[#ff5a6b]/30'
                                           : 'text-white placeholder:text-gray-600'
                                       }`}
                                     />
                                     <span className={`pb-1.5 text-sm font-semibold transition-colors duration-200 ${
-                                      sendAmountExceedsBalance ? 'text-[#8e3f3f]/85' : 'text-gray-400'
+                                      sendAmountExceedsBalance ? 'text-[#ff5a6b]' : 'text-gray-400'
                                     }`}>INJ</span>
                                   </div>
 
@@ -2332,7 +2343,7 @@ export default function DashboardPage() {
                                 </div>
                               </div>
 
-                              <div className="mt-5 rounded-2xl border border-white/8 bg-white/[0.02] px-4 py-3">
+                                  <div className="mt-5 rounded-2xl border border-white/8 bg-white/[0.02] px-4 py-3">
                                 <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">Gas</div>
                                 <div className="mt-3 space-y-3">
                                   <div className="flex items-center justify-between gap-3 text-sm">
@@ -2340,12 +2351,8 @@ export default function DashboardPage() {
                                     <span className="font-mono text-white">{sendEstimating && !sendGasEstimate ? 'Estimating...' : sendGasLimitLabel}</span>
                                   </div>
                                   <div className="flex items-center justify-between gap-3 text-sm">
-                                    <span className="text-gray-500">Max Fee</span>
-                                    <span className="font-mono text-white">{sendEstimating && !sendGasEstimate ? 'Estimating...' : sendMaxFeeLabel}</span>
-                                  </div>
-                                  <div className="flex items-center justify-between gap-3 text-sm">
-                                    <span className="text-gray-500">Priority Fee</span>
-                                    <span className="font-mono text-white">{sendEstimating && !sendGasEstimate ? 'Estimating...' : sendPriorityFeeLabel}</span>
+                                    <span className="text-gray-500">Estimated Cost</span>
+                                    <span className="font-mono text-white">{sendEstimating && !sendGasEstimate ? 'Estimating...' : sendEstimatedGasLabel}</span>
                                   </div>
                                 </div>
                               </div>
@@ -2364,8 +2371,8 @@ export default function DashboardPage() {
                         )}
 
                         {walletPanel === 'receive' && (
-                          <div className="flex h-full min-h-0 flex-col pt-5">
-                            <div className="grid min-h-0 flex-1 gap-5 lg:grid-cols-[220px_minmax(0,1fr)] lg:items-stretch">
+                          <div className="flex h-full min-h-0 flex-col">
+                            <div className="grid min-h-0 flex-1 gap-4 lg:grid-cols-[220px_minmax(0,1fr)] lg:items-stretch">
                               <div className="flex h-full items-center justify-center">
                                 <div className="rounded-[2rem] bg-white p-4 shadow-2xl">
                                   <QRCodeSVG
@@ -2379,7 +2386,7 @@ export default function DashboardPage() {
                                 </div>
                               </div>
 
-                              <div className="flex h-full min-h-0 flex-col">
+                              <div className="flex h-full min-h-0 flex-col justify-between">
                                 <div className="relative p-1 bg-white/5 rounded-2xl border border-white/10">
                                   <div
                                     className={`absolute top-1 bottom-1 w-[calc(50%-0.25rem)] rounded-[0.85rem] bg-white transition-all duration-300 ${
@@ -2402,7 +2409,7 @@ export default function DashboardPage() {
                                   </div>
                                 </div>
 
-                                <div className="mt-4 rounded-2xl border border-white/10 bg-black/20 p-4">
+                                <div className="mt-3 rounded-2xl border border-white/10 bg-black/20 p-4">
                                   <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">Wallet Address</div>
                                   <div className="mt-3 flex items-center gap-3">
                                     <div className="flex-1 overflow-x-auto scrollbar-hide font-mono text-sm text-white whitespace-nowrap">
@@ -2426,7 +2433,7 @@ export default function DashboardPage() {
                                   </div>
                                 </div>
 
-                                <div className="mt-auto grid gap-3 pt-4 sm:grid-cols-2">
+                                <div className="grid gap-3 pt-0 sm:grid-cols-2">
                                   <div className="rounded-2xl border border-emerald-500/15 bg-emerald-500/5 px-4 py-3 text-sm text-gray-300">
                                     Use <span className="text-white">{receiveAddressType === 'evm' ? 'EVM' : 'Cosmos'}</span> format depending on the sender you are receiving from.
                                   </div>
@@ -2613,10 +2620,43 @@ export default function DashboardPage() {
 
                                 <div className="mt-5 rounded-2xl border border-white/8 bg-white/[0.03] px-4 py-3">
                                   <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">Route</div>
-                                  <div className="mt-3 space-y-2 text-sm text-gray-300">
-                                    <p>Pair: {swapFromToken} → {swapToToken}</p>
-                                    <p>Slippage: {swapSlippage}%</p>
-                                    <p>Network: {currentNetworkLabel}</p>
+                                  <div className="mt-3 space-y-3 text-sm text-gray-300">
+                                    <div className="flex items-center gap-3">
+                                      <div className="relative h-8 w-8 overflow-hidden rounded-full border border-white/10 bg-white/5">
+                                        <Image
+                                          src={swapFromMeta.icon}
+                                          alt={swapFromMeta.symbol}
+                                          fill
+                                          className={swapFromMeta.symbol === 'LAM' ? 'object-cover object-center' : 'object-contain'}
+                                        />
+                                      </div>
+                                      <div>
+                                        <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">From</div>
+                                        <div className="text-white">{swapFromToken}</div>
+                                      </div>
+                                    </div>
+                                    <div className="flex justify-center">
+                                      <div className="flex h-8 w-8 items-center justify-center rounded-full border border-white/8 bg-white/[0.04]">
+                                        <svg className="h-4 w-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v14m0 0-4-4m4 4 4-4" />
+                                        </svg>
+                                      </div>
+                                    </div>
+                                    <div className="flex items-center gap-3">
+                                      <div className="relative h-8 w-8 overflow-hidden rounded-full border border-white/10 bg-white/5">
+                                        <Image
+                                          src={swapToMeta.icon}
+                                          alt={swapToMeta.symbol}
+                                          fill
+                                          className={swapToMeta.symbol === 'LAM' ? 'object-cover object-center' : 'object-contain'}
+                                        />
+                                      </div>
+                                      <div>
+                                        <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">To</div>
+                                        <div className="text-white">{swapToToken}</div>
+                                      </div>
+                                    </div>
+                                    <div className="pt-1 text-xs text-gray-400">Slippage: {swapSlippage}%</div>
                                   </div>
                                 </div>
 
