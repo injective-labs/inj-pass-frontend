@@ -4,7 +4,6 @@ import { useRouter } from 'next/navigation';
 import { useWallet } from '@/contexts/WalletContext';
 import { useEffect, useState } from 'react';
 import { useTheme } from '@/contexts/ThemeContext';
-import LoadingSpinner from '@/components/LoadingSpinner';
 import AccountHeader from '../components/AccountHeader';
 import { DAPPS, DApp, DAppCategory } from '@/config/dapps';
 import { NETWORK_CONFIG } from '@/config/network';
@@ -68,6 +67,123 @@ function SearchBox({
           </svg>
         </button>
       )}
+    </div>
+  );
+}
+
+function DiscoverSkeleton({
+  isLight,
+  isEmbedded,
+}: {
+  isLight: boolean;
+  isEmbedded: boolean;
+}) {
+  if (isEmbedded) {
+    return (
+      <div className="flex h-full flex-col gap-3 px-3 py-3 sm:gap-4 sm:px-4">
+        <div className={`rounded-2xl border p-3 ${isLight ? 'border-slate-200/80 bg-white/88' : 'border-white/10 bg-white/[0.04]'}`}>
+          <div className={`h-11 rounded-xl animate-pulse ${isLight ? 'bg-slate-200/80' : 'bg-white/10'}`} />
+        </div>
+        <div className="flex gap-2">
+          {[0, 1, 2].map((item) => (
+            <div
+              key={item}
+              className={`h-8 w-20 rounded-full animate-pulse ${isLight ? 'bg-slate-200/80' : 'bg-white/10'}`}
+            />
+          ))}
+        </div>
+        <div className="grid gap-3">
+          {[0, 1, 2, 3].map((item) => (
+            <div
+              key={item}
+              className={`rounded-2xl border p-4 ${isLight ? 'border-slate-200/80 bg-white/88' : 'border-white/10 bg-white/[0.04]'}`}
+            >
+              <div className="flex items-center gap-3">
+                <div className={`h-11 w-11 rounded-2xl animate-pulse ${isLight ? 'bg-slate-200/80' : 'bg-white/10'}`} />
+                <div className="min-w-0 flex-1 space-y-2">
+                  <div className={`h-3.5 w-28 rounded-full animate-pulse ${isLight ? 'bg-slate-200' : 'bg-white/10'}`} />
+                  <div className={`h-3.5 w-40 rounded-full animate-pulse ${isLight ? 'bg-slate-200/80' : 'bg-white/10'}`} />
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className={`min-h-screen ${isLight ? 'bg-[#eef4fb] text-slate-900' : 'bg-black text-white'}`}>
+      <div className={isLight ? 'border-b border-slate-200/80 bg-gradient-to-b from-white/90 to-transparent backdrop-blur-sm' : 'bg-gradient-to-b from-white/5 to-transparent border-b border-white/5 backdrop-blur-sm'}>
+        <div className="mx-auto max-w-7xl px-4 py-6">
+          <div className="mb-6 flex items-start justify-between gap-4">
+            <div className="space-y-2">
+              <div className={`h-4 w-28 rounded-full animate-pulse ${isLight ? 'bg-slate-200' : 'bg-white/10'}`} />
+              <div className={`h-10 w-56 rounded-2xl animate-pulse ${isLight ? 'bg-slate-200/80' : 'bg-white/10'}`} />
+            </div>
+            <div className="flex gap-2">
+              {[0, 1].map((item) => (
+                <div
+                  key={item}
+                  className={`h-10 w-24 rounded-xl animate-pulse ${isLight ? 'bg-slate-200/80' : 'bg-white/10'}`}
+                />
+              ))}
+            </div>
+          </div>
+          <div className={`rounded-2xl border p-4 ${isLight ? 'border-slate-200/80 bg-white/78' : 'border-white/10 bg-black'}`}>
+            <div className={`h-11 rounded-xl animate-pulse ${isLight ? 'bg-slate-200/80' : 'bg-white/10'}`} />
+          </div>
+        </div>
+      </div>
+
+      <div className="mx-auto max-w-7xl px-4 py-6">
+        <div className="mb-5 flex gap-2">
+          {[0, 1, 2, 3, 4].map((item) => (
+            <div
+              key={item}
+              className={`h-8 w-20 rounded-full animate-pulse ${isLight ? 'bg-slate-200/80' : 'bg-white/10'}`}
+            />
+          ))}
+        </div>
+
+        <div className="mb-6 grid gap-4 lg:grid-cols-[minmax(0,1.12fr)_minmax(320px,0.88fr)]">
+          <div className={`rounded-[26px] border p-5 ${isLight ? 'border-slate-200/80 bg-white/86' : 'border-white/10 bg-white/[0.04]'}`}>
+            <div className={`h-4 w-24 rounded-full animate-pulse ${isLight ? 'bg-slate-200' : 'bg-white/10'}`} />
+            <div className={`mt-4 h-10 w-48 rounded-2xl animate-pulse ${isLight ? 'bg-slate-200/80' : 'bg-white/10'}`} />
+            <div className={`mt-3 h-3.5 w-[70%] rounded-full animate-pulse ${isLight ? 'bg-slate-200/80' : 'bg-white/10'}`} />
+            <div className={`mt-6 h-48 rounded-[24px] animate-pulse ${isLight ? 'bg-slate-100' : 'bg-white/[0.04]'}`} />
+          </div>
+          <div className="grid gap-4">
+            {[0, 1].map((item) => (
+              <div
+                key={item}
+                className={`rounded-[26px] border p-5 ${isLight ? 'border-slate-200/80 bg-white/86' : 'border-white/10 bg-white/[0.04]'}`}
+              >
+                <div className={`h-4 w-20 rounded-full animate-pulse ${isLight ? 'bg-slate-200' : 'bg-white/10'}`} />
+                <div className={`mt-4 h-24 rounded-[20px] animate-pulse ${isLight ? 'bg-slate-100' : 'bg-white/[0.04]'}`} />
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          {[0, 1, 2, 3, 4, 5].map((item) => (
+            <div
+              key={item}
+              className={`rounded-[24px] border p-4 ${isLight ? 'border-slate-200/80 bg-white/86' : 'border-white/10 bg-white/[0.04]'}`}
+            >
+              <div className="flex items-center gap-3">
+                <div className={`h-12 w-12 rounded-2xl animate-pulse ${isLight ? 'bg-slate-200/80' : 'bg-white/10'}`} />
+                <div className="min-w-0 flex-1 space-y-2">
+                  <div className={`h-3.5 w-28 rounded-full animate-pulse ${isLight ? 'bg-slate-200' : 'bg-white/10'}`} />
+                  <div className={`h-3.5 w-40 rounded-full animate-pulse ${isLight ? 'bg-slate-200/80' : 'bg-white/10'}`} />
+                </div>
+              </div>
+              <div className={`mt-4 h-20 rounded-[18px] animate-pulse ${isLight ? 'bg-slate-100' : 'bg-white/[0.04]'}`} />
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }
@@ -206,12 +322,7 @@ export default function DiscoverPage() {
   };
 
   if (isCheckingSession) {
-    return (
-      <LoadingSpinner
-        progress={isAiMode ? 58 : 44}
-        statusLabel={isAiMode ? 'Loading AI-driven dApps' : 'Loading discovery workspace'}
-      />
-    );
+    return <DiscoverSkeleton isLight={isLight} isEmbedded={isEmbedded} />;
   }
 
   if (!isUnlocked && !isEmbedded) {
