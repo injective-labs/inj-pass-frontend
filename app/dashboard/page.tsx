@@ -17,7 +17,7 @@ import { createPublicClient, formatEther, formatUnits, http, type Address } from
 import Image from 'next/image';
 import NFTDetailModal from '@/components/NFTDetailModal';
 import TransactionAuthModal from '@/components/TransactionAuthModal';
-import ThemeToggleButton from '@/components/ThemeToggleButton';
+import WelcomeThemeIconButton from '@/components/WelcomeThemeIconButton';
 import NinjaMinerGame from '@/components/NinjaMinerGame';
 import EditableAccountIdentity from '@/components/EditableAccountIdentity';
 import { useTheme } from '@/contexts/ThemeContext';
@@ -37,7 +37,7 @@ type DashboardTransactionType = 'send' | 'receive' | 'swap';
 type DashboardTransactionStatus = 'completed' | 'pending' | 'failed';
 type DashboardHistoryFilter = 'all' | DashboardTransactionType;
 type DashboardChainType = 'EVM' | 'Cosmos';
-type SwapToken = 'INJ' | 'USDT' | 'USDC' | 'NINJA';
+type SwapToken = 'INJ' | 'USDT' | 'USDC' | 'LAM';
 type AssetSurfaceMode = 'assets' | 'ai' | 'faucet';
 type WalletNetworkMode = 'mainnet' | 'testnet';
 type FaucetCategory = 'popular' | 'others';
@@ -76,7 +76,7 @@ const MORE_CHANCE_PLANS: Array<{
     id: 'pro',
     name: 'Pro',
     chances: 12,
-    blurb: 'Best balance for repeat NINJA farming.',
+    blurb: 'Best balance for repeat LAM farming.',
     accentClass: 'text-violet-200',
     surfaceClass: 'border-violet-400/22 bg-violet-500/[0.08]',
   },
@@ -1106,7 +1106,7 @@ export default function DashboardPage() {
     { symbol: 'INJ' as const, name: 'Injective', icon: '/injswap.png', balance: tokenBalances.INJ, enabled: true },
     { symbol: 'USDT' as const, name: 'Tether', icon: '/USDT_Logo.png', balance: tokenBalances.USDT, enabled: true },
     { symbol: 'USDC' as const, name: 'USD Coin', icon: '/USDC_Logo.png', balance: tokenBalances.USDC, enabled: true },
-    { symbol: 'NINJA' as const, name: 'Ninja', icon: '/NIJIA.png', balance: walletNetworkMode === 'mainnet' ? ninjaBalance.toFixed(2) : '0.00', enabled: false },
+    { symbol: 'LAM' as const, name: 'LAM', icon: '/lam-logo.png', balance: walletNetworkMode === 'mainnet' ? ninjaBalance.toFixed(2) : '0.00', enabled: false },
   ];
   const swapFromMeta = swapTokenOptions.find((token) => token.symbol === swapFromToken) || swapTokenOptions[0];
   const swapToMeta = swapTokenOptions.find((token) => token.symbol === swapToToken) || swapTokenOptions[1];
@@ -1169,7 +1169,7 @@ export default function DashboardPage() {
     },
     chance: {
       title: 'More Chance',
-      subtitle: 'Choose an extra tap pack for the NINJA earn loop without leaving the wallet surface.',
+      subtitle: 'Choose an extra tap pack for the LAM earn loop without leaving the wallet surface.',
     },
   };
 
@@ -1327,7 +1327,7 @@ export default function DashboardPage() {
     }
 
     if (!swapFromMeta.enabled || !swapToMeta.enabled) {
-      setSwapError('NINJA swap is coming soon.');
+      setSwapError('LAM swap is coming soon.');
       return;
     }
 
@@ -1707,7 +1707,7 @@ export default function DashboardPage() {
   const isCardPanel = walletPanel === 'card';
   const isTestnet = walletNetworkMode === 'testnet';
   const activeWalletPanelMeta = walletPanel !== 'overview' ? walletPanelMeta[walletPanel] : null;
-  const formattedNinjaBalance = walletNetworkMode === 'mainnet' ? ninjaBalance.toFixed(2) : '0.00';
+  const formattedLamBalance = walletNetworkMode === 'mainnet' ? ninjaBalance.toFixed(2) : '0.00';
   const overviewStageClassName = 'h-[438px] sm:h-[470px] md:h-[482px]';
   const detailStageClassName = 'h-[500px] sm:h-[528px] md:h-[520px]';
   const aiStageClassName = overviewStageClassName;
@@ -1752,9 +1752,9 @@ export default function DashboardPage() {
       contractValue: currentUsdcAddress ? truncateMiddle(currentUsdcAddress, 8, 6) : 'No contract yet',
     },
     {
-      symbol: 'NINJA',
-      icon: '/NIJIA.png',
-      balance: `${formattedNinjaBalance} NINJA`,
+      symbol: 'LAM',
+      icon: '/lam-logo.png',
+      balance: `${formattedLamBalance} LAM`,
       usdValue: '$0.00',
       change: '+0.00%',
       changeClass: 'text-gray-500',
@@ -1777,7 +1777,7 @@ export default function DashboardPage() {
   const renderCompactAssetSurface = (surface: 'left' | 'right') => {
     const shouldPromoteNinja = surface === 'left' && isAiStage && aiCompactNinjaPromoted;
     const compactDisplayOrder = shouldPromoteNinja
-      ? ['NINJA', 'INJ', 'USDC', 'USDT']
+      ? ['LAM', 'INJ', 'USDC', 'USDT']
       : dashboardTokenCards.map((token) => token.symbol);
     const compactListHeight = dashboardTokenCards.length * compactAssetCardHeight + (dashboardTokenCards.length - 1) * compactAssetCardGap;
 
@@ -1806,7 +1806,7 @@ export default function DashboardPage() {
               event.dataTransfer.setData('text/plain', `$${token.symbol}`);
             }}
             className={`absolute left-0 right-0 flex h-16 cursor-grab items-center gap-3 rounded-2xl border px-4 py-3 transition-[top,transform,border-color,box-shadow,background-color] duration-700 ease-[cubic-bezier(0.22,1,0.36,1)] hover:bg-white/[0.08] active:cursor-grabbing ${
-              shouldPromoteNinja && token.symbol === 'NINJA'
+              shouldPromoteNinja && token.symbol === 'LAM'
                 ? isLight
                   ? 'border-black/45 bg-white/[0.05] shadow-[0_0_0_1px_rgba(0,0,0,0.18)]'
                   : 'border-black/75 bg-white/[0.06] shadow-[0_0_0_1px_rgba(0,0,0,0.48)]'
@@ -1814,8 +1814,8 @@ export default function DashboardPage() {
             }`}
             style={{
               top: `${compactDisplayOrder.indexOf(token.symbol) * (compactAssetCardHeight + compactAssetCardGap)}px`,
-              transform: shouldPromoteNinja && token.symbol === 'NINJA' ? 'translateY(-3px)' : 'translateY(0)',
-              zIndex: shouldPromoteNinja && token.symbol === 'NINJA' ? 2 : 1,
+              transform: shouldPromoteNinja && token.symbol === 'LAM' ? 'translateY(-3px)' : 'translateY(0)',
+              zIndex: shouldPromoteNinja && token.symbol === 'LAM' ? 2 : 1,
             }}
           >
             <div className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full bg-white/[0.04]">
@@ -1852,7 +1852,7 @@ export default function DashboardPage() {
 
             {/* Scan QR Code Button */}
             <div className="flex w-full flex-wrap items-center justify-end gap-1.5 md:w-auto md:flex-nowrap md:gap-2">
-              <ThemeToggleButton compact />
+              <WelcomeThemeIconButton />
               <button
                 onClick={openAiAssetSurface}
                 className={`rounded-lg border px-2.5 py-1.5 text-[10px] font-semibold uppercase tracking-[0.18em] transition-all sm:px-3 sm:py-2 sm:text-[11px] sm:tracking-[0.22em] ${
@@ -2015,8 +2015,8 @@ export default function DashboardPage() {
                         : 'opacity-0 translate-y-5 pointer-events-none'
                     }`}
                   >
-                    <div key={`wallet-overview-${walletNetworkMode}-${walletSurfaceMotionKey}`} className="dashboard-surface-enter flex h-full flex-col">
-                      <div className="flex h-full flex-row items-start gap-3 sm:gap-4 md:gap-6 xl:flex-row xl:items-end">
+                    <div key={`wallet-overview-${walletNetworkMode}-${walletSurfaceMotionKey}`} className="dashboard-surface-enter flex h-full -translate-y-2 flex-col justify-center sm:-translate-y-3 md:-translate-y-4">
+                      <div className="flex h-full flex-row items-center gap-3 sm:gap-4 md:gap-6 xl:flex-row xl:items-center">
                         <div className="min-w-0 flex-1">
                           <div className="pl-1 sm:pl-3 md:pl-4">
                             <div className="flex flex-wrap items-end gap-2.5 sm:gap-3 md:gap-4">
@@ -2535,7 +2535,7 @@ export default function DashboardPage() {
                                     : swapSubmitting
                                       ? 'Swapping...'
                                       : !swapFromMeta.enabled || !swapToMeta.enabled
-                                        ? 'NINJA Swap Coming Soon'
+                                        ? 'LAM Swap Coming Soon'
                                         : `Swap to ${swapToMeta.symbol}`}
                                 </button>
                               </div>
