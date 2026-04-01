@@ -12,7 +12,7 @@ export interface InviteCodeResponse {
 
 export interface InviterInfo {
   inviteCode: string;
-  ninjiaBalance: number;
+  ninjaBalance: number;
 }
 
 export interface ValidateResponse {

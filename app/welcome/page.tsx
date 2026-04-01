@@ -549,7 +549,11 @@ function WelcomePageContent() {
         throw new Error('INJ Pass name must be 20 characters or fewer.');
       }
 
-      const result = await createByPasskey(walletName);
+      const normalizedInviteCode = inviteCodeInput.trim();
+      const result = await createByPasskey(
+        walletName,
+        normalizedInviteCode.length > 0 ? normalizedInviteCode : undefined
+      );
       const createdWallet = loadWallet();
 
       if (!createdWallet) {
@@ -578,13 +582,21 @@ function WelcomePageContent() {
     dismissErrorToast(true);
 
     try {
-      const existingWallet = loadWallet();
+      const { recoverFullWallet } = await import(
+        '@/wallet/key-management/recoverByPasskey'
+      );
+      const recovered = await recoverFullWallet();
+      const recoveredWallet = loadWallet();
 
-      if (!existingWallet || !existingWallet.credentialId) {
-        throw new Error('No paired passkey wallet was found on this device.');
+      if (!recoveredWallet) {
+        throw new Error('Failed to load recovered wallet.');
       }
 
-      await unlockPasskeyWallet(existingWallet);
+      await unlockPasskeyWallet({
+        ...recoveredWallet,
+        credentialId: recovered.credentialId,
+      });
+      setWalletExists(true);
       router.push('/dashboard');
     } catch (err) {
       showErrorToast(

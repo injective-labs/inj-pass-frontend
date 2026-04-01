@@ -5,28 +5,18 @@ import { useWallet } from '@/contexts/WalletContext';
 import { useEffect, useState } from 'react';
 import { useTheme } from '@/contexts/ThemeContext';
 import AccountHeader from '../components/AccountHeader';
-import { DAPPS, DApp, DAppCategory } from '@/config/dapps';
-import { NETWORK_CONFIG } from '@/config/network';
+import type { DApp } from '@/config/dapps';
+import { fetchDapps, type DAppTab } from '@/services/dapps';
 import { startQRScanner, stopQRScanner, clearQRScanner, isCameraSupported, isValidAddress } from '@/services/qr-scanner';
 import { QRCodeSVG } from 'qrcode.react';
 
-type DiscoverCategory = DAppCategory | 'ai';
+type DiscoverCategory = string | 'ai';
 
-const AI_DAPP_MENTIONS: Record<string, string> = {
-  Omisper: '@Omisper',
-  'Hash Mahjong': '@HashMahjong',
-};
-const AI_DRIVEN_DAPP_NAMES = new Set<keyof typeof AI_DAPP_MENTIONS>(['Omisper', 'Hash Mahjong']);
-
-const CATEGORIES = [
-  { id: 'all', name: 'New' },
-  { id: 'defi', name: 'DeFi' },
-  { id: 'nft', name: 'NFT' },
-  { id: 'game', name: 'Game' },
-  { id: 'social', name: 'Social' },
-] as const;
-
-const AI_CATEGORY = [{ id: 'ai', name: 'AI-Driven' }] as const;
+function isAiTab(tab: { id: string; label?: string; name?: string }): boolean {
+  const id = tab.id.toLowerCase();
+  const label = (tab.label ?? tab.name ?? '').toLowerCase();
+  return id === 'ai' || id === 'ai-driven' || label === 'ai-driven' || label === 'ai';
+}
 
 function SearchBox({
   value,
@@ -215,23 +205,46 @@ export default function DiscoverPage() {
   const isAiMode = routeContext.aiMode;
   const isLight = theme === 'light';
   const useWalletSurfaceTheme = isEmbedded;
-  const [activeCategory, setActiveCategory] = useState<DiscoverCategory>(isAiMode ? 'ai' : 'all');
+  const [activeCategory, setActiveCategory] = useState<DiscoverCategory>(isAiMode ? 'ai' : '');
   const [searchQuery, setSearchQuery] = useState('');
   const [surfaceReady, setSurfaceReady] = useState(false);
-  const dapps: (DApp & { aiDriven?: boolean })[] = DAPPS.map((dapp) => ({
-    ...dapp,
-    icon:
-      dapp.icon.startsWith('http') || dapp.icon.startsWith('/')
-        ? dapp.icon
-        : `${NETWORK_CONFIG.faviconService}${dapp.icon}&sz=128`,
-    aiDriven: AI_DRIVEN_DAPP_NAMES.has(dapp.name as keyof typeof AI_DAPP_MENTIONS),
-  }));
+  const [dapps, setDapps] = useState<DApp[]>([]);
+  const [categoryTabs, setCategoryTabs] = useState<DAppTab[]>([]);
 
   useEffect(() => {
     let frame = 0;
     frame = window.requestAnimationFrame(() => setSurfaceReady(true));
     return () => window.cancelAnimationFrame(frame);
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadDappDirectory() {
+      const { dapps: remoteDapps, tabs } = await fetchDapps();
+      if (cancelled) return;
+
+      setDapps(remoteDapps);
+
+      setCategoryTabs(tabs);
+      if (routeContext.aiMode) {
+        const aiTab = tabs.find((tab) => isAiTab(tab));
+        setActiveCategory((aiTab?.id ?? '') as DiscoverCategory);
+        return;
+      }
+
+      const nonAiTabs = tabs.filter((tab) => !isAiTab(tab));
+      if (nonAiTabs.length > 0) {
+        setActiveCategory(nonAiTabs[0].id as DiscoverCategory);
+      }
+    }
+
+    void loadDappDirectory();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [routeContext.aiMode]);
 
   const navigateApp = (path: string) => {
     if (typeof window !== 'undefined' && isEmbedded && window.top) {
@@ -243,14 +256,6 @@ export default function DiscoverPage() {
 
   const handleDAppClick = (dapp: DApp) => {
     window.open(dapp.url, '_blank', 'noopener,noreferrer');
-  };
-
-  const handleDAppDragStart = (event: React.DragEvent<HTMLButtonElement>, dapp: DApp) => {
-    const mention = AI_DAPP_MENTIONS[dapp.name];
-    if (!mention) return;
-    event.dataTransfer.effectAllowed = 'copy';
-    event.dataTransfer.setData('application/x-injpass-dapp', dapp.name);
-    event.dataTransfer.setData('text/plain', mention);
   };
 
   const openQRScanner = async () => {
@@ -330,19 +335,39 @@ export default function DiscoverPage() {
     return null;
   }
 
-  const categoryTabs = isAiMode ? AI_CATEGORY : CATEGORIES;
-  const visibleDapps = isAiMode ? dapps.filter((dapp) => dapp.aiDriven) : dapps;
+  const resolvedCategoryTabs = isAiMode
+    ? categoryTabs
+        .filter((tab) => isAiTab(tab))
+        .map((tab) => ({ id: tab.id, name: tab.label }))
+    : categoryTabs.length > 0
+      ? categoryTabs
+          .filter((tab) => !isAiTab(tab))
+          .map((tab) => ({ id: tab.id, name: tab.label }))
+      : [];
+  const effectiveCategoryTabs = resolvedCategoryTabs;
+  const effectiveTabCount = Math.max(effectiveCategoryTabs.length, 1);
+  const aiCategoryIds = categoryTabs.filter((tab) => isAiTab(tab)).map((tab) => tab.id);
+  const visibleDapps = isAiMode
+    ? dapps.filter((dapp) => dapp.categories.some((category) => aiCategoryIds.includes(category)))
+    : dapps;
+  const hasSearch = searchQuery.trim().length > 0;
   const filteredDapps = visibleDapps.filter((dapp) => {
-    const matchesCategory = activeCategory === 'all' || activeCategory === 'ai' || dapp.category === activeCategory;
+    const matchesCategory =
+      hasSearch ||
+      (isAiMode
+        ? Boolean(activeCategory) && dapp.categories.includes(activeCategory)
+        : !activeCategory || dapp.categories.includes(activeCategory));
     const matchesSearch =
       dapp.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      dapp.description.toLowerCase().includes(searchQuery.toLowerCase());
+      dapp.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      dapp.url.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      dapp.categories.some((category) => category.toLowerCase().includes(searchQuery.toLowerCase()));
     return matchesCategory && matchesSearch;
   });
 
-  const featuredDapps = dapps.filter((dapp) => dapp.featured);
+  const featuredDapps = visibleDapps.filter((dapp) => dapp.featured);
   const activeCategoryIndex = Math.max(
-    categoryTabs.findIndex((category) => category.id === activeCategory),
+    effectiveCategoryTabs.findIndex((category) => category.id === activeCategory),
     0
   );
 
@@ -390,12 +415,12 @@ export default function DiscoverPage() {
                       : 'bg-white shadow-lg'
                 }`}
                 style={{
-                  width: `calc((100% - ${(categoryTabs.length - 1) * 0.5}rem) / ${categoryTabs.length})`,
-                  left: `calc(0.25rem + ${activeCategoryIndex} * ((100% - ${(categoryTabs.length - 1) * 0.5}rem) / ${categoryTabs.length} + 0.5rem))`,
+                  width: `calc((100% - ${(effectiveTabCount - 1) * 0.5}rem) / ${effectiveTabCount})`,
+                  left: `calc(0.25rem + ${activeCategoryIndex} * ((100% - ${(effectiveTabCount - 1) * 0.5}rem) / ${effectiveTabCount} + 0.5rem))`,
                 }}
               />
               <div className="relative flex gap-2">
-                {categoryTabs.map((category) => (
+                {effectiveCategoryTabs.map((category) => (
                   <button
                     key={category.id}
                     onClick={() => setActiveCategory(category.id as DiscoverCategory)}
@@ -428,8 +453,6 @@ export default function DiscoverPage() {
               {filteredDapps.map((dapp) => (
                 <button
                   key={dapp.id}
-                  draggable={isAiMode && !!AI_DAPP_MENTIONS[dapp.name]}
-                  onDragStart={(event) => handleDAppDragStart(event, dapp)}
                   onClick={() => handleDAppClick(dapp)}
                   className={`flex min-w-[102px] flex-col items-center justify-center gap-2 rounded-[1.35rem] border px-3 py-3.5 text-center transition-all hover:-translate-y-[1px] sm:min-w-[112px] sm:rounded-[1.45rem] sm:py-4 ${
                     useWalletSurfaceTheme
@@ -437,7 +460,7 @@ export default function DiscoverPage() {
                       : isLight
                         ? 'border-slate-200/80 bg-transparent hover:bg-slate-50/55 shadow-[0_8px_24px_rgba(148,163,184,0.08)]'
                         : 'border-white/10 bg-transparent hover:bg-white/[0.06]'
-                  } ${isAiMode && AI_DAPP_MENTIONS[dapp.name] ? 'cursor-grab active:cursor-grabbing' : ''}`}
+                  }`}
                 >
                   <div className={`flex h-10 w-10 items-center justify-center overflow-hidden rounded-full p-2 sm:h-11 sm:w-11 ${
                     useWalletSurfaceTheme
@@ -486,25 +509,16 @@ export default function DiscoverPage() {
             <div
               className="absolute top-1 bottom-1 bg-white rounded-lg transition-all duration-300 ease-out shadow-lg"
               style={{
-                width: 'calc(20% - 0.2rem)',
-                left:
-                  activeCategory === 'all'
-                    ? '0.25rem'
-                    : activeCategory === 'defi'
-                      ? 'calc(20% + 0.05rem)'
-                      : activeCategory === 'nft'
-                        ? 'calc(40% + 0.1rem)'
-                        : activeCategory === 'game'
-                          ? 'calc(60% + 0.15rem)'
-                          : 'calc(80% + 0.2rem)',
+                width: `calc((100% - ${(effectiveTabCount - 1) * 0.25}rem) / ${effectiveTabCount})`,
+                left: `calc(0.25rem + ${activeCategoryIndex} * ((100% - ${(effectiveTabCount - 1) * 0.25}rem) / ${effectiveTabCount} + 0.25rem))`,
               }}
             />
 
             <div className="relative flex gap-1 overflow-x-auto scrollbar-hide">
-              {CATEGORIES.map((category) => (
+              {effectiveCategoryTabs.map((category) => (
                 <button
                   key={category.id}
-                  onClick={() => setActiveCategory(category.id as DAppCategory)}
+                  onClick={() => setActiveCategory(category.id as DiscoverCategory)}
                   className={`flex min-w-0 flex-1 items-center justify-center whitespace-nowrap rounded-lg px-4 py-3 text-sm font-bold transition-all duration-300 ease-out ${
                     activeCategory === category.id ? 'text-black scale-105' : 'text-gray-400 hover:text-white'
                   }`}
@@ -518,7 +532,9 @@ export default function DiscoverPage() {
           <div>
             <div className="mb-4 flex items-center justify-between">
               <h2 className="text-sm font-bold uppercase tracking-wider text-gray-400">
-                {activeCategory === 'all' ? 'All dApps' : `${CATEGORIES.find((item) => item.id === activeCategory)?.name} dApps`}
+                {!activeCategory
+                  ? 'All dApps'
+                  : `${effectiveCategoryTabs.find((item) => item.id === activeCategory)?.name || activeCategory} dApps`}
               </h2>
             </div>
 

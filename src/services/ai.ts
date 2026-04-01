@@ -42,7 +42,7 @@ export interface ChatRecordRequest {
 export interface CostInfo {
   inputTokens: number;
   outputTokens: number;
-  ninjiaDeducted: number;
+  ninjaDeducted: number;
   currency: number;
 }
 

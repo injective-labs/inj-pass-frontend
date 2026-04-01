@@ -15,6 +15,7 @@ import { parseUnits } from 'viem';
 import type { Address } from 'viem';
 import { AGENT_CREDITS_STATS } from '@/config/agent-credits';
 import { useTheme } from '@/contexts/ThemeContext';
+import { recordChat } from '@/services/ai';
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
@@ -51,6 +52,7 @@ interface ApiMessage {
 
 interface Conversation {
   id: string;
+  backendConversationId?: string;
   title: string;
   createdAt: number;
   messages: ChatMessage[];
@@ -79,7 +81,7 @@ interface InviteFriend {
   status: 'Active' | 'Pending';
 }
 
-type AssetMentionSymbol = 'INJ' | 'USDC' | 'NINJA' | 'USDT';
+type AssetMentionSymbol = 'INJ' | 'USDC' | 'LAM' | 'USDT';
 type DAppMentionName = 'Omisper' | 'Hash Mahjong';
 
 const MODEL_OPTIONS: { value: Model; label: string }[] = [
@@ -129,6 +131,15 @@ function uid() {
   return Math.random().toString(36).slice(2, 10);
 }
 
+function normalizeAssetMentionSymbol(symbol?: string): AssetMentionSymbol | null {
+  if (!symbol) return null;
+  if (symbol === 'NINJA') return 'LAM';
+  if (symbol === 'INJ' || symbol === 'USDC' || symbol === 'LAM' || symbol === 'USDT') {
+    return symbol;
+  }
+  return null;
+}
+
 function loadConversations(): Conversation[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
@@ -173,6 +184,39 @@ function saveConversations(convs: Conversation[]) {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(convs));
   } catch { /* storage full */ }
+}
+
+function toRecordMessages(history: ApiMessage[]) {
+  return history.map((msg) => {
+    if (typeof msg.content === 'string') {
+      return {
+        role: msg.role,
+        content: msg.content,
+      };
+    }
+
+    const blocks = msg.content;
+    const toolUse = blocks
+      .filter((b) => b.type === 'tool_use' && b.name && b.id)
+      .map((b) => ({
+        name: b.name as string,
+        input: b.input as Record<string, unknown> | undefined,
+        id: b.id as string,
+      }));
+    const toolResult = blocks
+      .filter((b) => b.type === 'tool_result' && b.tool_use_id)
+      .map((b) => ({
+        tool_use_id: b.tool_use_id as string,
+        content: b.content ?? '',
+      }));
+
+    return {
+      role: msg.role,
+      content: JSON.stringify(blocks),
+      tool_use: toolUse.length ? toolUse : undefined,
+      tool_result: toolResult.length ? toolResult : undefined,
+    };
+  });
 }
 
 // ─── Hash Mahjong game logic (ported from hash-mahjong-two.vercel.app) ──────
@@ -325,13 +369,13 @@ export default function AgentsPage() {
     ? {
         INJ: 'border-violet-200/90 bg-violet-500/10 text-violet-700',
         USDC: 'border-sky-200/90 bg-sky-500/10 text-sky-700',
-        NINJA: 'border-amber-200/90 bg-amber-500/10 text-amber-700',
+        LAM: 'border-amber-200/90 bg-amber-500/10 text-amber-700',
         USDT: 'border-emerald-200/90 bg-emerald-500/10 text-emerald-700',
       }
     : {
         INJ: 'border-violet-400/30 bg-violet-500/12 text-violet-200',
         USDC: 'border-sky-400/30 bg-sky-500/12 text-sky-200',
-        NINJA: 'border-amber-400/30 bg-amber-500/12 text-amber-200',
+        LAM: 'border-amber-400/30 bg-amber-500/12 text-amber-200',
         USDT: 'border-emerald-400/30 bg-emerald-500/12 text-emerald-200',
       };
   const dappMentionTone: Record<DAppMentionName, string> = {
@@ -427,10 +471,11 @@ export default function AgentsPage() {
 
   useEffect(() => {
     const handleAssetMentionMessage = (event: MessageEvent) => {
-      const data = event.data as { type?: string; symbol?: AssetMentionSymbol; dapp?: DAppMentionName } | undefined;
+      const data = event.data as { type?: string; symbol?: string; dapp?: DAppMentionName } | undefined;
       if (!data) return;
-      if (data.type === 'injpass:add-asset-mention' && data.symbol) {
-        setAssetMentions((current) => current.includes(data.symbol!) ? current : [...current, data.symbol!]);
+      const normalizedSymbol = normalizeAssetMentionSymbol(data.symbol);
+      if (data.type === 'injpass:add-asset-mention' && normalizedSymbol) {
+        setAssetMentions((current) => current.includes(normalizedSymbol) ? current : [...current, normalizedSymbol]);
       }
       if (data.type === 'injpass:add-dapp-mention' && data.dapp && data.dapp in DAPP_MENTION_META) {
         setDappMentions((current) => current.includes(data.dapp!) ? current : [...current, data.dapp!]);
@@ -742,11 +787,38 @@ export default function AgentsPage() {
 
         const data = await res.json();
         const blocks: ApiBlock[] = data.content ?? [];
+        const usage = (data?.usage ?? {}) as {
+          input_tokens?: number;
+          output_tokens?: number;
+        };
 
         // Build the assistant api message and persist it
         const assistantApiMsg: ApiMessage = { role: 'assistant', content: blocks };
         history = [...history, assistantApiMsg];
         appendApi(convId, assistantApiMsg);
+
+        try {
+          const active = conversations.find((c) => c.id === convId);
+          const result = await recordChat({
+            conversationId: active?.backendConversationId,
+            title: active?.title || 'New Chat',
+            messages: toRecordMessages(history),
+            model,
+            usage: {
+              inputTokens: Number(usage.input_tokens ?? 0),
+              outputTokens: Number(usage.output_tokens ?? 0),
+            },
+          });
+
+          if (result.ok && result.conversationId) {
+            updateConv(convId, (current) => ({
+              ...current,
+              backendConversationId: result.conversationId,
+            }));
+          }
+        } catch (recordError) {
+          console.error('[AI] Failed to record chat turn:', recordError);
+        }
 
         // Render text blocks
         const textContent = blocks
@@ -823,7 +895,7 @@ export default function AgentsPage() {
     } finally {
       setIsRunning(false);
     }
-  }, [model]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [conversations, model]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ─── Confirm destructive tool ────────────────────────────────────────────
 
@@ -962,7 +1034,7 @@ export default function AgentsPage() {
 
   function handleAssetDrop(event: React.DragEvent<HTMLDivElement>) {
     event.preventDefault();
-    const symbol = event.dataTransfer.getData('application/x-injpass-asset') as AssetMentionSymbol;
+    const symbol = normalizeAssetMentionSymbol(event.dataTransfer.getData('application/x-injpass-asset'));
     const rawDapp = event.dataTransfer.getData('application/x-injpass-dapp');
     const dapp = rawDapp in DAPP_MENTION_META ? (rawDapp as DAppMentionName) : null;
 

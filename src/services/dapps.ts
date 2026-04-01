@@ -48,7 +48,7 @@ export async function fetchDapps(): Promise<{ dapps: DApp[]; tabs: DAppTab[] }> 
         order: Number.isFinite(dapp.order) ? dapp.order : 0,
         icon: normalizeIcon(dapp.icon),
       }))
-        .sort((left, right) => (right.order ?? 0) - (left.order ?? 0)),
+        .sort((left, right) => right.order - left.order),
       tabs: tabs
         .filter((tab) => tab.enabled)
         .sort((left, right) => left.order - right.order),
