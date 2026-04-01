@@ -11,6 +11,7 @@ export interface DApp {
   icon: string;
   category: DAppCategory;
   url: string;
+  order?: number;
   featured?: boolean;
 }
 
