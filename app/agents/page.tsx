@@ -16,6 +16,7 @@ import type { Address } from 'viem';
 import { AGENT_CREDITS_STATS } from '@/config/agent-credits';
 import { useTheme } from '@/contexts/ThemeContext';
 import { recordChat } from '@/services/ai';
+import { getInviteCode, getInvitees, getStats } from '@/services/referral';
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
@@ -77,8 +78,8 @@ type SettingsTab = 'credits' | 'tasks' | 'payments' | 'telegram';
 interface InviteFriend {
   wallet: string;
   joinedAt: string;
-  credits: number;
-  status: 'Active' | 'Pending';
+  reward: number;
+  status: 'Active';
 }
 
 type AssetMentionSymbol = 'INJ' | 'USDC' | 'LAM' | 'USDT';
@@ -100,12 +101,6 @@ const TOKEN_ICONS: Record<string, string> = {
   USDT: '/USDT_Logo.png',
   USDC: '/USDC_Logo.png',
 };
-
-const INVITED_FRIENDS: InviteFriend[] = [
-  { wallet: '0x6aA1...2fd8', joinedAt: '2026-03-07', credits: 400, status: 'Active' },
-  { wallet: '0xB944...9e11', joinedAt: '2026-03-05', credits: 250, status: 'Active' },
-  { wallet: '0x13c2...7f90', joinedAt: '2026-03-02', credits: 0, status: 'Pending' },
-];
 
 const DAPP_MENTION_META: Record<
   DAppMentionName,
@@ -129,6 +124,18 @@ const DAPP_MENTION_META: Record<
 
 function uid() {
   return Math.random().toString(36).slice(2, 10);
+}
+
+function formatWalletLabel(walletAddress: string | null, walletName: string | null): string {
+  if (walletName) return walletName;
+  if (!walletAddress) return 'Unknown wallet';
+  return `${walletAddress.slice(0, 8)}...${walletAddress.slice(-6)}`;
+}
+
+function formatJoinedAt(value: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '-';
+  return date.toISOString().slice(0, 10);
 }
 
 function normalizeAssetMentionSymbol(symbol?: string): AssetMentionSymbol | null {
@@ -346,6 +353,10 @@ export default function AgentsPage() {
   const [activeSettingsTab, setActiveSettingsTab] = useState<SettingsTab>('credits');
   const [inviteCopied, setInviteCopied] = useState(false);
   const [inviteLinkCopied, setInviteLinkCopied] = useState(false);
+  const [liveInviteCode, setLiveInviteCode] = useState('');
+  const [invitedByCode, setInvitedByCode] = useState<string | null>(null);
+  const [invitedFriends, setInvitedFriends] = useState<InviteFriend[]>([]);
+  const [totalRewards, setTotalRewards] = useState(0);
 
   // Sandbox
   const [sandboxBalances, setSandboxBalances] = useState<{ INJ: string; USDT: string; USDC: string } | null>(null);
@@ -358,10 +369,10 @@ export default function AgentsPage() {
 
   const activeConv = conversations.find((c) => c.id === activeId) ?? null;
   const messages = activeConv?.messages ?? [];
-  const inviteCode = address ? `INJ-${address.slice(2, 6).toUpperCase()}${address.slice(-4).toUpperCase()}` : 'INJ-PASS';
-  const inviteLink = `https://injpass.com/welcome?invite=${inviteCode}`;
-  const totalInviteCredits = INVITED_FRIENDS.reduce((sum, friend) => sum + friend.credits, 0);
-  const activeInviteCount = INVITED_FRIENDS.filter((friend) => friend.status === 'Active').length;
+  const inviteCode = liveInviteCode || '';
+  const inviteLink = inviteCode ? `https://injpass.com/welcome?invite=${inviteCode}` : 'https://injpass.com/welcome';
+  const totalInviteCredits = totalRewards;
+  const activeInviteCount = invitedFriends.length;
   const isLight = theme === 'light';
   const isCompactStage = isCompactEmbedded && isEmbedded;
   const hasEmbeddedAgentAccess = isEmbedded ? !!address : isUnlocked && !!address;
@@ -433,8 +444,8 @@ export default function AgentsPage() {
     ? 'bg-[linear-gradient(180deg,#ffffff,#f5f8ff)] border border-slate-200/80 rounded-2xl w-full max-w-sm shadow-[0_20px_60px_rgba(148,163,184,0.24)] overflow-hidden'
     : 'bg-[#111] border border-white/15 rounded-2xl w-full max-w-sm shadow-2xl overflow-hidden';
   const inviteModalClass = isLight
-    ? 'flex h-[min(700px,84vh)] w-full max-w-5xl flex-col overflow-hidden rounded-3xl border border-slate-200/80 bg-[linear-gradient(180deg,#ffffff,#f6f9ff)] shadow-[0_24px_80px_rgba(148,163,184,0.24)]'
-    : 'flex h-[min(700px,84vh)] w-full max-w-5xl flex-col overflow-hidden rounded-3xl border border-white/15 bg-[#090909] shadow-2xl';
+    ? 'flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-3xl border border-slate-200/80 bg-[linear-gradient(180deg,#ffffff,#f6f9ff)] shadow-[0_24px_80px_rgba(148,163,184,0.24)]'
+    : 'flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-3xl border border-white/15 bg-[#090909] shadow-2xl';
   const settingsModalClass = isLight
     ? 'w-full max-w-5xl h-[88vh] rounded-3xl border border-slate-200/80 bg-[linear-gradient(180deg,#ffffff,#f6f9ff)] shadow-[0_24px_80px_rgba(148,163,184,0.24)] overflow-hidden flex'
     : 'w-full max-w-5xl h-[88vh] rounded-3xl border border-white/15 bg-[#090909] shadow-2xl overflow-hidden flex';
@@ -499,6 +510,40 @@ export default function AgentsPage() {
   useEffect(() => {
     saveConversations(conversations);
   }, [conversations]);
+
+  useEffect(() => {
+    if (!showInviteManager) return;
+
+    let mounted = true;
+
+    async function loadReferralData() {
+      const [code, stats, invitees] = await Promise.all([
+        getInviteCode(),
+        getStats(),
+        getInvitees(),
+      ]);
+
+      if (!mounted) return;
+
+      setLiveInviteCode(code || stats.inviteCode || '');
+      setInvitedByCode(stats.invitedBy || null);
+      setTotalRewards(Number(stats.totalRewards) || 0);
+      setInvitedFriends(
+        invitees.map((invitee) => ({
+          wallet: formatWalletLabel(invitee.walletAddress, invitee.walletName),
+          joinedAt: formatJoinedAt(invitee.joinedAt),
+          reward: Number(invitee.reward) || 0,
+          status: 'Active',
+        })),
+      );
+    }
+
+    void loadReferralData();
+
+    return () => {
+      mounted = false;
+    };
+  }, [showInviteManager]);
 
   // Close sandbox panel when switching conversations
   useEffect(() => { setShowSandboxPanel(false); setShowSandboxKey(false); }, [activeId]);
@@ -1283,7 +1328,7 @@ export default function AgentsPage() {
                   Share INJ Pass with Friends
                 </p>
                 <p className="text-[11px] mt-1 text-blue-200/90 font-medium tracking-wide">
-                  Get 1,000 Passbits
+                  Inviter +10 / Invitee +10 NINJA
                 </p>
               </div>
               <div className="relative w-11 h-11 rounded-2xl border border-[#6e5dff]/30 bg-gradient-to-br from-[#4c3af9]/28 via-white/[0.08] to-transparent shadow-[0_0_28px_rgba(76,58,249,0.16)] group-hover:border-[#8b7bff]/55 group-hover:shadow-[0_0_34px_rgba(76,58,249,0.24)] transition-all flex items-center justify-center overflow-hidden">
@@ -1812,7 +1857,7 @@ export default function AgentsPage() {
         {/* Invite manager */}
         {showInviteManager && (
           <div
-            className="fixed inset-0 z-[80] bg-black/80 backdrop-blur-sm p-4 sm:p-6 lg:p-10 flex items-center justify-center"
+            className="fixed inset-0 z-[80] bg-black/80 backdrop-blur-sm p-4 sm:p-6 lg:p-10 flex items-start justify-center overflow-y-auto"
             onClick={() => setShowInviteManager(false)}
           >
             <div
@@ -1834,9 +1879,10 @@ export default function AgentsPage() {
                 </button>
               </div>
 
-              <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 p-5 sm:p-6 lg:grid-cols-[340px_minmax(0,1fr)]">
+              <div className="min-h-0 flex-1 overflow-y-auto">
+                <div className="grid min-h-0 grid-cols-1 items-start gap-4 p-5 sm:p-6 lg:grid-cols-[340px_minmax(0,1fr)]">
                 <section className="min-h-0">
-                  <div className={`flex h-full flex-col rounded-[1.8rem] border p-5 ${
+                  <div className={`flex min-h-0 flex-col rounded-[1.8rem] border p-5 ${
                     isLight
                       ? 'border-violet-200/70 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(245,247,255,0.92))]'
                       : 'border-[#6e5dff]/20 bg-[linear-gradient(180deg,rgba(255,255,255,0.04),rgba(255,255,255,0.02))]'
@@ -1845,7 +1891,7 @@ export default function AgentsPage() {
                     <div className={`mt-3 rounded-2xl border px-4 py-4 font-mono text-xl font-semibold tracking-[0.16em] ${
                       isLight ? 'border-slate-200/80 bg-white text-slate-900' : 'border-white/10 bg-black/25 text-white'
                     }`}>
-                      {inviteCode}
+                      {inviteCode || '--------'}
                     </div>
 
                     <div className="mt-3 grid grid-cols-2 gap-2.5">
@@ -1856,8 +1902,14 @@ export default function AgentsPage() {
                             ? 'bg-slate-900 text-white hover:bg-slate-800'
                             : 'bg-white text-black hover:bg-gray-100'
                         }`}
+                        style={{
+                          color: isLight ? '#ffffff' : '#111827',
+                          WebkitTextFillColor: isLight ? '#ffffff' : '#111827',
+                        }}
                       >
-                        {inviteCopied ? 'Copied' : 'Copy Code'}
+                        <span style={{ color: isLight ? '#ffffff' : '#111827', WebkitTextFillColor: isLight ? '#ffffff' : '#111827' }}>
+                          {inviteCopied ? 'Copied' : 'Copy Code'}
+                        </span>
                       </button>
                       <button
                         onClick={copyInviteLink}
@@ -1877,13 +1929,16 @@ export default function AgentsPage() {
                       <div className="text-[10px] font-semibold uppercase tracking-[0.22em] text-gray-500">Link</div>
                       <p className={`mt-2 break-all text-xs leading-5 ${isLight ? 'text-slate-600' : 'text-gray-300'}`}>{inviteLink}</p>
                     </div>
-                    <div className="mt-auto pt-4">
+                    <div className="mt-4">
                       <div className={`rounded-[1.35rem] border px-4 py-4 ${
                         isLight ? 'border-slate-200/80 bg-white/82' : 'border-white/10 bg-white/[0.03]'
                       }`}>
                         <p className="text-[10px] uppercase tracking-[0.22em] text-gray-500">Referral Route</p>
                         <p className={`mt-2 text-sm leading-6 ${isLight ? 'text-slate-600' : 'text-gray-300'}`}>
                           Share the code or the link. Both route into the same INJ Pass referral flow.
+                        </p>
+                        <p className={`mt-2 text-xs ${isLight ? 'text-slate-500' : 'text-gray-400'}`}>
+                          Invited by: {invitedByCode || '-'}
                         </p>
                       </div>
                     </div>
@@ -1903,7 +1958,7 @@ export default function AgentsPage() {
                     <div className={`rounded-full border px-3 py-1 text-[11px] font-semibold ${
                       isLight ? 'border-slate-200/80 bg-slate-900/[0.03] text-slate-500' : 'border-white/10 bg-white/[0.04] text-gray-300'
                     }`}>
-                      {INVITED_FRIENDS.length} total
+                      {invitedFriends.length} total
                     </div>
                   </div>
 
@@ -1914,13 +1969,13 @@ export default function AgentsPage() {
                       isLight ? 'border-slate-200/80 bg-white/82' : 'border-white/10 bg-white/[0.03]'
                     }`}>
                       <p className="text-[10px] uppercase tracking-[0.22em] text-gray-500">Invited</p>
-                      <p className={`mt-1 text-2xl font-semibold ${isLight ? 'text-slate-900' : 'text-white'}`}>{INVITED_FRIENDS.length}</p>
+                      <p className={`mt-1 text-2xl font-semibold ${isLight ? 'text-slate-900' : 'text-white'}`}>{invitedFriends.length}</p>
                       <p className="mt-1 text-xs text-gray-400">{activeInviteCount} active</p>
                     </div>
                     <div className={`rounded-[1.1rem] border px-4 py-3 ${
                       isLight ? 'border-slate-200/80 bg-white/82' : 'border-white/10 bg-white/[0.03]'
                     }`}>
-                      <p className="text-[10px] uppercase tracking-[0.22em] text-gray-500">Passbits</p>
+                      <p className="text-[10px] uppercase tracking-[0.22em] text-gray-500">NINJA</p>
                       <p className={`mt-1 text-2xl font-semibold ${isLight ? 'text-violet-700' : 'text-blue-300'}`}>{totalInviteCredits.toLocaleString()}</p>
                       <p className="mt-1 text-xs text-gray-400">earned</p>
                     </div>
@@ -1929,7 +1984,7 @@ export default function AgentsPage() {
                     }`}>
                       <p className="text-[10px] uppercase tracking-[0.22em] text-gray-500">Referral Notes</p>
                       <p className={`mt-1 text-sm leading-6 ${isLight ? 'text-slate-600' : 'text-gray-300'}`}>
-                        Active friends unlock rewards immediately. Pending invites stay tracked until wallet activation.
+                        Rewards are credited on successful wallet registration with a valid invite code.
                       </p>
                     </div>
                   </div>
@@ -1943,12 +1998,16 @@ export default function AgentsPage() {
                     <span className="text-right">Status</span>
                   </div>
 
-                  <div className="grid min-h-0 flex-1 grid-rows-3">
-                    {INVITED_FRIENDS.map((friend, index) => (
+                  <div className="min-h-0 flex-1 overflow-y-auto">
+                    {invitedFriends.length === 0 ? (
+                      <div className={`px-5 py-8 text-sm ${isLight ? 'text-slate-500' : 'text-gray-400'}`}>
+                        No invited friends yet.
+                      </div>
+                    ) : invitedFriends.map((friend, index) => (
                       <div
                         key={`${friend.wallet}-${friend.joinedAt}`}
                         className={`grid grid-cols-[minmax(0,1.45fr)_132px_132px_90px] items-center gap-3 px-5 py-4 ${
-                          index !== INVITED_FRIENDS.length - 1
+                          index !== invitedFriends.length - 1
                             ? isLight ? 'border-b border-slate-200/80' : 'border-b border-white/10'
                             : ''
                         }`}
@@ -1959,19 +2018,15 @@ export default function AgentsPage() {
 
                         <div className="text-xs text-gray-400">{friend.joinedAt}</div>
 
-                        <div className={`text-sm font-semibold ${friend.credits > 0 ? (isLight ? 'text-violet-700' : 'text-blue-300') : 'text-gray-400'}`}>
-                          {friend.credits > 0 ? `+${friend.credits.toLocaleString()} Passbits` : 'No reward yet'}
+                        <div className={`text-sm font-semibold ${friend.reward > 0 ? (isLight ? 'text-violet-700' : 'text-blue-300') : 'text-gray-400'}`}>
+                          {friend.reward > 0 ? `+${friend.reward.toLocaleString()} NINJA` : 'No reward yet'}
                         </div>
 
                         <div className="text-right">
                           <span className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-semibold ${
-                            friend.status === 'Active'
-                              ? isLight
-                                ? 'border-emerald-400/35 bg-emerald-500/8 text-emerald-600'
-                                : 'border-emerald-400/40 bg-emerald-500/10 text-emerald-300'
-                              : isLight
-                                ? 'border-amber-400/35 bg-amber-500/8 text-amber-600'
-                                : 'border-amber-400/40 bg-amber-500/10 text-amber-300'
+                            isLight
+                              ? 'border-emerald-400/35 bg-emerald-500/8 text-emerald-600'
+                              : 'border-emerald-400/40 bg-emerald-500/10 text-emerald-300'
                           }`}>
                             {friend.status}
                           </span>
@@ -1980,6 +2035,7 @@ export default function AgentsPage() {
                     ))}
                   </div>
                 </section>
+                </div>
               </div>
             </div>
           </div>

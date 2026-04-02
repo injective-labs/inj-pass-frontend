@@ -18,6 +18,7 @@ import {
 } from '@/wallet/keystore';
 import type { LocalKeystore } from '@/types/wallet';
 import TunnelBackground from '@/components/TunnelBackground';
+import { validateInviteCode } from '@/services/referral';
 
 type PendingAction = 'create' | 'enter' | null;
 type MockPhase = 'idle' | 'analyzing' | 'preparing' | 'awaiting' | 'complete';
@@ -69,6 +70,7 @@ const AGENT_SCENARIOS = [
   'Claim staking rewards and restake them into INJ',
   'Rebalance idle USDT into INJ if slippage stays below 0.5%',
 ] as const;
+const INVITE_CODE_PATTERN = /^[A-HJ-NP-Z2-9]{8}$/;
 
 function WelcomeSkeleton({ isLightMode }: { isLightMode: boolean }) {
   return (
@@ -289,6 +291,7 @@ function WelcomePageContent() {
   const [walletNameInput, setWalletNameInput] = useState('');
   const [inviteCodeInput, setInviteCodeInput] = useState('');
   const [isInviteCodeVisible, setIsInviteCodeVisible] = useState(false);
+  const [createDialogError, setCreateDialogError] = useState<string | null>(null);
   const [walletExists, setWalletExists] = useState(false);
   const [isThemeTransitioning, setIsThemeTransitioning] = useState(false);
   const [hasHeaderEntered, setHasHeaderEntered] = useState(false);
@@ -309,6 +312,19 @@ function WelcomePageContent() {
 
   useEffect(() => {
     setWalletExists(hasWallet());
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const inviteCodeFromUrl = new URLSearchParams(window.location.search).get('invite');
+    if (!inviteCodeFromUrl) return;
+
+    const normalized = inviteCodeFromUrl.trim().toUpperCase();
+    if (!normalized) return;
+
+    setInviteCodeInput(normalized);
+    setIsInviteCodeVisible(true);
   }, []);
 
   useEffect(() => {
@@ -522,6 +538,7 @@ function WelcomePageContent() {
 
   const handleOpenCreateDialog = () => {
     dismissErrorToast(true);
+    setCreateDialogError(null);
     setIsCreateDialogOpen(true);
   };
 
@@ -530,6 +547,7 @@ function WelcomePageContent() {
       return;
     }
 
+    setCreateDialogError(null);
     setIsCreateDialogOpen(false);
   };
 
@@ -537,6 +555,7 @@ function WelcomePageContent() {
     event.preventDefault();
     setPendingAction('create');
     dismissErrorToast(true);
+    setCreateDialogError(null);
 
     try {
       const walletName = walletNameInput.trim();
@@ -549,7 +568,18 @@ function WelcomePageContent() {
         throw new Error('INJ Pass name must be 20 characters or fewer.');
       }
 
-      const normalizedInviteCode = inviteCodeInput.trim();
+      const normalizedInviteCode = inviteCodeInput.trim().toUpperCase();
+      if (normalizedInviteCode.length > 0) {
+        if (!INVITE_CODE_PATTERN.test(normalizedInviteCode)) {
+          throw new Error('Invite code format is invalid.');
+        }
+
+        const validationResult = await validateInviteCode(normalizedInviteCode);
+        if (!validationResult.valid) {
+          throw new Error('Invite code is invalid.');
+        }
+      }
+
       const result = await createByPasskey(
         walletName,
         normalizedInviteCode.length > 0 ? normalizedInviteCode : undefined
@@ -569,7 +599,7 @@ function WelcomePageContent() {
       setIsCreateDialogOpen(false);
       router.push('/dashboard');
     } catch (err) {
-      showErrorToast(
+      setCreateDialogError(
         err instanceof Error ? err.message : 'Failed to create wallet.'
       );
     } finally {
@@ -1246,8 +1276,9 @@ function WelcomePageContent() {
                 id="invite-code"
                 type="text"
                 value={inviteCodeInput}
-                onChange={(event) => setInviteCodeInput(event.target.value)}
+                onChange={(event) => setInviteCodeInput(event.target.value.toUpperCase())}
                 placeholder="Enter invite code"
+                maxLength={8}
                 disabled={pendingAction === 'create'}
                 className={`mt-3 w-full rounded-2xl border px-4 py-4 text-base focus:outline-none focus:ring-2 focus:ring-[#d96eff]/18 disabled:cursor-not-allowed disabled:opacity-65 ${
                   isLightMode
@@ -1264,6 +1295,19 @@ function WelcomePageContent() {
             >
               Up to 20 characters. This will be used for passkey registration.
             </p>
+
+            {createDialogError ? (
+              <p
+                role="alert"
+                className={`mt-3 rounded-xl border px-3 py-2 text-sm font-medium ${
+                  isLightMode
+                    ? 'border-red-200 bg-red-50 text-red-700'
+                    : 'border-red-400/35 bg-red-500/10 text-red-300'
+                }`}
+              >
+                {createDialogError}
+              </p>
+            ) : null}
 
             <div className="mt-6 flex flex-col gap-3 sm:flex-row">
               <button

@@ -27,6 +27,19 @@ export interface ReferralStats {
   invitedBy: string | null;
 }
 
+export interface ReferralInvitee {
+  walletAddress: string | null;
+  walletName: string | null;
+  inviteeId: number;
+  reward: number;
+  joinedAt: string;
+  status: 'Active';
+}
+
+function normalizeInviteCode(inviteCode: string): string {
+  return inviteCode.trim().toUpperCase();
+}
+
 /**
  * Get auth header with Bearer token
  */
@@ -68,7 +81,7 @@ export async function validateInviteCode(inviteCode: string): Promise<ValidateRe
     const response = await fetch(`${API_BASE_URL}/referral/validate`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ inviteCode }),
+      body: JSON.stringify({ inviteCode: normalizeInviteCode(inviteCode) }),
     });
 
     if (!response.ok) {
@@ -101,7 +114,13 @@ export async function getStats(): Promise<ReferralStats> {
       };
     }
 
-    return response.json();
+    const data = await response.json();
+    return {
+      inviteCode: data?.inviteCode || '',
+      inviteeCount: Number(data?.inviteeCount) || 0,
+      totalRewards: Number(data?.totalRewards) || 0,
+      invitedBy: data?.invitedBy || null,
+    };
   } catch (error) {
     console.error('[Referral] Get stats failed:', error);
     return {
@@ -110,5 +129,33 @@ export async function getStats(): Promise<ReferralStats> {
       totalRewards: 0,
       invitedBy: null,
     };
+  }
+}
+
+export async function getInvitees(): Promise<ReferralInvitee[]> {
+  try {
+    const response = await fetch(`${API_BASE_URL}/referral/invitees`, {
+      method: 'GET',
+      headers: getAuthHeader(),
+    });
+
+    if (!response.ok) {
+      return [];
+    }
+
+    const data = await response.json();
+    const invitees = Array.isArray(data?.invitees) ? data.invitees : [];
+
+    return invitees.map((item: ReferralInvitee) => ({
+      walletAddress: item.walletAddress ?? null,
+      walletName: item.walletName ?? null,
+      inviteeId: Number(item.inviteeId) || 0,
+      reward: Number(item.reward) || 0,
+      joinedAt: item.joinedAt,
+      status: 'Active',
+    }));
+  } catch (error) {
+    console.error('[Referral] Get invitees failed:', error);
+    return [];
   }
 }
