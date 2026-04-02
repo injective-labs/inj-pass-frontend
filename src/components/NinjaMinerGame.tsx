@@ -327,7 +327,7 @@ export default function NinjaMinerGame({ walletAddress, onOpenMoreChance }: Ninj
         >
           <div className="ninja-logo-wrap">
             <Image
-              src="/NIJIA.png"
+              src="/NINJA.png"
               alt="LAM"
               width={152}
               height={152}
