@@ -63,7 +63,6 @@ function normalizeState(state: TapMinerState, now: number): TapMinerState {
   if (next.sessionEndsAt > 0 && now >= next.sessionEndsAt) {
     next.sessionStartedAt = 0;
     next.sessionEndsAt = 0;
-    next.sessionUsesChance = false;
   }
 
   if (next.tapCooldownEndsAt > 0 && now >= next.tapCooldownEndsAt) {
@@ -281,6 +280,7 @@ export default function NinjaMinerGame({ walletAddress, onOpenMoreChance }: Ninj
         const result = await syncPoints(gameState.sessionEarned, {
           consumeChance: gameState.sessionUsesChance,
           chanceCooldownSeconds: CHANCE_COOLDOWN_MS / 1000,
+          walletAddress,
         });
         if (result.success && result.balance !== undefined) {
           const settledBalance = Number(result.balance);

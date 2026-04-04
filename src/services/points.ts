@@ -74,7 +74,11 @@ function getAuthHeader(): HeadersInit {
  */
 export async function syncPoints(
   earnedNinja: number,
-  options?: { consumeChance?: boolean; chanceCooldownSeconds?: number },
+  options?: {
+    consumeChance?: boolean;
+    chanceCooldownSeconds?: number;
+    walletAddress?: string;
+  },
 ): Promise<SyncResponse> {
   const safeEarnedNinja = Number(earnedNinja);
   if (!Number.isFinite(safeEarnedNinja) || safeEarnedNinja <= 0) {
@@ -89,6 +93,7 @@ export async function syncPoints(
         earnedNinja: safeEarnedNinja,
         consumeChance: Boolean(options?.consumeChance),
         chanceCooldownSeconds: options?.chanceCooldownSeconds,
+        walletAddress: options?.walletAddress,
       }),
     });
 
