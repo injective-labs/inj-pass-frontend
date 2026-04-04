@@ -9,7 +9,7 @@ interface TransactionAuthModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSuccess: () => void;
-  transactionType: 'send' | 'swap';
+  transactionType: 'send' | 'swap' | 'chance';
   variant?: 'modal' | 'inline';
 }
 
@@ -108,7 +108,7 @@ export default function TransactionAuthModal({
       >
         <div className="p-5 border-b border-white/5">
           <h3 className="text-lg font-bold text-white">
-            Verify {transactionType === 'send' ? 'Send' : 'Swap'} Transaction
+            Verify {transactionType === 'send' ? 'Send' : transactionType === 'swap' ? 'Swap' : 'Chance Purchase'} Transaction
           </h3>
         </div>
         

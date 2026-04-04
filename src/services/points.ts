@@ -19,6 +19,15 @@ export interface SyncResponse {
   success: boolean;
   balance?: number;
   transactionId?: number;
+  chanceRemaining?: number;
+  chanceCooldownEndsAt?: number;
+  error?: string;
+}
+
+export interface ConsumeChanceResponse {
+  success: boolean;
+  chanceRemaining?: number;
+  chanceCooldownEndsAt?: number;
   error?: string;
 }
 
@@ -28,10 +37,14 @@ export interface BalanceResponse {
 
 export interface NinjaMinerState {
   ninjaBalance: number;
-  cooldownEndsAt: number;
+  tapCooldownEndsAt: number;
+  chanceCooldownEndsAt: number;
+  chanceRemaining: number;
   sessionStartedAt: number;
   sessionEndsAt: number;
   sessionEarned: number;
+  sessionUsesChance?: boolean;
+  cooldownEndsAt?: number;
 }
 
 export interface TransactionsResponse {
@@ -59,7 +72,10 @@ function getAuthHeader(): HeadersInit {
 /**
  * Sync NINJA from tap game to backend
  */
-export async function syncPoints(earnedNinja: number): Promise<SyncResponse> {
+export async function syncPoints(
+  earnedNinja: number,
+  options?: { consumeChance?: boolean; chanceCooldownSeconds?: number },
+): Promise<SyncResponse> {
   const safeEarnedNinja = Number(earnedNinja);
   if (!Number.isFinite(safeEarnedNinja) || safeEarnedNinja <= 0) {
     return { success: false, error: 'Invalid earnedNinja' };
@@ -69,7 +85,11 @@ export async function syncPoints(earnedNinja: number): Promise<SyncResponse> {
     const response = await fetch(`${API_BASE_URL}/points/sync`, {
       method: 'POST',
       headers: getAuthHeader(),
-      body: JSON.stringify({ earnedNinja: safeEarnedNinja }),
+      body: JSON.stringify({
+        earnedNinja: safeEarnedNinja,
+        consumeChance: Boolean(options?.consumeChance),
+        chanceCooldownSeconds: options?.chanceCooldownSeconds,
+      }),
     });
 
     if (!response.ok) {
@@ -161,10 +181,19 @@ export async function getNinjaMinerState(walletAddress?: string): Promise<NinjaM
 
     return {
       ninjaBalance: Number.isFinite(Number(state.ninjaBalance)) ? Number(state.ninjaBalance) : 0,
-      cooldownEndsAt: Number.isFinite(Number(state.cooldownEndsAt)) ? Number(state.cooldownEndsAt) : 0,
+      tapCooldownEndsAt: Number.isFinite(Number(state.tapCooldownEndsAt))
+        ? Number(state.tapCooldownEndsAt)
+        : (Number.isFinite(Number(state.cooldownEndsAt)) ? Number(state.cooldownEndsAt) : 0),
+      chanceCooldownEndsAt: Number.isFinite(Number(state.chanceCooldownEndsAt)) ? Number(state.chanceCooldownEndsAt) : 0,
+      chanceRemaining: Number.isFinite(Number((state as { chanceRemaining?: unknown }).chanceRemaining))
+        ? Number((state as { chanceRemaining?: unknown }).chanceRemaining)
+        : 0,
       sessionStartedAt: Number.isFinite(Number(state.sessionStartedAt)) ? Number(state.sessionStartedAt) : 0,
       sessionEndsAt: Number.isFinite(Number(state.sessionEndsAt)) ? Number(state.sessionEndsAt) : 0,
       sessionEarned: Number.isFinite(Number(state.sessionEarned)) ? Number(state.sessionEarned) : 0,
+      sessionUsesChance: typeof (state as { sessionUsesChance?: unknown }).sessionUsesChance === 'boolean'
+        ? Boolean((state as { sessionUsesChance?: unknown }).sessionUsesChance)
+        : false,
     };
   } catch (error) {
     console.error('[Points] Get Ninja Miner state failed:', error);
@@ -190,5 +219,28 @@ export async function saveNinjaMinerState(
   } catch (error) {
     console.error('[Points] Save Ninja Miner state failed:', error);
     return false;
+  }
+}
+
+/**
+ * Consume one chance on backend.
+ */
+export async function consumeChance(cooldownSeconds = 20): Promise<ConsumeChanceResponse> {
+  try {
+    const response = await fetch(`${API_BASE_URL}/points/chance/consume`, {
+      method: 'POST',
+      headers: getAuthHeader(),
+      body: JSON.stringify({ cooldownSeconds }),
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ message: 'Consume chance failed' }));
+      return { success: false, error: error.message || 'Consume chance failed' };
+    }
+
+    return response.json();
+  } catch (error) {
+    console.error('[Points] Consume chance failed:', error);
+    return { success: false, error: 'Network error' };
   }
 }

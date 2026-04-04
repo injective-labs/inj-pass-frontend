@@ -4,6 +4,7 @@ import Image from 'next/image';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTheme } from '@/contexts/ThemeContext';
 import { getBalance, getNinjaMinerState, saveNinjaMinerState, syncPoints } from '@/services/points';
+import { getUserProfile } from '@/services/user';
 
 interface NinjaMinerGameProps {
   walletAddress?: string;
@@ -12,10 +13,14 @@ interface NinjaMinerGameProps {
 
 interface TapMinerState {
   ninjaBalance: number;
-  cooldownEndsAt: number;
+  tapCooldownEndsAt: number;
+  chanceCooldownEndsAt: number;
+  chanceRemaining: number;
   sessionStartedAt: number;
   sessionEndsAt: number;
   sessionEarned: number;
+  sessionUsesChance: boolean;
+  cooldownEndsAt?: number;
 }
 
 interface TapBurst {
@@ -25,10 +30,14 @@ interface TapBurst {
   y: number;
 }
 
+type PlayMode = 'tap' | 'chance';
+
 const BALANCE_EVENT = 'inj-pass:ninja-balance-update';
 const DEFAULT_NINJA_BALANCE = 22;
-const SESSION_DURATION_MS = 15_000;
-const COOLDOWN_MS = 30 * 1000;
+const SESSION_DURATION_MS = 5_000;
+const COOLDOWN_MS = 8 * 60 * 60 * 1000;
+const CHANCE_COOLDOWN_MS = 20_000;
+const SESSION_MAX_EARNED = 3;
 
 function roundTo(value: number, digits = 2) {
   return Number(value.toFixed(digits));
@@ -37,10 +46,13 @@ function roundTo(value: number, digits = 2) {
 function createInitialState(): TapMinerState {
   return {
     ninjaBalance: DEFAULT_NINJA_BALANCE,
-    cooldownEndsAt: 0,
+    tapCooldownEndsAt: 0,
+    chanceCooldownEndsAt: 0,
+    chanceRemaining: 0,
     sessionStartedAt: 0,
     sessionEndsAt: 0,
     sessionEarned: 0,
+    sessionUsesChance: false,
   };
 }
 
@@ -50,10 +62,19 @@ function normalizeState(state: TapMinerState, now: number): TapMinerState {
   if (next.sessionEndsAt > 0 && now >= next.sessionEndsAt) {
     next.sessionStartedAt = 0;
     next.sessionEndsAt = 0;
+    next.sessionUsesChance = false;
   }
 
-  if (next.cooldownEndsAt > 0 && now >= next.cooldownEndsAt) {
-    next.cooldownEndsAt = 0;
+  if (next.tapCooldownEndsAt > 0 && now >= next.tapCooldownEndsAt) {
+    next.tapCooldownEndsAt = 0;
+    next.sessionStartedAt = 0;
+    next.sessionEndsAt = 0;
+    next.sessionEarned = 0;
+    next.sessionUsesChance = false;
+  }
+
+  if (next.chanceCooldownEndsAt > 0 && now >= next.chanceCooldownEndsAt) {
+    next.chanceCooldownEndsAt = 0;
   }
 
   return next;
@@ -74,6 +95,7 @@ function randomReward() {
 export default function NinjaMinerGame({ walletAddress, onOpenMoreChance }: NinjaMinerGameProps) {
   const { theme } = useTheme();
   const [gameState, setGameState] = useState<TapMinerState>(() => createInitialState());
+  const [playMode, setPlayMode] = useState<PlayMode>('tap');
   const [bursts, setBursts] = useState<TapBurst[]>([]);
   const [hydrated, setHydrated] = useState(false);
   const [now, setNow] = useState(() => Date.now());
@@ -88,9 +110,10 @@ export default function NinjaMinerGame({ walletAddress, onOpenMoreChance }: Ninj
       const currentNow = Date.now();
 
       try {
-        const [savedState, balance] = await Promise.all([
+        const [savedState, balance, profile] = await Promise.all([
           walletAddress ? getNinjaMinerState(walletAddress) : Promise.resolve(null),
           walletAddress ? getBalance() : Promise.resolve(DEFAULT_NINJA_BALANCE),
+          walletAddress ? getUserProfile() : Promise.resolve(null),
         ]);
 
         if (cancelled) return;
@@ -100,10 +123,27 @@ export default function NinjaMinerGame({ walletAddress, onOpenMoreChance }: Ninj
             ninjaBalance: typeof savedState?.ninjaBalance === 'number'
               ? roundTo(savedState.ninjaBalance, 2)
               : DEFAULT_NINJA_BALANCE,
-            cooldownEndsAt: typeof savedState?.cooldownEndsAt === 'number' ? savedState.cooldownEndsAt : 0,
+            tapCooldownEndsAt: typeof savedState?.tapCooldownEndsAt === 'number'
+              ? savedState.tapCooldownEndsAt
+              : typeof savedState?.cooldownEndsAt === 'number'
+                ? savedState.cooldownEndsAt
+                : 0,
+            chanceCooldownEndsAt: typeof profile?.chanceCooldownEndsAt === 'number'
+              ? profile.chanceCooldownEndsAt
+              : typeof savedState?.chanceCooldownEndsAt === 'number'
+                ? savedState.chanceCooldownEndsAt
+                : 0,
+            chanceRemaining: typeof profile?.chanceRemaining === 'number'
+              ? profile.chanceRemaining
+              : typeof savedState?.chanceRemaining === 'number'
+                ? savedState.chanceRemaining
+                : 0,
             sessionStartedAt: typeof savedState?.sessionStartedAt === 'number' ? savedState.sessionStartedAt : 0,
             sessionEndsAt: typeof savedState?.sessionEndsAt === 'number' ? savedState.sessionEndsAt : 0,
             sessionEarned: typeof savedState?.sessionEarned === 'number' ? roundTo(savedState.sessionEarned, 2) : 0,
+            sessionUsesChance: typeof (savedState as { sessionUsesChance?: unknown })?.sessionUsesChance === 'boolean'
+              ? Boolean((savedState as { sessionUsesChance?: unknown }).sessionUsesChance)
+              : false,
           },
           currentNow,
         );
@@ -150,7 +190,18 @@ export default function NinjaMinerGame({ walletAddress, onOpenMoreChance }: Ninj
 
   const normalizedState = useMemo(() => normalizeState(gameState, now), [gameState, now]);
   const isActive = normalizedState.sessionEndsAt > now;
-  const isCoolingDown = !isActive && normalizedState.cooldownEndsAt > now;
+  const isTapCoolingDown = !isActive && normalizedState.tapCooldownEndsAt > now;
+  const tapCooldownRemainingMs = Math.max(0, normalizedState.tapCooldownEndsAt - now);
+  const chanceCooldownRemainingMs = Math.max(0, normalizedState.chanceCooldownEndsAt - now);
+  const isChanceCoolingDown = chanceCooldownRemainingMs > 0;
+  const chanceAvailable = normalizedState.chanceRemaining > 0;
+  const activeSessionMode: PlayMode = normalizedState.sessionUsesChance ? 'chance' : 'tap';
+  const isViewingActiveSessionMode = !isActive || playMode === activeSessionMode;
+  const modeIsCoolingDown = playMode === 'tap' ? isTapCoolingDown : isChanceCoolingDown;
+  const modeCanStartSession = playMode === 'tap'
+    ? !isTapCoolingDown
+    : (chanceAvailable && !isChanceCoolingDown);
+  const canTapInCurrentMode = isActive ? isViewingActiveSessionMode : modeCanStartSession;
 
   useEffect(() => {
     if (!hydrated) return;
@@ -159,7 +210,6 @@ export default function NinjaMinerGame({ walletAddress, onOpenMoreChance }: Ninj
     const shouldSync =
       prevIsActiveRef.current &&
       !isActive &&
-      isCoolingDown &&
       gameState.sessionEarned > 0 &&
       !isSyncing &&
       lastSyncedSessionKeyRef.current !== sessionKey;
@@ -174,12 +224,25 @@ export default function NinjaMinerGame({ walletAddress, onOpenMoreChance }: Ninj
     void (async () => {
       setIsSyncing(true);
       try {
-        const result = await syncPoints(gameState.sessionEarned);
+        const result = await syncPoints(gameState.sessionEarned, {
+          consumeChance: gameState.sessionUsesChance,
+          chanceCooldownSeconds: CHANCE_COOLDOWN_MS / 1000,
+        });
         if (result.success && result.balance !== undefined) {
           const settledBalance = Number(result.balance);
           setGameState((prev) => ({
             ...prev,
             ninjaBalance: Number.isFinite(settledBalance) ? settledBalance : prev.ninjaBalance,
+            chanceRemaining: Number.isFinite(Number(result.chanceRemaining))
+              ? Math.max(0, Math.floor(Number(result.chanceRemaining)))
+              : prev.chanceRemaining,
+            chanceCooldownEndsAt: Number.isFinite(Number(result.chanceCooldownEndsAt))
+              ? Math.max(0, Math.floor(Number(result.chanceCooldownEndsAt)))
+              : prev.chanceCooldownEndsAt,
+            sessionStartedAt: 0,
+            sessionEndsAt: 0,
+            sessionEarned: 0,
+            sessionUsesChance: false,
           }));
           window.dispatchEvent(new CustomEvent(BALANCE_EVENT, {
             detail: {
@@ -199,7 +262,7 @@ export default function NinjaMinerGame({ walletAddress, onOpenMoreChance }: Ninj
         setIsSyncing(false);
       }
     })();
-  }, [hydrated, isActive, isCoolingDown, gameState.sessionEarned, gameState.sessionStartedAt, gameState.sessionEndsAt, isSyncing]);
+  }, [hydrated, isActive, gameState.sessionEarned, gameState.sessionStartedAt, gameState.sessionEndsAt, isSyncing]);
 
   useEffect(() => {
     if (!hydrated || !walletAddress) return;
@@ -214,19 +277,37 @@ export default function NinjaMinerGame({ walletAddress, onOpenMoreChance }: Ninj
   }, [gameState, hydrated, walletAddress]);
 
   const activeRemainingMs = Math.max(0, normalizedState.sessionEndsAt - now);
-  const cooldownRemainingMs = Math.max(0, normalizedState.cooldownEndsAt - now);
   const activeProgress = isActive ? (activeRemainingMs / SESSION_DURATION_MS) * 100 : 0;
-  const cooldownProgress = isCoolingDown
-    ? ((COOLDOWN_MS - cooldownRemainingMs) / COOLDOWN_MS) * 100
+  const tapCooldownProgress = isTapCoolingDown
+    ? ((COOLDOWN_MS - tapCooldownRemainingMs) / COOLDOWN_MS) * 100
     : 0;
-  const progressValue = isActive ? activeProgress : isCoolingDown ? cooldownProgress : 100;
+  const chanceCooldownProgress = isChanceCoolingDown
+    ? ((CHANCE_COOLDOWN_MS - chanceCooldownRemainingMs) / CHANCE_COOLDOWN_MS) * 100
+    : 0;
+  const progressValue = isActive
+    ? activeProgress
+    : playMode === 'tap'
+      ? (isTapCoolingDown ? tapCooldownProgress : 100)
+      : (isChanceCoolingDown ? chanceCooldownProgress : 100);
   const isLight = theme === 'light';
 
+  const modeStatusLabel = playMode === 'tap'
+    ? (isTapCoolingDown ? `Tap cooldown ${formatDuration(tapCooldownRemainingMs)}` : 'Tap ready')
+    : (chanceAvailable
+      ? (isChanceCoolingDown ? `Chance cooldown ${formatDuration(chanceCooldownRemainingMs)}` : 'Chance ready')
+      : 'No chance left');
+
   const progressLabel = isActive
-    ? `${(activeRemainingMs / 1000).toFixed(1)}s`
-    : isCoolingDown
-      ? `Reset in ${formatDuration(cooldownRemainingMs)}`
-      : 'Ready';
+    ? `Session ${(activeRemainingMs / 1000).toFixed(1)}s`
+    : playMode === 'tap'
+      ? isTapCoolingDown
+        ? `Tap cooldown ${formatDuration(tapCooldownRemainingMs)}`
+        : 'Tap LAM to earn'
+      : chanceAvailable
+        ? isChanceCoolingDown
+          ? `Chance cooldown ${formatDuration(chanceCooldownRemainingMs)}`
+          : 'Chance ready'
+        : 'No chance left';
 
   const spawnBurst = (amount: number) => {
     const burst = {
@@ -243,7 +324,7 @@ export default function NinjaMinerGame({ walletAddress, onOpenMoreChance }: Ninj
   };
 
   const handleTap = () => {
-    if (!hydrated || isCoolingDown) return;
+    if (!hydrated || !canTapInCurrentMode) return;
 
     const tapAt = Date.now();
     const reward = randomReward();
@@ -251,23 +332,72 @@ export default function NinjaMinerGame({ walletAddress, onOpenMoreChance }: Ninj
     setGameState((current) => {
       const synced = normalizeState(current, tapAt);
 
-      // Block late taps after a session has ended but before the UI has rendered cooldown.
-      if (synced.cooldownEndsAt > tapAt && synced.sessionEndsAt === 0) {
+      const sessionAlreadyActive = synced.sessionEndsAt > tapAt;
+      const tapCooldownActive = synced.tapCooldownEndsAt > tapAt;
+      const chanceReadyNow = synced.chanceRemaining > 0 && synced.chanceCooldownEndsAt <= tapAt;
+      const activeSessionEarned = sessionAlreadyActive ? synced.sessionEarned : 0;
+      const remainingCapacity = Math.max(0, SESSION_MAX_EARNED - activeSessionEarned);
+      const sessionUsesChance = sessionAlreadyActive ? synced.sessionUsesChance : playMode === 'chance';
+      const sessionMode: PlayMode = sessionUsesChance ? 'chance' : 'tap';
+
+      if (sessionAlreadyActive && playMode !== sessionMode) {
         return synced;
       }
 
-      const sessionAlreadyActive = synced.sessionEndsAt > tapAt;
+      if (remainingCapacity <= 0) {
+        return {
+          ...synced,
+          sessionStartedAt: 0,
+          sessionEndsAt: tapAt,
+          tapCooldownEndsAt: sessionUsesChance ? synced.tapCooldownEndsAt : tapAt + COOLDOWN_MS,
+          sessionUsesChance,
+        };
+      }
+
+      const effectiveReward = Math.min(reward, remainingCapacity);
+      const nextSessionEarned = roundTo(activeSessionEarned + effectiveReward, 2);
+      const hitCap = nextSessionEarned >= SESSION_MAX_EARNED;
+
+      if (!sessionAlreadyActive && playMode === 'chance') {
+        if (!chanceReadyNow) {
+          return synced;
+        }
+
+        return {
+          ninjaBalance: roundTo(synced.ninjaBalance + effectiveReward, 2),
+          tapCooldownEndsAt: synced.tapCooldownEndsAt,
+          chanceCooldownEndsAt: tapAt + CHANCE_COOLDOWN_MS,
+          chanceRemaining: Math.max(0, synced.chanceRemaining - 1),
+          sessionStartedAt: tapAt,
+          sessionEndsAt: tapAt + SESSION_DURATION_MS,
+          sessionEarned: effectiveReward,
+          sessionUsesChance: true,
+        };
+      }
+
+      if (!sessionAlreadyActive && tapCooldownActive) {
+        return synced;
+      }
+
       return {
-        ninjaBalance: roundTo(synced.ninjaBalance + reward, 2),
+        ninjaBalance: roundTo(synced.ninjaBalance + effectiveReward, 2),
         sessionStartedAt: sessionAlreadyActive ? synced.sessionStartedAt : tapAt,
-        sessionEndsAt: sessionAlreadyActive ? synced.sessionEndsAt : tapAt + SESSION_DURATION_MS,
-        cooldownEndsAt: sessionAlreadyActive ? synced.cooldownEndsAt : tapAt + SESSION_DURATION_MS + COOLDOWN_MS,
-        sessionEarned: roundTo((sessionAlreadyActive ? synced.sessionEarned : 0) + reward, 2),
+        sessionEndsAt: hitCap ? tapAt : (sessionAlreadyActive ? synced.sessionEndsAt : tapAt + SESSION_DURATION_MS),
+        tapCooldownEndsAt: hitCap
+          ? (sessionUsesChance ? synced.tapCooldownEndsAt : tapAt + COOLDOWN_MS)
+          : (sessionAlreadyActive ? synced.tapCooldownEndsAt : tapAt + SESSION_DURATION_MS + COOLDOWN_MS),
+        chanceCooldownEndsAt: synced.chanceCooldownEndsAt,
+        chanceRemaining: synced.chanceRemaining,
+        sessionEarned: nextSessionEarned,
+        sessionUsesChance,
       };
     });
 
     setNow(tapAt);
-    spawnBurst(reward);
+    const visibleReward = Math.min(reward, Math.max(0, SESSION_MAX_EARNED - normalizedState.sessionEarned));
+    if (visibleReward > 0) {
+      spawnBurst(visibleReward);
+    }
   };
 
   if (!hydrated) {
@@ -284,9 +414,47 @@ export default function NinjaMinerGame({ walletAddress, onOpenMoreChance }: Ninj
 
   return (
     <div
-      className="flex h-full flex-col items-center justify-center px-6 py-7"
+      className="flex h-full flex-col items-center justify-between px-5 py-4"
     >
-      <div className="mb-4 flex w-full items-center justify-end gap-2.5">
+      <div className="mb-1 flex w-full flex-col gap-1.5">
+        <div className="flex items-center justify-between gap-2">
+          <div className={`inline-flex rounded-full border p-1 ${
+            isLight ? 'border-slate-700/80 bg-slate-900' : 'border-white/10 bg-white/[0.04]'
+          }`}>
+            <button
+              type="button"
+              onClick={() => setPlayMode('tap')}
+              className={`rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] transition-all ${
+                playMode === 'tap'
+                  ? (isLight ? 'bg-slate-700 text-white' : 'bg-white/20 text-white')
+                  : (isLight ? 'text-white/85 hover:text-white' : 'text-gray-300 hover:text-white')
+              }`}
+            >
+              Tap
+            </button>
+            <button
+              type="button"
+              onClick={() => setPlayMode('chance')}
+              className={`rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] transition-all ${
+                playMode === 'chance'
+                  ? (isLight ? 'bg-slate-700 text-white' : 'bg-white/20 text-white')
+                  : (isLight ? 'text-white/85 hover:text-white' : 'text-gray-300 hover:text-white')
+              }`}
+            >
+              Chance
+            </button>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] font-semibold uppercase tracking-[0.18em]">
+          <div className={isLight ? 'text-slate-500' : 'text-gray-500'}>
+            {modeStatusLabel}
+          </div>
+          <div className="text-white">
+            Chance left · {normalizedState.chanceRemaining}
+          </div>
+        </div>
+        <div className="flex items-center justify-end gap-2.5">
         <button
           type="button"
           onClick={onOpenMoreChance}
@@ -303,9 +471,10 @@ export default function NinjaMinerGame({ walletAddress, onOpenMoreChance }: Ninj
         }`}>
           +{normalizedState.sessionEarned.toFixed(2)} LAM
         </div>
+        </div>
       </div>
 
-      <div className="relative -mt-5 flex flex-1 items-center justify-center">
+      <div className="relative mt-0 flex flex-1 items-center justify-center">
         {bursts.map((burst) => (
           <div
             key={burst.id}
@@ -319,11 +488,11 @@ export default function NinjaMinerGame({ walletAddress, onOpenMoreChance }: Ninj
         <button
           type="button"
           onClick={handleTap}
-          disabled={isCoolingDown}
-          className={`ninja-tap-shell ${isActive ? 'is-active' : ''} ${isCoolingDown ? 'is-cooling' : ''} ${
+          disabled={!canTapInCurrentMode}
+          className={`ninja-tap-shell ${isActive ? 'is-active' : ''} ${!isActive && modeIsCoolingDown ? 'is-cooling' : ''} ${
             isLight ? 'border-slate-300/75 bg-slate-100/80' : 'border-white/10 bg-white/[0.04]'
           }`}
-          aria-label={isCoolingDown ? 'LAM tap cooldown active' : 'Tap LAM'}
+          aria-label={!canTapInCurrentMode ? 'Current mode unavailable' : 'Tap LAM'}
         >
           <div className="ninja-logo-wrap">
             <Image
@@ -338,10 +507,10 @@ export default function NinjaMinerGame({ walletAddress, onOpenMoreChance }: Ninj
         </button>
       </div>
 
-      <div className="w-full max-w-[360px] space-y-2">
-        {!isActive && !isCoolingDown ? (
+      <div className="w-full max-w-[360px] space-y-1 pb-1">
+        {!isActive && !modeIsCoolingDown ? (
           <div className={`text-center text-[11px] font-semibold uppercase tracking-[0.22em] ${isLight ? 'text-slate-500' : 'text-gray-500'}`}>
-            Tap LAM to Earn
+            {playMode === 'chance' && chanceAvailable ? 'Chance mode ready' : 'Tap LAM to Earn'}
           </div>
         ) : (
           <div className={`h-2 overflow-hidden rounded-full ${isLight ? 'bg-slate-200/90' : 'bg-white/8'}`}>
@@ -358,9 +527,13 @@ export default function NinjaMinerGame({ walletAddress, onOpenMoreChance }: Ninj
           </div>
         )}
 
-        <div className={`text-center text-[11px] font-semibold uppercase tracking-[0.18em] ${isLight ? 'text-slate-500' : 'text-gray-500'}`}>
-          {progressLabel}
-        </div>
+        {(isActive || modeIsCoolingDown || (isActive && !isViewingActiveSessionMode)) && (
+          <div className={`text-center text-[11px] font-semibold uppercase tracking-[0.18em] ${isLight ? 'text-slate-500' : 'text-gray-500'}`}>
+            {isActive && !isViewingActiveSessionMode
+              ? `Current session in ${activeSessionMode.toUpperCase()} mode`
+              : progressLabel}
+          </div>
+        )}
       </div>
 
       <style jsx>{`
@@ -369,8 +542,8 @@ export default function NinjaMinerGame({ walletAddress, onOpenMoreChance }: Ninj
           display: flex;
           align-items: center;
           justify-content: center;
-          width: 15rem;
-          height: 15rem;
+          width: 13.5rem;
+          height: 13.5rem;
           border-radius: 999px;
           transition: transform 180ms ease, opacity 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
           overflow: hidden;
@@ -413,8 +586,8 @@ export default function NinjaMinerGame({ walletAddress, onOpenMoreChance }: Ninj
           display: flex;
           align-items: center;
           justify-content: center;
-          width: 11rem;
-          height: 11rem;
+          width: 9.75rem;
+          height: 9.75rem;
           border-radius: 999px;
         }
 

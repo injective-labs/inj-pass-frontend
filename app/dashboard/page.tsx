@@ -29,6 +29,7 @@ import SettingsPage from '../settings/page';
 import { privateKeyToHex } from '@/utils/wallet';
 import { getInjectiveAddress, getEthereumAddress } from '@injectivelabs/sdk-ts';
 import { INJECTIVE_TESTNET } from '@/types/chain';
+import { encodeFunctionData, keccak256, stringToHex } from 'viem';
 
 type AssetTab = 'tokens' | 'nfts' | 'defi' | 'earn';
 type WalletPanel = 'overview' | 'send' | 'receive' | 'swap' | 'history' | 'settings' | 'card' | 'chance';
@@ -61,37 +62,59 @@ const LAM_USD_PRICE = 0.01;
 const POPULAR_FAUCET_IDS = new Set(['injective', 'sepolia', 'arbitrum', 'base']);
 const MORE_CHANCE_PLANS: Array<{
   id: ChancePlanId;
+  planId: number;
   name: string;
   chances: number;
+  priceWei: bigint;
   blurb: string;
   accentClass: string;
   surfaceClass: string;
 }> = [
   {
     id: 'go',
+    planId: 1,
     name: 'Go',
     chances: 3,
+    priceWei: BigInt(process.env.NEXT_PUBLIC_PLAN_GO_PRICE_WEI || '100000000000000'),
     blurb: 'Quick refill for a few extra tap runs.',
     accentClass: 'text-emerald-300',
     surfaceClass: 'border-emerald-400/18 bg-emerald-500/[0.08]',
   },
   {
     id: 'pro',
+    planId: 2,
     name: 'Pro',
     chances: 12,
+    priceWei: BigInt(process.env.NEXT_PUBLIC_PLAN_PRO_PRICE_WEI || '200000000000000'),
     blurb: 'Best balance for repeat LAM farming.',
     accentClass: 'text-violet-200',
     surfaceClass: 'border-violet-400/22 bg-violet-500/[0.08]',
   },
   {
     id: 'max',
+    planId: 3,
     name: 'Max',
     chances: 30,
+    priceWei: BigInt(process.env.NEXT_PUBLIC_PLAN_MAX_PRICE_WEI || '300000000000000'),
     blurb: 'Longest session pack for power users.',
     accentClass: 'text-amber-200',
     surfaceClass: 'border-amber-400/18 bg-amber-500/[0.08]',
   },
 ];
+
+const CHANCE_CONTRACT_ADDRESS = (process.env.NEXT_PUBLIC_CHANCE_CONTRACT_ADDRESS || '0x258A549Be00FaDC2777266eA6eC87Deb2f650c3c') as Address;
+const CHANCE_MANAGER_ABI = [
+  {
+    type: 'function',
+    name: 'buyChance',
+    stateMutability: 'payable',
+    inputs: [
+      { name: 'planId', type: 'uint8' },
+      { name: 'clientRef', type: 'bytes32' },
+    ],
+    outputs: [],
+  },
+] as const;
 
 const NETWORK_META: Record<WalletNetworkMode, { label: string; shortLabel: string; chain: typeof INJECTIVE_MAINNET; tokenSet: typeof TOKENS_MAINNET }> = {
   mainnet: {
@@ -645,8 +668,11 @@ export default function DashboardPage() {
   const [selectedChancePlan, setSelectedChancePlan] = useState<ChancePlanId>('pro');
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [showInlineSendAuth, setShowInlineSendAuth] = useState(false);
-  const [pendingAuthAction, setPendingAuthAction] = useState<'send' | 'swap' | null>(null);
-  const [postAuthAction, setPostAuthAction] = useState<'send' | 'swap' | null>(null);
+  const [pendingAuthAction, setPendingAuthAction] = useState<'send' | 'swap' | 'chance' | null>(null);
+  const [postAuthAction, setPostAuthAction] = useState<'send' | 'swap' | 'chance' | null>(null);
+  const [chanceSubmitting, setChanceSubmitting] = useState(false);
+  const [chanceError, setChanceError] = useState('');
+  const [chanceTxHash, setChanceTxHash] = useState('');
   const [cardPanelTab, setCardPanelTab] = useState<CardPanelTab>('pay');
   const [boundCards, setBoundCards] = useState<BoundCardPreview[]>([]);
   const [cardScanState, setCardScanState] = useState<'idle' | 'scanning' | 'success' | 'error'>('idle');
@@ -1415,6 +1441,67 @@ export default function DashboardPage() {
     void executeInlineSwap();
   };
 
+  const executeChancePurchase = useCallback(async () => {
+    if (walletNetworkMode === 'testnet') {
+      setChanceError('Chance purchase is available on mainnet only.');
+      return;
+    }
+
+    if (!privateKey || !address) {
+      setChanceError('Signing key is not loaded. Verify with Passkey and try again.');
+      return;
+    }
+
+    if (!CHANCE_CONTRACT_ADDRESS || !CHANCE_CONTRACT_ADDRESS.startsWith('0x')) {
+      setChanceError('Chance contract is not configured. Set NEXT_PUBLIC_CHANCE_CONTRACT_ADDRESS.');
+      return;
+    }
+
+    const selectedPlan = MORE_CHANCE_PLANS.find((plan) => plan.id === selectedChancePlan);
+    if (!selectedPlan) {
+      setChanceError('Selected chance plan is invalid.');
+      return;
+    }
+
+    setChanceSubmitting(true);
+    setChanceError('');
+    setChanceTxHash('');
+
+    try {
+      const clientRef = keccak256(stringToHex(`chance-${selectedPlan.id}-${Date.now()}`));
+      const data = encodeFunctionData({
+        abi: CHANCE_MANAGER_ABI,
+        functionName: 'buyChance',
+        args: [selectedPlan.planId, clientRef],
+      });
+
+      const hash = await sendTransaction(
+        privateKey,
+        CHANCE_CONTRACT_ADDRESS,
+        formatEther(selectedPlan.priceWei),
+        data,
+        currentNetworkMeta.chain,
+      );
+
+      setChanceTxHash(hash);
+      resetTxAuth();
+    } catch (error) {
+      setChanceError(error instanceof Error ? error.message : 'Failed to buy chance');
+    } finally {
+      setChanceSubmitting(false);
+    }
+  }, [address, currentNetworkMeta.chain, privateKey, resetTxAuth, selectedChancePlan, walletNetworkMode]);
+
+  const handleChanceAction = () => {
+    if (isPinLocked || autoLockMinutes === 0 || !privateKey) {
+      setPendingAuthAction('chance');
+      setShowAuthModal(true);
+      return;
+    }
+
+    void executeChancePurchase();
+  };
+
   const handleTransactionAuthSuccess = () => {
     setShowAuthModal(false);
     if (pendingAuthAction) {
@@ -1441,12 +1528,14 @@ export default function DashboardPage() {
 
     if (postAuthAction === 'send') {
       void executeInlineSend();
-    } else {
+    } else if (postAuthAction === 'swap') {
       void executeInlineSwap();
+    } else {
+      void executeChancePurchase();
     }
 
     setPostAuthAction(null);
-  }, [executeInlineSend, executeInlineSwap, postAuthAction, privateKey]);
+  }, [executeChancePurchase, executeInlineSend, executeInlineSwap, postAuthAction, privateKey]);
 
   useEffect(() => {
     if (walletPanel !== 'history') return;
@@ -3035,14 +3124,32 @@ export default function DashboardPage() {
                                   <div className="mt-2 text-lg font-bold text-white">
                                     {MORE_CHANCE_PLANS.find((plan) => plan.id === selectedChancePlan)?.name} · {MORE_CHANCE_PLANS.find((plan) => plan.id === selectedChancePlan)?.chances} chances
                                   </div>
+                                  <div className="mt-1 text-sm text-gray-400">
+                                    Price: {formatEther(MORE_CHANCE_PLANS.find((plan) => plan.id === selectedChancePlan)?.priceWei ?? BigInt(0))} INJ
+                                  </div>
                                 </div>
                                 <button
                                   type="button"
-                                  className="rounded-2xl border border-white/10 bg-white/5 px-5 py-3 text-sm font-semibold text-white transition-all hover:bg-white/10"
+                                  onClick={handleChanceAction}
+                                  disabled={chanceSubmitting}
+                                  className="rounded-2xl border border-white/10 bg-white/5 px-5 py-3 text-sm font-semibold text-white transition-all hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
                                 >
-                                  Continue
+                                  {chanceSubmitting ? 'Submitting...' : 'Continue'}
                                 </button>
                               </div>
+                              {chanceError && (
+                                <div className="mt-3 text-sm text-rose-300">{chanceError}</div>
+                              )}
+                              {chanceTxHash && (
+                                <a
+                                  href={`${currentNetworkMeta.chain.explorerUrl}/tx/${chanceTxHash}`}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="mt-3 inline-flex text-xs font-semibold uppercase tracking-[0.18em] text-emerald-300 hover:text-emerald-200"
+                                >
+                                  View purchase tx
+                                </a>
+                              )}
                             </div>
                           </div>
                         )}
