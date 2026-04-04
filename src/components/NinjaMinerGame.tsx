@@ -33,6 +33,7 @@ interface TapBurst {
 type PlayMode = 'tap' | 'chance';
 
 const BALANCE_EVENT = 'inj-pass:ninja-balance-update';
+const CHANCE_PURCHASE_SUBMITTED_EVENT = 'inj-pass:chance-purchase-submitted';
 const DEFAULT_NINJA_BALANCE = 22;
 const SESSION_DURATION_MS = 5_000;
 const COOLDOWN_MS = 8 * 60 * 60 * 1000;
@@ -102,6 +103,11 @@ export default function NinjaMinerGame({ walletAddress, onOpenMoreChance }: Ninj
   const [isSyncing, setIsSyncing] = useState(false);
   const prevIsActiveRef = useRef(false);
   const lastSyncedSessionKeyRef = useRef<string | null>(null);
+  const gameStateRef = useRef(gameState);
+
+  useEffect(() => {
+    gameStateRef.current = gameState;
+  }, [gameState]);
 
   useEffect(() => {
     let cancelled = false;
@@ -187,6 +193,54 @@ export default function NinjaMinerGame({ walletAddress, onOpenMoreChance }: Ninj
 
     return () => window.clearInterval(timer);
   }, [hydrated]);
+
+  useEffect(() => {
+    if (!walletAddress) return;
+
+    const sleep = (ms: number) => new Promise((resolve) => window.setTimeout(resolve, ms));
+
+    const syncChanceFromProfile = async () => {
+      for (let attempt = 0; attempt < 8; attempt += 1) {
+        try {
+          const profile = await getUserProfile();
+          if (profile) {
+            const current = gameStateRef.current;
+            const nextChanceRemaining = Number.isFinite(Number(profile.chanceRemaining))
+              ? Math.max(0, Math.floor(Number(profile.chanceRemaining)))
+              : current.chanceRemaining;
+            const nextChanceCooldownEndsAt = Number.isFinite(Number(profile.chanceCooldownEndsAt))
+              ? Math.max(0, Math.floor(Number(profile.chanceCooldownEndsAt)))
+              : current.chanceCooldownEndsAt;
+            const changed =
+              nextChanceRemaining !== current.chanceRemaining ||
+              nextChanceCooldownEndsAt !== current.chanceCooldownEndsAt;
+
+            if (changed) {
+              setGameState((prev) => ({
+                ...prev,
+                chanceRemaining: nextChanceRemaining,
+                chanceCooldownEndsAt: nextChanceCooldownEndsAt,
+              }));
+              return;
+            }
+          }
+        } catch (error) {
+          console.warn('[NinjaMiner] Failed to refresh profile after chance purchase:', error);
+        }
+
+        await sleep(1500);
+      }
+    };
+
+    const handleChancePurchaseSubmitted = () => {
+      void syncChanceFromProfile();
+    };
+
+    window.addEventListener(CHANCE_PURCHASE_SUBMITTED_EVENT, handleChancePurchaseSubmitted);
+    return () => {
+      window.removeEventListener(CHANCE_PURCHASE_SUBMITTED_EVENT, handleChancePurchaseSubmitted);
+    };
+  }, [walletAddress]);
 
   const normalizedState = useMemo(() => normalizeState(gameState, now), [gameState, now]);
   const isActive = normalizedState.sessionEndsAt > now;

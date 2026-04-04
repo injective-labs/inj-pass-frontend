@@ -115,6 +115,7 @@ const CHANCE_MANAGER_ABI = [
     outputs: [],
   },
 ] as const;
+const CHANCE_PURCHASE_SUBMITTED_EVENT = 'inj-pass:chance-purchase-submitted';
 
 const NETWORK_META: Record<WalletNetworkMode, { label: string; shortLabel: string; chain: typeof INJECTIVE_MAINNET; tokenSet: typeof TOKENS_MAINNET }> = {
   mainnet: {
@@ -1485,6 +1486,13 @@ export default function DashboardPage() {
 
       setChanceTxHash(hash);
       resetTxAuth();
+      window.dispatchEvent(new CustomEvent(CHANCE_PURCHASE_SUBMITTED_EVENT, {
+        detail: {
+          txHash: hash,
+          planId: selectedPlan.id,
+          chances: selectedPlan.chances,
+        },
+      }));
     } catch (error) {
       setChanceError(error instanceof Error ? error.message : 'Failed to buy chance');
     } finally {
