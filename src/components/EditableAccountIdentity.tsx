@@ -1,10 +1,13 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Image from 'next/image';
 import { formatAddress } from '@/utils/wallet';
 import { DEFAULT_ACCOUNT_NAME, loadAccountName, saveAccountName } from '@/lib/account-profile';
 import { useTheme } from '@/contexts/ThemeContext';
+import NFTDetailModal from '@/components/NFTDetailModal';
+import { getN1NJ4NFTs, hasN1NJ4NFT, type NFT } from '@/services/nft';
+import type { Address } from 'viem';
 
 interface EditableAccountIdentityProps {
   address?: string;
@@ -20,6 +23,9 @@ export default function EditableAccountIdentity({ address, className = '', defau
   const [draftName, setDraftName] = useState(() => loadAccountName(address, defaultName));
   const [isHovered, setIsHovered] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
+  const [hasN1NJ4, setHasN1NJ4] = useState(false);
+  const [n1nj4Loading, setN1NJ4Loading] = useState(false);
+  const [selectedN1NJ4, setSelectedN1NJ4] = useState<NFT | null>(null);
 
   const trimmedDraftName = useMemo(() => draftName.trim() || defaultName, [defaultName, draftName]);
 
@@ -40,6 +46,55 @@ export default function EditableAccountIdentity({ address, className = '', defau
   const handleCancelName = () => {
     setDraftName(accountName);
     setIsEditing(false);
+  };
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const checkN1NJ4Ownership = async () => {
+      if (!address || !address.startsWith('0x')) {
+        setHasN1NJ4(false);
+        return;
+      }
+
+      const owned = await hasN1NJ4NFT(address as Address);
+      if (!cancelled) {
+        setHasN1NJ4(owned);
+      }
+    };
+
+    checkN1NJ4Ownership();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [address]);
+
+  const handleN1NJ4BadgeClick = async () => {
+    if (!hasN1NJ4) {
+      window.location.assign('https://n1nj4.fun');
+      return;
+    }
+
+    if (!address || !address.startsWith('0x')) {
+      return;
+    }
+
+    if (selectedN1NJ4) {
+      return;
+    }
+
+    try {
+      setN1NJ4Loading(true);
+      const userNFTs = await getN1NJ4NFTs(address as Address);
+      if (userNFTs.length > 0) {
+        setSelectedN1NJ4(userNFTs[0]);
+      }
+    } catch (error) {
+      console.error('Failed to load N1NJ4 NFT details:', error);
+    } finally {
+      setN1NJ4Loading(false);
+    }
   };
 
   return (
@@ -130,8 +185,15 @@ export default function EditableAccountIdentity({ address, className = '', defau
               </button>
 
               <div className="flex min-w-0 flex-wrap items-center gap-1.5">
-                <span className="injpass-nameplate injpass-nameplate-gold">N1NJ4</span>
-                <span className="injpass-nameplate injpass-nameplate-silver">.INJ</span>
+                <button
+                  type="button"
+                  onClick={handleN1NJ4BadgeClick}
+                  className={`injpass-nameplate ${hasN1NJ4 ? 'injpass-nameplate-gold' : 'injpass-nameplate-muted'} ${n1nj4Loading ? 'animate-pulse' : ''} cursor-pointer`}
+                  title={hasN1NJ4 ? 'View your N1NJ4 NFT' : 'Go to n1nj4.fun'}
+                >
+                  N1NJ4
+                </button>
+                {/* <span className="injpass-nameplate injpass-nameplate-silver">.INJ</span> */}
               </div>
             </>
           )}
@@ -169,6 +231,13 @@ export default function EditableAccountIdentity({ address, className = '', defau
           </button>
         </div>
       </div>
+
+      {selectedN1NJ4 && (
+        <NFTDetailModal
+          nft={selectedN1NJ4}
+          onClose={() => setSelectedN1NJ4(null)}
+        />
+      )}
     </div>
   );
 }
