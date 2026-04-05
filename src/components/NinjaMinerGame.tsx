@@ -92,6 +92,28 @@ function randomReward() {
   return roundTo((Math.floor(Math.random() * 9) + 1) / 100, 2);
 }
 
+function mergeCooldownEndsAt(prevEndsAt: number, incomingEndsAt: number, now: number) {
+  const safePrev = Number.isFinite(prevEndsAt) ? prevEndsAt : 0;
+  const safeIncoming = Number.isFinite(incomingEndsAt) ? incomingEndsAt : 0;
+
+  if (safeIncoming <= 0) {
+    return safePrev;
+  }
+
+  const prevActive = safePrev > now;
+  const incomingActive = safeIncoming > now;
+
+  if (prevActive && incomingActive) {
+    return Math.min(safePrev, safeIncoming);
+  }
+
+  if (!prevActive) {
+    return safeIncoming;
+  }
+
+  return safePrev;
+}
+
 export default function NinjaMinerGame({ walletAddress, onOpenMoreChance }: NinjaMinerGameProps) {
   const { theme } = useTheme();
   const [gameState, setGameState] = useState<TapMinerState>(() => createInitialState());
@@ -218,7 +240,11 @@ export default function NinjaMinerGame({ walletAddress, onOpenMoreChance }: Ninj
               setGameState((prev) => ({
                 ...prev,
                 chanceRemaining: nextChanceRemaining,
-                chanceCooldownEndsAt: nextChanceCooldownEndsAt,
+                chanceCooldownEndsAt: mergeCooldownEndsAt(
+                  prev.chanceCooldownEndsAt,
+                  nextChanceCooldownEndsAt,
+                  Date.now(),
+                ),
               }));
               return;
             }
@@ -290,9 +316,13 @@ export default function NinjaMinerGame({ walletAddress, onOpenMoreChance }: Ninj
             chanceRemaining: Number.isFinite(Number(result.chanceRemaining))
               ? Math.max(0, Math.floor(Number(result.chanceRemaining)))
               : prev.chanceRemaining,
-            chanceCooldownEndsAt: Number.isFinite(Number(result.chanceCooldownEndsAt))
-              ? Math.max(0, Math.floor(Number(result.chanceCooldownEndsAt)))
-              : prev.chanceCooldownEndsAt,
+            chanceCooldownEndsAt: mergeCooldownEndsAt(
+              prev.chanceCooldownEndsAt,
+              Number.isFinite(Number(result.chanceCooldownEndsAt))
+                ? Math.max(0, Math.floor(Number(result.chanceCooldownEndsAt)))
+                : 0,
+              Date.now(),
+            ),
             sessionStartedAt: 0,
             sessionEndsAt: 0,
             sessionEarned: 0,
@@ -473,15 +503,16 @@ export default function NinjaMinerGame({ walletAddress, onOpenMoreChance }: Ninj
       <div className="mb-1 flex w-full flex-col gap-1.5">
         <div className="flex items-center justify-between gap-2">
           <div className={`inline-flex rounded-full border p-1 ${
-            isLight ? 'border-slate-700/80 bg-slate-900' : 'border-white/10 bg-white/[0.04]'
+            isLight ? 'border-[#cfd7e7] bg-white shadow-[0_1px_0_rgba(12,18,32,0.04)]' : 'border-white/10 bg-white/[0.04]'
           }`}>
             <button
               type="button"
               onClick={() => setPlayMode('tap')}
+              style={playMode === 'tap' && isLight ? { color: '#ffffff' } : undefined}
               className={`rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] transition-all ${
                 playMode === 'tap'
-                  ? (isLight ? 'bg-slate-700 text-white' : 'bg-white/20 text-white')
-                  : (isLight ? 'text-white/85 hover:text-white' : 'text-gray-300 hover:text-white')
+                  ? (isLight ? 'bg-[#0f1f44] !text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.1)]' : 'bg-white/20 text-white')
+                  : (isLight ? 'text-[#5f6f8d] hover:text-[#1f2a44]' : 'text-gray-300 hover:text-white')
               }`}
             >
               Tap
@@ -489,25 +520,18 @@ export default function NinjaMinerGame({ walletAddress, onOpenMoreChance }: Ninj
             <button
               type="button"
               onClick={() => setPlayMode('chance')}
+              style={playMode === 'chance' && isLight ? { color: '#ffffff' } : undefined}
               className={`rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] transition-all ${
                 playMode === 'chance'
-                  ? (isLight ? 'bg-slate-700 text-white' : 'bg-white/20 text-white')
-                  : (isLight ? 'text-white/85 hover:text-white' : 'text-gray-300 hover:text-white')
+                  ? (isLight ? 'bg-[#0f1f44] !text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.1)]' : 'bg-white/20 text-white')
+                  : (isLight ? 'text-[#5f6f8d] hover:text-[#1f2a44]' : 'text-gray-300 hover:text-white')
               }`}
             >
-              Chance
+              Chance {normalizedState.chanceRemaining}
             </button>
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] font-semibold uppercase tracking-[0.18em]">
-          <div className={isLight ? 'text-slate-500' : 'text-gray-500'}>
-            {modeStatusLabel}
-          </div>
-          <div className="text-white">
-            Chance left · {normalizedState.chanceRemaining}
-          </div>
-        </div>
         <div className="flex items-center justify-end gap-2.5">
         <button
           type="button"
