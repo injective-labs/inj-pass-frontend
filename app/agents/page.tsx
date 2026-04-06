@@ -20,7 +20,7 @@ import { getInviteCode, getInvitees, getStats } from '@/services/referral';
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
-type Model = 'gpt-5.2';
+type Model = 'gpt-5.1';
 
 /** Display message shown in the chat UI */
 interface ChatMessage {
@@ -81,7 +81,7 @@ type AssetMentionSymbol = 'INJ' | 'USDC' | 'LAM' | 'USDT';
 type DAppMentionName = 'Omisper' | 'Hash Mahjong';
 
 const MODEL_OPTIONS: { value: Model; label: string }[] = [
-  { value: 'gpt-5.2', label: 'GPT-5.2' },
+  { value: 'gpt-5.1', label: 'GPT-5.1' },
 ];
 
 const STORAGE_KEY = 'injpass_agent_conversations';
@@ -321,7 +321,7 @@ export default function AgentsPage() {
   const [assetMentions, setAssetMentions] = useState<AssetMentionSymbol[]>([]);
   const [dappMentions, setDappMentions] = useState<DAppMentionName[]>([]);
   const [isAssetDropActive, setIsAssetDropActive] = useState(false);
-  const [model, setModel] = useState<Model>('gpt-5.2');
+  const [model, setModel] = useState<Model>('gpt-5.1');
   const [isRunning, setIsRunning] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [pendingConfirm, setPendingConfirm] = useState<PendingConfirmation | null>(null);
