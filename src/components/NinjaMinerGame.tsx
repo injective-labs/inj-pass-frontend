@@ -526,7 +526,7 @@ export default function NinjaMinerGame({ walletAddress, onOpenMoreChance }: Ninj
                   : (isLight ? 'text-[#5f6f8d] hover:text-[#1f2a44]' : 'text-gray-300 hover:text-white')
               }`}
             >
-              TAP
+              PAID
             </button>
           </div>
         </div>

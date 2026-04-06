@@ -1484,7 +1484,7 @@ export default function AgentsPage() {
                         No conversations yet
                       </div>
                       <h2 className={`mt-3 text-[23px] font-bold tracking-tight sm:text-[25px] ${isLight ? 'text-slate-900' : 'text-white'}`}>
-                        <span className="lambda-gradient">λ</span> AgentOS
+                        <span className="lambda-gradient">AgentOS</span>
                       </h2>
                       <p className={`mt-2 max-w-xl text-[12px] leading-5 sm:text-[13px] ${isLight ? 'text-slate-500' : 'text-gray-400'}`}>
                         AI-powered wallet assistant for balances, swaps, transfers, and quick Injective checks.
