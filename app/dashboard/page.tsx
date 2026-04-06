@@ -60,6 +60,28 @@ const NINJA_BALANCE_POLL_MS = 20_000;
 const DEFAULT_NINJA_BALANCE = 22;
 const LAM_USD_PRICE = 0.01;
 const POPULAR_FAUCET_IDS = new Set(['injective', 'sepolia', 'arbitrum', 'base']);
+
+const PLAN_GO_PRICE_WEI_ENV = process.env.NEXT_PUBLIC_PLAN_GO_PRICE_WEI;
+const PLAN_PRO_PRICE_WEI_ENV = process.env.NEXT_PUBLIC_PLAN_PRO_PRICE_WEI;
+const PLAN_MAX_PRICE_WEI_ENV = process.env.NEXT_PUBLIC_PLAN_MAX_PRICE_WEI;
+const CHANCE_CONTRACT_ADDRESS_ENV = process.env.NEXT_PUBLIC_CHANCE_CONTRACT_ADDRESS;
+
+if (!PLAN_GO_PRICE_WEI_ENV || !/^\d+$/.test(PLAN_GO_PRICE_WEI_ENV)) {
+  throw new Error('NEXT_PUBLIC_PLAN_GO_PRICE_WEI is required and must be an integer wei string.');
+}
+
+if (!PLAN_PRO_PRICE_WEI_ENV || !/^\d+$/.test(PLAN_PRO_PRICE_WEI_ENV)) {
+  throw new Error('NEXT_PUBLIC_PLAN_PRO_PRICE_WEI is required and must be an integer wei string.');
+}
+
+if (!PLAN_MAX_PRICE_WEI_ENV || !/^\d+$/.test(PLAN_MAX_PRICE_WEI_ENV)) {
+  throw new Error('NEXT_PUBLIC_PLAN_MAX_PRICE_WEI is required and must be an integer wei string.');
+}
+
+if (!CHANCE_CONTRACT_ADDRESS_ENV || !/^0x[a-fA-F0-9]{40}$/.test(CHANCE_CONTRACT_ADDRESS_ENV)) {
+  throw new Error('NEXT_PUBLIC_CHANCE_CONTRACT_ADDRESS is required and must be a valid 0x address.');
+}
+
 const MORE_CHANCE_PLANS: Array<{
   id: ChancePlanId;
   planId: number;
@@ -75,7 +97,7 @@ const MORE_CHANCE_PLANS: Array<{
     planId: 1,
     name: 'Go',
     chances: 3,
-    priceWei: BigInt(process.env.NEXT_PUBLIC_PLAN_GO_PRICE_WEI || '100000000000000'),
+    priceWei: BigInt(PLAN_GO_PRICE_WEI_ENV),
     blurb: 'Quick refill for a few extra tap runs.',
     accentClass: 'text-emerald-300',
     surfaceClass: 'border-emerald-400/18 bg-emerald-500/[0.08]',
@@ -85,7 +107,7 @@ const MORE_CHANCE_PLANS: Array<{
     planId: 2,
     name: 'Pro',
     chances: 12,
-    priceWei: BigInt(process.env.NEXT_PUBLIC_PLAN_PRO_PRICE_WEI || '200000000000000'),
+    priceWei: BigInt(PLAN_PRO_PRICE_WEI_ENV),
     blurb: 'Best balance for repeat LAM farming.',
     accentClass: 'text-violet-200',
     surfaceClass: 'border-violet-400/22 bg-violet-500/[0.08]',
@@ -95,14 +117,14 @@ const MORE_CHANCE_PLANS: Array<{
     planId: 3,
     name: 'Max',
     chances: 30,
-    priceWei: BigInt(process.env.NEXT_PUBLIC_PLAN_MAX_PRICE_WEI || '300000000000000'),
+    priceWei: BigInt(PLAN_MAX_PRICE_WEI_ENV),
     blurb: 'Longest session pack for power users.',
     accentClass: 'text-amber-200',
     surfaceClass: 'border-amber-400/18 bg-amber-500/[0.08]',
   },
 ];
 
-const CHANCE_CONTRACT_ADDRESS = (process.env.NEXT_PUBLIC_CHANCE_CONTRACT_ADDRESS || '0x258A549Be00FaDC2777266eA6eC87Deb2f650c3c') as Address;
+const CHANCE_CONTRACT_ADDRESS = CHANCE_CONTRACT_ADDRESS_ENV as Address;
 const CHANCE_MANAGER_ABI = [
   {
     type: 'function',
