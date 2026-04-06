@@ -1,210 +1,315 @@
 'use client';
 
-import { useEffect, useState, Suspense } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useEffect, useMemo, useState } from 'react';
+import TunnelBackground from '@/components/TunnelBackground';
+import TrustPillBadge from '@/components/TrustPillBadge';
+import WelcomeThemeIconButton from '@/components/WelcomeThemeIconButton';
+import { WalletErrorToast } from '@/components/WalletErrorToast';
+import { useTheme } from '@/contexts/ThemeContext';
+import { useWalletErrorToast } from '@/lib/useWalletErrorToast';
 import { unlockByPasskey } from '@/wallet/key-management/createByPasskey';
 import { loadWallet } from '@/wallet/keystore/storage';
 import { decryptKey } from '@/wallet/keystore';
 import { secp256k1 } from '@noble/curves/secp256k1.js';
 import { keccak_256 } from '@noble/hashes/sha3.js';
-import type { AuthRequest, AuthResponse, WalletConnectRequest, WalletConnectResponse } from '@/lib/auth-bridge';
+import type {
+  AuthRequest,
+  AuthResponse,
+  WalletConnectRequest,
+  WalletConnectResponse,
+} from '@/lib/auth-bridge';
 
-/**
- * Hash a message using EIP-191 personal_sign prefix so that XMTP / Ethereum
- * wallets can verify the signature on-chain.
- */
 function hashPersonalMessage(message: string): Uint8Array {
   const msgBytes = new TextEncoder().encode(message);
-  const prefix = new TextEncoder().encode(`\x19Ethereum Signed Message:\n${msgBytes.length}`);
+  const prefix = new TextEncoder().encode(
+    `\x19Ethereum Signed Message:\n${msgBytes.length}`
+  );
   const combined = new Uint8Array(prefix.length + msgBytes.length);
   combined.set(prefix);
   combined.set(msgBytes, prefix.length);
   return keccak_256(combined);
 }
 
-/**
- * 授权窗口页面
- * 在顶层文档运行，可正常调用 WebAuthn (Passkey)
- */
+function BrandLockIcon({ className = 'h-5 w-5' }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9">
+      <rect x="4" y="11" width="16" height="9" rx="2.8" />
+      <path strokeLinecap="round" d="M8 11V8a4 4 0 018 0v3" />
+    </svg>
+  );
+}
+
+function FingerprintIcon({ className = 'h-5 w-5' }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9">
+      <path strokeLinecap="round" d="M12 4.5a6.5 6.5 0 00-6.5 6.5" />
+      <path strokeLinecap="round" d="M12 4.5a6.5 6.5 0 016.5 6.5" />
+      <path strokeLinecap="round" d="M8 11a4 4 0 018 0v2.4" />
+      <path strokeLinecap="round" d="M8.2 15.4c.2 2.4-.4 4.1-1.7 5.6" />
+      <path strokeLinecap="round" d="M12 8a3 3 0 013 3v4.5c0 2.2-.5 4.1-1.7 5.8" />
+      <path strokeLinecap="round" d="M11.2 12.5v3.8c0 1.5-.3 2.8-1.2 4.2" />
+      <path strokeLinecap="round" d="M16.8 11.8v1.6c0 3.1-.3 5.3-1.6 7.6" />
+    </svg>
+  );
+}
+
+function SparkIcon({ className = 'h-5 w-5' }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M12 3l1.8 4.5L18 9.3l-4.2 1.8L12 16l-1.8-4.9L6 9.3l4.2-1.8L12 3z" />
+      <path strokeLinecap="round" d="M19 15l.9 2.2L22 18l-2.1.8L19 21l-.9-2.2L16 18l2.1-.8L19 15z" />
+    </svg>
+  );
+}
+
+function CheckIcon({ className = 'h-5 w-5' }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M5 12.5l4.1 4.1L19 7.5" />
+    </svg>
+  );
+}
+
+function XIcon({ className = 'h-5 w-5' }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+      <path strokeLinecap="round" d="M7 7l10 10" />
+      <path strokeLinecap="round" d="M17 7L7 17" />
+    </svg>
+  );
+}
+
+function callerOriginToLabel(origin: string | null) {
+  if (!origin) return 'Connected app';
+  try {
+    return new URL(origin).hostname;
+  } catch {
+    return origin;
+  }
+}
 
 function AuthPageContent() {
-  const searchParams = useSearchParams();
-  const requestId = searchParams.get('requestId');
-  const originParam = searchParams.get('origin');
-  const action = searchParams.get('action') || 'connect'; // 'connect', 'sign', or 'sign_persistent'
-  
-  const [status, setStatus] = useState<'waiting' | 'sign_pending' | 'processing' | 'success' | 'error' | 'ready'>('waiting');
-  const [error, setError] = useState('');
+  const { theme } = useTheme();
+  const isLightMode = theme === 'light';
+
+  const [query] = useState(() => {
+    if (typeof window === 'undefined') {
+      return {
+        requestId: null as string | null,
+        originParam: null as string | null,
+        action: 'connect',
+      };
+    }
+
+    const params = new URLSearchParams(window.location.search);
+    return {
+      requestId: params.get('requestId'),
+      originParam: params.get('origin'),
+      action: params.get('action') || 'connect',
+    };
+  });
+
+  const { requestId, originParam, action } = query;
+
+  const [status, setStatus] = useState<
+    'waiting' | 'sign_pending' | 'processing' | 'success' | 'error' | 'ready'
+  >('waiting');
   const [message, setMessage] = useState('');
   const [currentSignRequest, setCurrentSignRequest] = useState<{
     requestId: string;
     message: string;
     origin: string;
   } | null>(null);
+  const { errorToast, showErrorToast, dismissErrorToast } = useWalletErrorToast();
 
-  const BALL_W = 82, BALL_H = 82;
-  const FULL_W = 400, FULL_H = 530;
+  const BALL_W = 82;
+  const BALL_H = 82;
+  const FULL_W = 400;
+  const FULL_H = 530;
 
-  // 🔵 窗口自动伸缩：ready 状态缩小为悬浮球，其他状态展开
   useEffect(() => {
     if (typeof window === 'undefined') return;
+
     if (status === 'ready') {
       window.resizeTo(BALL_W, BALL_H);
       window.moveTo(
-        Math.max(0, screen.availWidth  - BALL_W - 20),
-        Math.max(0, screen.availHeight - BALL_H - 60),
+        Math.max(0, screen.availWidth - BALL_W - 20),
+        Math.max(0, screen.availHeight - BALL_H - 60)
       );
     } else if (status !== 'waiting') {
       window.resizeTo(FULL_W, FULL_H);
       window.moveTo(
-        Math.max(0, screen.availWidth  - FULL_W - 20),
-        Math.max(0, screen.availHeight - FULL_H - 60),
+        Math.max(0, screen.availWidth - FULL_W - 20),
+        Math.max(0, screen.availHeight - FULL_H - 60)
       );
       window.focus();
     }
   }, [status]);
 
-  // 📩 监听 embed 页面转发的签名请求（ready 时收到 → 展开窗口显示确认界面）
   useEffect(() => {
     const handleSignRequest = (event: MessageEvent) => {
       const isLocalhost = event.origin.startsWith('http://localhost:');
       const isSameOrigin = event.origin === originParam;
-      // embed page posts from window.location.origin (same domain as auth popup)
       const isSameDomain = event.origin === window.location.origin;
       if (!isLocalhost && !isSameOrigin && !isSameDomain) return;
 
       const { type, requestId: reqId, message: msg } = event.data;
       if (type === 'SIGN_REQUEST' && status === 'ready') {
-        setCurrentSignRequest({ requestId: reqId, message: msg, origin: event.origin });
+        setCurrentSignRequest({
+          requestId: reqId,
+          message: msg,
+          origin: event.origin,
+        });
         setStatus('sign_pending');
       }
     };
+
     window.addEventListener('message', handleSignRequest);
     return () => window.removeEventListener('message', handleSignRequest);
   }, [originParam, status]);
 
-  // 处理 sign_persistent 初始化
   useEffect(() => {
     if (action === 'sign_persistent') {
       setStatus('ready');
     }
   }, [action]);
 
-  // ✅ 用户点击「确认签名」→ Passkey 认证 → 签名
   const handleConfirmSign = async () => {
     if (!currentSignRequest) return;
-    const { requestId: reqId, message: msg, origin: reqOrigin } = currentSignRequest;
+
+    const { requestId: reqId, message: msg, origin: reqOrigin } =
+      currentSignRequest;
+
     setStatus('processing');
-    setMessage('Unlocking your wallet...');
+    setMessage('Unlocking your INJ Pass...');
+    dismissErrorToast(true);
+
     try {
       const keystore = loadWallet();
       if (!keystore?.credentialId) throw new Error('Wallet not found');
-      const entropy    = await unlockByPasskey(keystore.credentialId);
-      setMessage('Signing...');
-      const privateKey  = await decryptKey(keystore.encryptedPrivateKey, entropy);
+
+      const entropy = await unlockByPasskey(keystore.credentialId);
+      setMessage('Authorizing signature...');
+
+      const privateKey = await decryptKey(keystore.encryptedPrivateKey, entropy);
       const messageHash = hashPersonalMessage(msg);
-      const sigBytes    = secp256k1.sign(messageHash, privateKey, {
-        lowS: true, prehash: false, format: 'recovered',
+      const sigBytes = secp256k1.sign(messageHash, privateKey, {
+        lowS: true,
+        prehash: false,
+        format: 'recovered',
       });
+
       const ethSig = new Uint8Array(65);
       ethSig.set(sigBytes.slice(1, 33), 0);
       ethSig.set(sigBytes.slice(33, 65), 32);
       ethSig[64] = sigBytes[0] + 27;
-      window.opener?.postMessage({
-        type: 'SIGN_RESPONSE',
-        data: { requestId: reqId, signature: Array.from(ethSig), address: keystore.address },
-      }, reqOrigin);
+
+      window.opener?.postMessage(
+        {
+          type: 'SIGN_RESPONSE',
+          data: {
+            requestId: reqId,
+            signature: Array.from(ethSig),
+            address: keystore.address,
+          },
+        },
+        reqOrigin
+      );
+
       setCurrentSignRequest(null);
       setStatus('success');
-      setMessage('Signed!');
+      setMessage('Authorization complete');
       setTimeout(() => setStatus('ready'), 1800);
     } catch (err) {
       const errMsg = err instanceof Error ? err.message : 'Signing failed';
-      setError(errMsg);
-      window.opener?.postMessage({
-        type: 'SIGN_RESPONSE',
-        data: { requestId: reqId, error: errMsg },
-      }, currentSignRequest.origin);
+      showErrorToast(errMsg);
+      window.opener?.postMessage(
+        {
+          type: 'SIGN_RESPONSE',
+          data: { requestId: reqId, error: errMsg },
+        },
+        currentSignRequest.origin
+      );
       setCurrentSignRequest(null);
       setStatus('error');
-      setTimeout(() => { setStatus('ready'); setError(''); }, 2000);
+      setTimeout(() => {
+        setStatus('ready');
+      }, 2000);
     }
   };
 
-  // ❌ 用户拒绝签名
   const handleRejectSign = () => {
     if (currentSignRequest) {
-      window.opener?.postMessage({
-        type: 'SIGN_RESPONSE',
-        data: { requestId: currentSignRequest.requestId, error: 'User rejected the request.' },
-      }, currentSignRequest.origin);
+      window.opener?.postMessage(
+        {
+          type: 'SIGN_RESPONSE',
+          data: {
+            requestId: currentSignRequest.requestId,
+            error: 'User rejected the request.',
+          },
+        },
+        currentSignRequest.origin
+      );
     }
     setCurrentSignRequest(null);
     setStatus('ready');
   };
 
   useEffect(() => {
-    // sign_persistent 模式由单独的 useEffect 处理
     if (action === 'sign_persistent') {
       return;
     }
 
     if (!requestId || !originParam) {
-      setError('Invalid request parameters');
+      showErrorToast('Invalid request parameters');
       setStatus('error');
       return;
     }
 
-    let processingStarted = false; // 使用本地变量而不是 state
+    let processingStarted = false;
 
-    // 处理钱包连接
-    const handleWalletConnect = async (request: WalletConnectRequest, targetOrigin: string) => {
+    const handleWalletConnect = async (
+      request: WalletConnectRequest,
+      targetOrigin: string
+    ) => {
       if (request.requestId !== requestId) {
-        console.warn('Request ID mismatch, ignoring');
         return;
       }
 
       if (processingStarted) {
-        console.warn('Already processing, ignoring duplicate request');
         return;
       }
 
       processingStarted = true;
       setStatus('processing');
-      setMessage('Please authenticate with your Passkey...');
+      setMessage('Preparing secure authorization...');
+      dismissErrorToast(true);
 
       try {
-        // 1. 加载钱包
         const keystore = loadWallet();
         if (!keystore || !keystore.credentialId) {
-          throw new Error('No wallet found. Please create a wallet first at injpass.com');
+          throw new Error(
+            'No wallet found. Please create a wallet first at injpass.com'
+          );
         }
 
-        // 2. 使用 Passkey 解锁（✅ 在顶层窗口可正常工作）
-        setMessage('Verifying your identity...');
+        setMessage('Verifying with passkey...');
         await unlockByPasskey(keystore.credentialId);
 
-        // 3. 回传连接结果（✅ 指定明确的 targetOrigin）
-        // SDK 中只使用 EVM 地址（0x 格式），不转换成 inj1
-        // inj1 格式只在 INJ Pass 主产品中显示
         const response: WalletConnectResponse = {
           type: 'WALLET_CONNECT_RESPONSE',
           requestId: request.requestId,
-          address: keystore.address, // 0x... EVM format
+          address: keystore.address,
           walletName: keystore.walletName || 'INJ Pass Wallet',
         };
 
         window.opener?.postMessage(response, targetOrigin);
 
-        // 🔐 连接成功后，转换为持久化签名模式（不关闭窗口）
         setStatus('ready');
         setMessage('Ready to sign transactions');
-        
-        // 切换到持久化签名模式，开始监听签名请求
-        console.log('✅ Connected, switching to persistent signing mode');
       } catch (err) {
         const errorMsg = err instanceof Error ? err.message : 'Connection failed';
-        setError(errorMsg);
+        showErrorToast(errorMsg);
         setStatus('error');
 
         const response: WalletConnectResponse = {
@@ -217,68 +322,65 @@ function AuthPageContent() {
       }
     };
 
-    // 处理签名请求
-    const handlePasskeySign = async (request: AuthRequest, targetOrigin: string) => {
+    const handlePasskeySign = async (
+      request: AuthRequest,
+      targetOrigin: string
+    ) => {
       if (request.requestId !== requestId) {
-        console.warn('Request ID mismatch, ignoring');
         return;
       }
 
       if (processingStarted) {
-        console.warn('Already processing, ignoring duplicate request');
         return;
       }
 
       processingStarted = true;
       setStatus('processing');
-      setMessage('Please authenticate with your Passkey...');
-      
+      setMessage('Preparing secure signature...');
+      dismissErrorToast(true);
+
       try {
-        // 1. 加载钱包
         const keystore = loadWallet();
         if (!keystore || !keystore.credentialId) {
           throw new Error('Wallet not found');
         }
 
-        // 2. 使用 Passkey 解锁（✅ 在顶层窗口可正常工作）
-        setMessage('Unlocking your wallet...');
+        setMessage('Unlocking your INJ Pass...');
         const entropy = await unlockByPasskey(keystore.credentialId);
         const privateKey = await decryptKey(keystore.encryptedPrivateKey, entropy);
 
-        // 3. 签名 — EIP-191 personal_sign (65 bytes: r || s || v)
         setMessage('Signing message...');
         const messageHash = hashPersonalMessage(request.message);
-        // Sign with recovered format: [recovery, r(32), s(32)]
         const sigBytes = secp256k1.sign(messageHash, privateKey, {
           lowS: true,
           prehash: false,
-          format: 'recovered'
+          format: 'recovered',
         });
-        // Convert to Ethereum format: [r(32), s(32), v] where v = recovery + 27
+
         const recovery = sigBytes[0];
         const r = sigBytes.slice(1, 33);
         const s = sigBytes.slice(33, 65);
         const ethSignature = new Uint8Array(65);
         ethSignature.set(r, 0);
         ethSignature.set(s, 32);
-        ethSignature[64] = recovery + 27; // v = 27 or 28
+        ethSignature[64] = recovery + 27;
 
-        // 4. 回传结果（✅ 指定明确的 targetOrigin）
         const response: AuthResponse = {
           type: 'PASSKEY_SIGN_RESPONSE',
           requestId: request.requestId,
-          signature: Array.from(ethSignature), // 65 bytes
+          signature: Array.from(ethSignature),
           address: keystore.address,
         };
 
         window.opener?.postMessage(response, targetOrigin);
 
         setStatus('success');
-        setMessage('Signed successfully!');
+        setMessage('Authorization complete');
         setTimeout(() => window.close(), 1500);
       } catch (err) {
-        const errorMsg = err instanceof Error ? err.message : 'Authentication failed';
-        setError(errorMsg);
+        const errorMsg =
+          err instanceof Error ? err.message : 'Authentication failed';
+        showErrorToast(errorMsg);
         setStatus('error');
 
         const response: AuthResponse = {
@@ -291,27 +393,22 @@ function AuthPageContent() {
       }
     };
 
-    // ✅ 监听来自 opener 的请求
     const handleMessage = async (event: MessageEvent) => {
-      // 基本的 origin 验证（允许 localhost 用于开发）
       const isLocalhost = event.origin.startsWith('http://localhost:');
       const isSameOrigin = event.origin === originParam;
-      
+
       if (!isLocalhost && !isSameOrigin) {
-        console.warn('Origin mismatch:', { expected: originParam, received: event.origin });
-        setError('Origin verification failed');
+        showErrorToast('Origin verification failed');
         setStatus('error');
         return;
       }
 
       const data = event.data;
 
-      // 处理钱包连接请求
       if (data.type === 'WALLET_CONNECT' && data.requestId === requestId) {
         await handleWalletConnect(data as WalletConnectRequest, event.origin);
       }
 
-      // 处理签名请求
       if (data.type === 'PASSKEY_SIGN' && data.requestId === requestId) {
         await handlePasskeySign(data as AuthRequest, event.origin);
       }
@@ -319,205 +416,338 @@ function AuthPageContent() {
 
     window.addEventListener('message', handleMessage);
 
-    // 通知 opener 窗口已准备就绪
     if (window.opener) {
-      window.opener.postMessage({ type: 'AUTH_WINDOW_READY', requestId }, originParam);
+      window.opener.postMessage(
+        { type: 'AUTH_WINDOW_READY', requestId },
+        originParam
+      );
     }
 
     return () => window.removeEventListener('message', handleMessage);
-  }, [requestId, originParam]);
+  }, [action, dismissErrorToast, originParam, requestId, showErrorToast]);
 
-  /* ── BALL MODE ─────────────────────────────────────────────────────────── */
+  const callerLabel = useMemo(() => callerOriginToLabel(originParam), [originParam]);
+
+  const pageTone = isLightMode ? 'bg-[#e9eff7] text-[#171b24]' : 'bg-[#020202] text-white';
+  const headerTone = isLightMode ? 'text-[#59657a]' : 'text-white/58';
+  const cardTone = isLightMode
+    ? 'border-[#cad7eb] bg-[linear-gradient(180deg,rgba(255,255,255,0.92),rgba(242,246,252,0.88))] text-[#171b24] shadow-[0_32px_100px_rgba(98,110,132,0.18)]'
+    : 'border-white/10 bg-[linear-gradient(180deg,rgba(21,16,30,0.9),rgba(8,8,14,0.95))] text-white shadow-[0_40px_120px_rgba(5,4,8,0.58)]';
+  const surfaceTone = isLightMode
+    ? 'border-[#d6dfed] bg-white/74'
+    : 'border-white/10 bg-white/[0.05]';
+  const secondaryButtonTone = isLightMode
+    ? 'border-[#cfd8ea] bg-white/76 text-[#2c394d] hover:bg-white'
+    : 'border-white/10 bg-white/[0.06] text-white/84 hover:bg-white/[0.1]';
+  const primaryButtonTone = isLightMode
+    ? 'border-[#c9d5e8] bg-[linear-gradient(180deg,#ffffff_0%,#eef4fb_100%)] text-[#243043] hover:brightness-[1.02]'
+    : 'border-[#d0b7ff]/24 bg-[linear-gradient(180deg,rgba(255,255,255,0.14),rgba(255,255,255,0.08))] text-white hover:bg-white/[0.15]';
+
   if (status === 'ready') {
     return (
       <div
         style={{ width: BALL_W, height: BALL_H }}
-        className="overflow-hidden bg-transparent flex items-center justify-center"
+        className={`relative overflow-hidden ${pageTone}`}
       >
-        <div className="w-[68px] h-[68px] bg-gradient-to-br from-purple-600 to-indigo-700 rounded-full flex items-center justify-center shadow-2xl border border-purple-400/40 cursor-default select-none">
-          <span style={{ fontSize: 28, lineHeight: 1 }}>&#x1F510;</span>
+        <div
+          className={`absolute inset-0 ${
+            isLightMode
+              ? 'bg-[radial-gradient(circle_at_30%_30%,rgba(255,255,255,0.95),rgba(234,239,247,0.88)_60%,rgba(220,227,240,0.8))]'
+              : 'bg-[radial-gradient(circle_at_30%_30%,rgba(255,255,255,0.16),rgba(88,63,134,0.26)_35%,rgba(13,12,22,0.96)_75%)]'
+          }`}
+        />
+        <div className="relative flex h-full w-full items-center justify-center">
+          <div
+            className={`flex h-[68px] w-[68px] items-center justify-center rounded-full border backdrop-blur-xl ${
+              isLightMode
+                ? 'border-[#c8d4e8] text-[#4f48df] shadow-[0_14px_36px_rgba(88,102,129,0.18)]'
+                : 'border-white/10 text-white shadow-[0_16px_44px_rgba(6,5,10,0.5)]'
+            }`}
+          >
+            <BrandLockIcon className="h-6 w-6" />
+          </div>
         </div>
       </div>
     );
   }
 
-  /* ── SIGN CONFIRM MODE ──────────────────────────────────────────────────── */
-  if (status === 'sign_pending' && currentSignRequest) {
-    return (
-      <div
-        style={{ width: FULL_W, height: FULL_H }}
-        className="overflow-hidden bg-gradient-to-br from-[#1a0533] to-[#0d1b4b] flex flex-col"
-      >
-        {/* Title bar */}
-        <div className="flex items-center gap-2 px-5 pt-5 pb-3 border-b border-white/10">
-          <span style={{ fontSize: 20 }}>&#x270D;&#xFE0F;</span>
-          <h2 className="text-white font-bold text-base flex-1">Signature Request</h2>
-          <span className="text-xs text-purple-300 bg-purple-500/20 px-2 py-0.5 rounded-full">INJ Pass</span>
-        </div>
+  const title =
+    status === 'sign_pending'
+      ? 'Review authorization request'
+      : status === 'processing'
+        ? 'Authorizing with passkey'
+        : status === 'success'
+          ? 'Authorization complete'
+          : status === 'error'
+            ? 'Authorization failed'
+            : action === 'connect'
+              ? 'Connect your INJ Pass'
+              : 'Authorize secure action';
 
-        {/* Message preview */}
-        <div className="flex-1 overflow-auto px-5 py-4">
-          <p className="text-purple-300 text-xs font-medium mb-1 uppercase tracking-wider">Message</p>
-          <div className="bg-white/5 border border-white/10 rounded-xl p-3 max-h-36 overflow-auto">
-            <p className="text-purple-100 text-xs font-mono break-all leading-relaxed">
-              {currentSignRequest.message}
-            </p>
-          </div>
+  const description =
+    status === 'sign_pending'
+      ? `Review the request from ${callerLabel} before approving with your passkey.`
+      : status === 'processing'
+        ? message || 'Preparing secure authorization...'
+      : status === 'success'
+          ? 'The secure session is ready and will return to its compact state.'
+      : status === 'error'
+            ? 'Review the alert above and try the authorization flow again.'
+            : action === 'connect'
+              ? 'Your paired wallet stays self-custodial while INJ Pass opens the secure session.'
+              : 'INJ Pass is preparing the next authorization flow.';
 
-          <p className="text-purple-300 text-xs font-medium mt-4 mb-1 uppercase tracking-wider">Requested by</p>
-          <div className="bg-white/5 border border-white/10 rounded-xl px-3 py-2">
-            <p className="text-purple-200 text-xs truncate">{currentSignRequest.origin}</p>
-          </div>
-
-          <div className="mt-4 p-3 bg-yellow-500/10 border border-yellow-500/20 rounded-xl">
-            <p className="text-yellow-200 text-xs">
-              Your Passkey (fingerprint / Face ID) will be required to complete this signature.
-            </p>
-          </div>
-        </div>
-
-        {/* Action buttons */}
-        <div className="flex gap-3 px-5 pb-5 pt-3 border-t border-white/10">
-          <button
-            onClick={handleRejectSign}
-            className="flex-1 py-2.5 bg-white/10 text-white rounded-xl border border-white/20 hover:bg-white/20 transition-colors text-sm font-medium"
-          >
-            Reject
-          </button>
-          <button
-            onClick={handleConfirmSign}
-            className="flex-1 py-2.5 bg-purple-500 text-white rounded-xl font-bold hover:bg-purple-400 transition-colors text-sm"
-          >
-            Sign with Passkey
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  /* ── FULL CARD MODE (connect / processing / success / error / waiting) ── */
   return (
     <div
       style={{ width: FULL_W, height: FULL_H }}
-      className="overflow-hidden bg-gradient-to-br from-purple-900 via-purple-800 to-indigo-900 flex items-center justify-center p-4"
+      className={`relative overflow-hidden transition-colors duration-500 ${pageTone}`}
     >
-      <div className="bg-black/30 backdrop-blur-md border border-white/10 rounded-2xl p-8 w-full">
-        {/* Header */}
-        <div className="text-center mb-6">
-          <div className="inline-block p-3 bg-purple-500/20 rounded-full mb-3">
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              className="w-10 h-10 text-purple-300"
-            >
-              <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
-              <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
-            </svg>
-          </div>
-          <h1 className="text-2xl font-bold text-white mb-1">INJ Pass</h1>
-          <p className="text-purple-200 text-sm">
-            {action === 'sign_persistent'
-              ? 'Authorization'
-              : action === 'connect'
-                ? 'Connect your wallet'
-                : 'Sign transaction'}
-          </p>
+      <TunnelBackground mode={theme} className="absolute inset-0 z-0" />
+      <div className="pointer-events-none absolute inset-x-0 top-4 z-40 flex justify-center px-4">
+        {errorToast ? (
+          <WalletErrorToast
+            key={errorToast.id}
+            message={errorToast.message}
+            isExiting={errorToast.isExiting}
+            isLightMode={isLightMode}
+          />
+        ) : null}
+      </div>
+      <div className="pointer-events-none absolute inset-0 z-[1] overflow-hidden">
+        <div className={`absolute left-0 top-0 h-px w-full overflow-hidden ${isLightMode ? 'opacity-70' : 'opacity-60'}`}>
+          <span className={`edge-marquee-x absolute left-0 top-0 h-full w-[30%] ${isLightMode ? 'bg-[linear-gradient(90deg,transparent,rgba(121,88,255,0.7),rgba(255,133,175,0.38),transparent)]' : 'bg-[linear-gradient(90deg,transparent,rgba(179,123,255,0.72),rgba(255,123,170,0.42),transparent)]'}`} />
         </div>
-
-        {/* Status Display */}
-        <div className="text-center">
-          {status === 'waiting' && (
-            <div className="py-8">
-              <div className="animate-pulse h-12 w-12 border-4 border-purple-300/30 border-t-purple-300 rounded-full mx-auto mb-4"></div>
-              <p className="text-white/70 text-sm">Initializing...</p>
-            </div>
-          )}
-
-          {status === 'processing' && (
-            <div className="py-8">
-              <div className="animate-spin h-16 w-16 border-4 border-white/20 border-t-white rounded-full mx-auto mb-4"></div>
-              <p className="text-white text-lg font-medium">{message}</p>
-              <p className="text-purple-200 text-sm mt-2">This may take a few seconds</p>
-            </div>
-          )}
-
-          {status === 'success' && (
-            <div className="py-8">
-              <div className="inline-flex items-center justify-center w-16 h-16 bg-green-500/20 rounded-full mb-4">
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="3"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  className="w-10 h-10 text-green-400"
-                >
-                  <polyline points="20 6 9 17 4 12"></polyline>
-                </svg>
-              </div>
-              <p className="text-white text-xl font-bold mb-2">{message}</p>
-              <p className="text-green-300 text-sm">Shrinking back to ball...</p>
-            </div>
-          )}
-
-          {status === 'error' && (
-            <div className="py-8">
-              <div className="inline-flex items-center justify-center w-16 h-16 bg-red-500/20 rounded-full mb-4">
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="3"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  className="w-10 h-10 text-red-400"
-                >
-                  <circle cx="12" cy="12" r="10"></circle>
-                  <line x1="15" y1="9" x2="9" y2="15"></line>
-                  <line x1="9" y1="9" x2="15" y2="15"></line>
-                </svg>
-              </div>
-              <p className="text-white text-xl font-bold mb-2">Failed</p>
-              <p className="text-red-300 text-sm bg-red-500/10 border border-red-500/30 rounded-lg px-4 py-3 mt-4">
-                {error}
-              </p>
-              <p className="text-red-400/70 text-xs mt-2">Shrinking back to ball...</p>
-            </div>
-          )}
+        <div className={`absolute bottom-0 left-0 h-px w-full overflow-hidden ${isLightMode ? 'opacity-55' : 'opacity-50'}`}>
+          <span className={`edge-marquee-x-reverse absolute left-0 top-0 h-full w-[28%] ${isLightMode ? 'bg-[linear-gradient(90deg,transparent,rgba(255,140,173,0.34),rgba(121,88,255,0.62),transparent)]' : 'bg-[linear-gradient(90deg,transparent,rgba(255,129,166,0.4),rgba(174,131,255,0.62),transparent)]'}`} />
         </div>
-
-        {/* Security Notice */}
-        <div className="mt-6 pt-6 border-t border-white/10">
-          <p className="text-purple-300 text-xs text-center">
-            Secured by WebAuthn biometric authentication
-          </p>
-          {originParam && (
-            <p className="text-purple-400/60 text-xs text-center mt-2">
-              Requested by: {originParam}
-            </p>
-          )}
+        <div className={`absolute left-0 top-0 h-full w-px overflow-hidden ${isLightMode ? 'opacity-65' : 'opacity-55'}`}>
+          <span className={`edge-marquee-y absolute left-0 top-0 h-[28%] w-full ${isLightMode ? 'bg-[linear-gradient(180deg,transparent,rgba(121,88,255,0.68),rgba(255,138,177,0.28),transparent)]' : 'bg-[linear-gradient(180deg,transparent,rgba(179,123,255,0.72),rgba(255,123,170,0.28),transparent)]'}`} />
+        </div>
+        <div className={`absolute right-0 top-0 h-full w-px overflow-hidden ${isLightMode ? 'opacity-55' : 'opacity-50'}`}>
+          <span className={`edge-marquee-y-reverse absolute left-0 top-0 h-[30%] w-full ${isLightMode ? 'bg-[linear-gradient(180deg,transparent,rgba(255,140,173,0.3),rgba(121,88,255,0.64),transparent)]' : 'bg-[linear-gradient(180deg,transparent,rgba(255,129,166,0.32),rgba(174,131,255,0.68),transparent)]'}`} />
         </div>
       </div>
+
+      <div
+        className={`pointer-events-none absolute inset-0 z-[2] ${
+          isLightMode
+            ? 'bg-[radial-gradient(circle_at_14%_18%,rgba(147,114,255,0.13),transparent_28%),radial-gradient(circle_at_84%_16%,rgba(255,126,175,0.1),transparent_24%),linear-gradient(180deg,rgba(255,255,255,0.12),rgba(233,239,247,0.32)_40%,rgba(233,239,247,0.82))]'
+            : 'bg-[radial-gradient(circle_at_14%_18%,rgba(144,92,255,0.16),transparent_28%),radial-gradient(circle_at_84%_16%,rgba(255,102,168,0.11),transparent_24%),linear-gradient(180deg,rgba(7,8,14,0.16),rgba(2,2,2,0.78))]'
+        }`}
+      />
+
+      <div className="relative z-10 flex h-full flex-col p-4">
+        <header className="flex items-start justify-between gap-4">
+          <div className="min-w-0">
+            <div className={`text-[0.96rem] font-medium tracking-[-0.02em] ${isLightMode ? 'text-[#263144]' : 'text-white/[0.92]'}`}>
+              INJ Pass Authorization
+            </div>
+            <div className={`mt-1 text-xs ${headerTone}`}>
+              Agent Wallet for Injective
+            </div>
+          </div>
+          <WelcomeThemeIconButton />
+        </header>
+
+        <div className={`relative mt-4 flex min-h-0 flex-1 flex-col overflow-hidden rounded-[32px] border p-5 backdrop-blur-2xl ${cardTone}`}>
+          <div
+            className={`absolute inset-0 ${
+              isLightMode
+                ? 'bg-[radial-gradient(circle_at_top_left,rgba(147,114,255,0.16),transparent_38%),radial-gradient(circle_at_bottom_right,rgba(255,118,168,0.08),transparent_36%)]'
+                : 'bg-[radial-gradient(circle_at_top_left,rgba(147,114,255,0.16),transparent_38%),radial-gradient(circle_at_bottom_right,rgba(255,118,168,0.09),transparent_36%)]'
+            }`}
+          />
+
+          <div className="relative z-10 flex h-full min-h-0 flex-col">
+            <div className="flex items-start gap-4">
+              <div
+                className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-[18px] border ${
+                  isLightMode
+                    ? 'border-[#d4deed] bg-white/82 text-[#4f48df]'
+                    : 'border-white/10 bg-white/[0.06] text-white'
+                }`}
+              >
+                {status === 'sign_pending' ? (
+                  <SparkIcon />
+                ) : status === 'processing' ? (
+                  <FingerprintIcon />
+                ) : status === 'success' ? (
+                  <CheckIcon />
+                ) : status === 'error' ? (
+                  <XIcon />
+                ) : (
+                  <BrandLockIcon />
+                )}
+              </div>
+
+              <div className="min-w-0">
+                <div className={`text-[10px] font-medium uppercase tracking-[0.22em] ${headerTone}`}>
+                  Secure authorization
+                </div>
+                <h1 className="mt-2 text-[1.38rem] font-semibold tracking-[-0.035em]">
+                  {title}
+                </h1>
+                <p className={`mt-2 text-sm leading-6 ${headerTone}`}>
+                  {description}
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-4 flex flex-wrap gap-2">
+              <TrustPillBadge label="Passkey Security" icon="passkey" isLightMode={isLightMode} showActivation activationIndex={0} className="!gap-1.5 !px-2.5 !py-1 !text-[10px] !font-medium !tracking-[0.16em] !uppercase sm:!px-2.5 sm:!py-1 sm:!text-[10px]" />
+              <TrustPillBadge label="Sovereign Custody" icon="custody" isLightMode={isLightMode} showActivation activationIndex={1} className="!gap-1.5 !px-2.5 !py-1 !text-[10px] !font-medium !tracking-[0.16em] !uppercase sm:!px-2.5 sm:!py-1 sm:!text-[10px]" />
+              <TrustPillBadge label="Agent Session" icon="lock" isLightMode={isLightMode} showActivation activationIndex={2} className="!gap-1.5 !px-2.5 !py-1 !text-[10px] !font-medium !tracking-[0.16em] !uppercase sm:!px-2.5 sm:!py-1 sm:!text-[10px]" />
+            </div>
+
+            {status === 'sign_pending' && currentSignRequest ? (
+              <div className="mt-5 flex min-h-0 flex-1 flex-col gap-3">
+                <div className={`rounded-[24px] border p-4 ${surfaceTone}`}>
+                  <p className={`text-[10px] uppercase tracking-[0.2em] ${headerTone}`}>
+                    Message
+                  </p>
+                  <div className={`mt-2 max-h-32 overflow-auto rounded-[20px] border px-3 py-3 font-mono text-xs leading-5 ${isLightMode ? 'border-[#d7dfed] bg-white/80 text-[#243043]' : 'border-white/10 bg-black/20 text-white/88'}`}>
+                    {currentSignRequest.message}
+                  </div>
+                </div>
+
+                <div className={`rounded-[24px] border p-4 ${surfaceTone}`}>
+                  <p className={`text-[10px] uppercase tracking-[0.2em] ${headerTone}`}>
+                    Requested by
+                  </p>
+                  <p className="mt-2 text-sm">{callerOriginToLabel(currentSignRequest.origin)}</p>
+                  <p className={`mt-1 truncate text-xs ${headerTone}`}>
+                    {currentSignRequest.origin}
+                  </p>
+                </div>
+
+                <div className={`rounded-[22px] border px-4 py-3 text-sm ${isLightMode ? 'border-amber-200 bg-amber-50 text-amber-700' : 'border-amber-400/20 bg-amber-500/10 text-amber-100'}`}>
+                  Your passkey approval is required before this signature can be released.
+                </div>
+
+                <div className="mt-auto grid grid-cols-2 gap-2.5 pt-1">
+                  <button
+                    onClick={handleRejectSign}
+                    className={`rounded-[22px] border px-4 py-3 text-sm font-semibold transition-all ${secondaryButtonTone}`}
+                  >
+                    Reject
+                  </button>
+                  <button
+                    onClick={handleConfirmSign}
+                    className={`rounded-[22px] border px-4 py-3 text-sm font-semibold transition-all ${primaryButtonTone}`}
+                  >
+                    Sign with Passkey
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="mt-5 flex min-h-0 flex-1 flex-col justify-between gap-4">
+                <div className={`rounded-[24px] border p-5 ${surfaceTone}`}>
+                  <div className="flex flex-col items-center justify-center gap-4 py-4 text-center">
+                    {status === 'waiting' || status === 'processing' ? (
+                      <div
+                        className={`h-12 w-12 animate-spin rounded-full border-[3px] ${
+                          isLightMode
+                            ? 'border-[#d5deed] border-t-[#5a4cff]'
+                            : 'border-white/10 border-t-white'
+                        }`}
+                      />
+                    ) : status === 'success' ? (
+                      <div className={`flex h-12 w-12 items-center justify-center rounded-full ${isLightMode ? 'bg-emerald-50 text-emerald-700' : 'bg-emerald-500/10 text-emerald-200'}`}>
+                        <CheckIcon className="h-6 w-6" />
+                      </div>
+                    ) : status === 'error' ? (
+                      <div className={`flex h-12 w-12 items-center justify-center rounded-full ${isLightMode ? 'bg-rose-50 text-rose-700' : 'bg-rose-500/10 text-rose-200'}`}>
+                        <XIcon className="h-6 w-6" />
+                      </div>
+                    ) : (
+                      <div className={`flex h-12 w-12 items-center justify-center rounded-full ${isLightMode ? 'bg-white text-[#4f48df]' : 'bg-white/[0.06] text-white'}`}>
+                        <BrandLockIcon className="h-6 w-6" />
+                      </div>
+                    )}
+
+                    <div>
+                      <p className="text-base font-semibold">
+                        {status === 'waiting'
+                          ? 'Initializing secure window'
+                          : status === 'processing'
+                            ? message || 'Authorizing...'
+                            : status === 'success'
+                              ? message || 'Authorization complete'
+                              : status === 'error'
+                                ? 'Authorization failed'
+                                : 'Secure session ready'}
+                      </p>
+                      <p className={`mt-1 text-xs leading-5 ${headerTone}`}>
+                        {status === 'error'
+                          ? 'Review the alert above and try again.'
+                          : status === 'success'
+                            ? 'Returning to the compact secure session.'
+                            : `Requested by ${callerLabel}`}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className={`rounded-[24px] border p-4 ${surfaceTone}`}>
+                  <p className={`text-[10px] uppercase tracking-[0.2em] ${headerTone}`}>
+                    Security notice
+                  </p>
+                  <p className="mt-2 text-sm leading-6">
+                    INJ Pass authorizes from a self-custodial wallet secured by passkeys. Your private key never leaves this secure window.
+                  </p>
+                  {originParam ? (
+                    <p className={`mt-2 text-xs ${headerTone}`}>
+                      Requested by: {originParam}
+                    </p>
+                  ) : null}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      <style>{`
+        @keyframes edgeMarqueeX {
+          from { transform: translateX(-135%); }
+          to { transform: translateX(420%); }
+        }
+
+        @keyframes edgeMarqueeXReverse {
+          from { transform: translateX(420%); }
+          to { transform: translateX(-135%); }
+        }
+
+        @keyframes edgeMarqueeY {
+          from { transform: translateY(-135%); }
+          to { transform: translateY(420%); }
+        }
+
+        @keyframes edgeMarqueeYReverse {
+          from { transform: translateY(420%); }
+          to { transform: translateY(-135%); }
+        }
+
+        .edge-marquee-x {
+          animation: edgeMarqueeX 9.8s linear infinite;
+        }
+
+        .edge-marquee-x-reverse {
+          animation: edgeMarqueeXReverse 11.4s linear infinite;
+        }
+
+        .edge-marquee-y {
+          animation: edgeMarqueeY 10.4s linear infinite;
+        }
+
+        .edge-marquee-y-reverse {
+          animation: edgeMarqueeYReverse 12.2s linear infinite;
+        }
+      `}</style>
     </div>
   );
 }
 
 export default function AuthPage() {
-  return (
-    <Suspense fallback={
-      <div className="min-h-screen bg-gradient-to-br from-purple-900 via-purple-800 to-indigo-900 flex items-center justify-center">
-        <div className="animate-spin h-16 w-16 border-4 border-white/20 border-t-white rounded-full"></div>
-      </div>
-    }>
-      <AuthPageContent />
-    </Suspense>
-  );
+  return <AuthPageContent />;
 }

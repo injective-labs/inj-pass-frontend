@@ -63,7 +63,8 @@ export async function verifyPasskey(
   challenge: string,
   credential: any,
   walletAddress?: string,
-  walletName?: string
+  walletName?: string,
+  inviteCode?: string
 ): Promise<PasskeyVerifyResponse> {
   // Build request body - only include walletAddress and walletName if they have values
   // This ensures we never accidentally send undefined/null during authentication
@@ -78,6 +79,10 @@ export async function verifyPasskey(
   }
   if (walletName) {
     requestBody.walletName = walletName;
+  }
+  // Include invite code during registration for referral rewards
+  if (inviteCode) {
+    requestBody.inviteCode = inviteCode;
   }
 
   const response = await fetch(`${API_BASE_URL}/passkey/verify`, {

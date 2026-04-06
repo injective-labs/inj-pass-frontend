@@ -1,37 +1,124 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
-import { triggerWalletConnect, triggerPasskeySign, isValidOrigin } from '@/lib/auth-bridge';
+import { useCallback, useEffect, useState } from 'react';
+import TrustPillBadge from '@/components/TrustPillBadge';
+import WelcomeThemeIconButton from '@/components/WelcomeThemeIconButton';
+import { WalletErrorToast } from '@/components/WalletErrorToast';
+import { useTheme } from '@/contexts/ThemeContext';
+import { triggerWalletConnect, isValidOrigin } from '@/lib/auth-bridge';
+import { useWalletErrorToast } from '@/lib/useWalletErrorToast';
 
-/* ── 尺寸常量 ─────────────────────────────────────────────────────────── */
-const BALL_SIZE = 56;   // 悬浮球直径 px
-const CARD_W    = 360;  // 展开卡片宽
-const CARD_H    = 280;  // 展开卡片高
-const CONNECT_W = 360;  // 连接前卡片宽
-const CONNECT_H = 300;  // 连接前卡片高
+const BALL_SIZE = 58;
+const CARD_W = 392;
+const CARD_H = 314;
+const CONNECT_W = 392;
+const CONNECT_H = 360;
 
-/** 通知父窗口（SDK）调整 iframe 尺寸 */
 function requestResize(width: number, height: number) {
-  window.parent.postMessage({
-    type: 'INJPASS_RESIZE',
-    width,
-    height,
-  }, '*');
+  window.parent.postMessage(
+    {
+      type: 'INJPASS_RESIZE',
+      width,
+      height,
+    },
+    '*'
+  );
+}
+
+function LockIcon({ className = 'h-4 w-4' }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.9"
+    >
+      <rect x="4" y="11" width="16" height="9" rx="2.8" />
+      <path strokeLinecap="round" d="M8 11V8a4 4 0 018 0v3" />
+    </svg>
+  );
+}
+
+function FingerprintIcon({ className = 'h-4 w-4' }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.9"
+    >
+      <path strokeLinecap="round" d="M12 4.5a6.5 6.5 0 00-6.5 6.5" />
+      <path strokeLinecap="round" d="M12 4.5a6.5 6.5 0 016.5 6.5" />
+      <path strokeLinecap="round" d="M8 11a4 4 0 018 0v2.4" />
+      <path strokeLinecap="round" d="M8.2 15.4c.2 2.4-.4 4.1-1.7 5.6" />
+      <path strokeLinecap="round" d="M12 8a3 3 0 013 3v4.5c0 2.2-.5 4.1-1.7 5.8" />
+      <path strokeLinecap="round" d="M11.2 12.5v3.8c0 1.5-.3 2.8-1.2 4.2" />
+      <path strokeLinecap="round" d="M16.8 11.8v1.6c0 3.1-.3 5.3-1.6 7.6" />
+    </svg>
+  );
+}
+
+function MinimizeIcon({ className = 'h-4 w-4' }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+    >
+      <path strokeLinecap="round" d="M5 12h14" />
+    </svg>
+  );
+}
+
+function DisconnectIcon({ className = 'h-4 w-4' }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.9"
+    >
+      <path strokeLinecap="round" strokeLinejoin="round" d="M15 8l4 4-4 4" />
+      <path strokeLinecap="round" d="M19 12H9" />
+      <path strokeLinecap="round" d="M13 4H7a2 2 0 00-2 2v12a2 2 0 002 2h6" />
+    </svg>
+  );
+}
+
+function OpenIcon({ className = 'h-4 w-4' }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.9"
+    >
+      <path strokeLinecap="round" strokeLinejoin="round" d="M14 5h5v5" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M10 14L19 5" />
+      <path strokeLinecap="round" d="M19 13v4a2 2 0 01-2 2H7a2 2 0 01-2-2V7a2 2 0 012-2h4" />
+    </svg>
+  );
 }
 
 export default function EmbedPage() {
+  const { theme } = useTheme();
+  const isLightMode = theme === 'light';
+
   const [connected, setConnected] = useState(false);
-  const [address, setAddress] = useState<string>('');
-  const [walletName, setWalletName] = useState<string>('');
+  const [address, setAddress] = useState('');
+  const [walletName, setWalletName] = useState('');
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
   const [authPopup, setAuthPopup] = useState<Window | null>(null);
   const [hasPendingSign, setHasPendingSign] = useState(false);
-  const [minimized, setMinimized] = useState(false); // 悬浮球 / 展开
+  const [minimized, setMinimized] = useState(false);
+  const { errorToast, showErrorToast, dismissErrorToast } = useWalletErrorToast();
 
-  // body 透明 — useEffect 作为保险，真正的首屏透明由内联 <style> 保证
-
-  // ── iframe 自动伸缩 ──────────────────────────────────────────────────
   useEffect(() => {
     if (!connected) {
       requestResize(CONNECT_W, CONNECT_H);
@@ -42,23 +129,19 @@ export default function EmbedPage() {
     }
   }, [connected, minimized]);
 
-  // 连接成功后自动缩成小球
   useEffect(() => {
     if (connected && !minimized) {
-      // 短暂展示 connected 状态后缩成球
-      const t = setTimeout(() => setMinimized(true), 1200);
-      return () => clearTimeout(t);
+      const timeoutId = window.setTimeout(() => setMinimized(true), 1200);
+      return () => window.clearTimeout(timeoutId);
     }
-  }, [connected]);
+  }, [connected, minimized]);
 
-  // 有签名请求时自动展开（让用户看到提示）
   useEffect(() => {
     if (hasPendingSign && minimized) {
       setMinimized(false);
     }
-  }, [hasPendingSign]);
+  }, [hasPendingSign, minimized]);
 
-  // 监听页面卸载事件，当 DApp 关闭时关闭认证弹窗
   useEffect(() => {
     const handleUnload = () => {
       if (authPopup && !authPopup.closed) {
@@ -75,51 +158,84 @@ export default function EmbedPage() {
     };
   }, [authPopup]);
 
-  const expand  = useCallback(() => setMinimized(false), []);
+  const expand = useCallback(() => setMinimized(false), []);
   const minimize = useCallback(() => setMinimized(true), []);
+  const handleDisconnect = useCallback(() => {
+    if (authPopup && !authPopup.closed) {
+      authPopup.close();
+    }
 
-  // ── 消息监听 ────────────────────────────────────────────────────────
+    const backdrop = document.getElementById('injpass-backdrop');
+    if (backdrop) {
+      backdrop.remove();
+    }
+
+    setAuthPopup(null);
+    setAddress('');
+    setWalletName('');
+    setConnected(false);
+    setMinimized(false);
+    setHasPendingSign(false);
+    window.parent.postMessage({ type: 'INJPASS_DISCONNECTED' }, '*');
+  }, [authPopup]);
+
   useEffect(() => {
-    const handleMessage = async (event: MessageEvent) => {
+    const handleMessage = (event: MessageEvent) => {
       if (!isValidOrigin(event.origin)) return;
       const { type, data } = event.data;
 
       if (type === 'INJPASS_SIGN_REQUEST') {
         if (!connected) {
-          event.source?.postMessage({
-            type: 'INJPASS_SIGN_RESPONSE',
-            requestId: data.id,
-            error: 'Wallet not connected',
-          }, { targetOrigin: event.origin });
+          event.source?.postMessage(
+            {
+              type: 'INJPASS_SIGN_RESPONSE',
+              requestId: data.id,
+              error: 'Wallet not connected',
+            },
+            { targetOrigin: event.origin }
+          );
           return;
         }
 
         if (authPopup && !authPopup.closed) {
-          authPopup.postMessage({
-            type: 'SIGN_REQUEST',
-            requestId: data.id,
-            message: data.message,
-          }, window.location.origin);
-          try { authPopup.focus(); } catch (_) {}
+          authPopup.postMessage(
+            {
+              type: 'SIGN_REQUEST',
+              requestId: data.id,
+              message: data.message,
+            },
+            window.location.origin
+          );
+
+          try {
+            authPopup.focus();
+          } catch {}
+
           setHasPendingSign(true);
         } else {
-          event.source?.postMessage({
-            type: 'INJPASS_SIGN_RESPONSE',
-            requestId: data.id,
-            error: 'Auth popup is closed. Please reconnect.',
-          }, { targetOrigin: event.origin });
+          event.source?.postMessage(
+            {
+              type: 'INJPASS_SIGN_RESPONSE',
+              requestId: data.id,
+              error: 'Auth popup is closed. Please reconnect.',
+            },
+            { targetOrigin: event.origin }
+          );
         }
       }
 
       if (type === 'SIGN_RESPONSE') {
         setHasPendingSign(false);
-        window.parent.postMessage({
-          type: 'INJPASS_SIGN_RESPONSE',
-          requestId: data.requestId,
-          signature: data.signature,
-          address: data.address,
-          error: data.error,
-        }, '*');
+        window.parent.postMessage(
+          {
+            type: 'INJPASS_SIGN_RESPONSE',
+            requestId: data.requestId,
+            signature: data.signature,
+            address: data.address,
+            error: data.error,
+          },
+          '*'
+        );
       }
 
       if (type === 'INJPASS_DISCONNECT') {
@@ -129,194 +245,353 @@ export default function EmbedPage() {
 
     window.addEventListener('message', handleMessage);
     return () => window.removeEventListener('message', handleMessage);
-  }, [connected, authPopup]);
+  }, [authPopup, connected, handleDisconnect]);
 
-  // ── 连接 / 断开 ────────────────────────────────────────────────────
   const handleConnect = async () => {
     setLoading(true);
-    setError('');
+    dismissErrorToast(true);
+
     try {
-      const { address: walletAddress, walletName: name, popup } = await triggerWalletConnect();
+      const { address: walletAddress, walletName: nextWalletName, popup } =
+        await triggerWalletConnect();
+
       setAddress(walletAddress);
-      setWalletName(name);
+      setWalletName(nextWalletName);
       setConnected(true);
 
       if (popup && !popup.closed) {
         setAuthPopup(popup);
       }
 
-      window.parent.postMessage({
-        type: 'INJPASS_CONNECTED',
-        address: walletAddress,
-        walletName: name,
-      }, '*');
+      window.parent.postMessage(
+        {
+          type: 'INJPASS_CONNECTED',
+          address: walletAddress,
+          walletName: nextWalletName,
+        },
+        '*'
+      );
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : 'Connection failed';
-      setError(errorMsg);
+      showErrorToast(errorMsg);
       window.parent.postMessage({ type: 'INJPASS_ERROR', error: errorMsg }, '*');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleDisconnect = () => {
-    if (authPopup && !authPopup.closed) authPopup.close();
-    setAuthPopup(null);
-    setAddress('');
-    setWalletName('');
-    setConnected(false);
-    setMinimized(false);
-    window.parent.postMessage({ type: 'INJPASS_DISCONNECTED' }, '*');
-  };
+  const cardTone = isLightMode
+    ? 'border-[#c9d7ec] bg-[linear-gradient(180deg,rgba(255,255,255,0.92),rgba(244,247,252,0.88))] text-[#171b24] shadow-[0_24px_60px_rgba(92,104,126,0.18)]'
+    : 'border-white/10 bg-[linear-gradient(180deg,rgba(25,16,33,0.92),rgba(10,8,16,0.94))] text-white shadow-[0_28px_80px_rgba(8,6,13,0.5)]';
+  const softSurfaceTone = isLightMode
+    ? 'border-[#d5dfee] bg-white/72'
+    : 'border-white/10 bg-white/[0.05]';
+  const secondaryButtonTone = isLightMode
+    ? 'border-[#c9d6ea] bg-white/74 text-[#243043] hover:bg-white'
+    : 'border-white/10 bg-white/[0.06] text-white/82 hover:bg-white/[0.1]';
+  const brandTextTone = isLightMode ? 'text-[#495468]' : 'text-white/62';
 
-  /* ================================================================== */
-  /* ██  BALL MODE  ████████████████████████████████████████████████████ */
-  /* ================================================================== */
   if (connected && minimized) {
     return (
       <div
         onClick={expand}
         style={{ width: BALL_SIZE, height: BALL_SIZE }}
-          className="relative cursor-pointer select-none"
-        >
-        <div className="w-full h-full bg-gradient-to-br from-purple-600 to-indigo-700 rounded-full flex items-center justify-center shadow-xl border border-purple-400/40 transition-transform hover:scale-110 active:scale-95">
-          <span style={{ fontSize: 24, lineHeight: 1 }}>&#x1F510;</span>
+        className="group relative cursor-pointer select-none"
+      >
+        <div
+          className={`absolute inset-0 rounded-full border backdrop-blur-xl transition-all duration-500 ${
+            isLightMode
+              ? 'border-[#c8d4e8] bg-[radial-gradient(circle_at_30%_30%,rgba(255,255,255,0.95),rgba(234,239,247,0.88)_60%,rgba(220,227,240,0.8))] shadow-[0_14px_36px_rgba(88,102,129,0.18)]'
+              : 'border-white/10 bg-[radial-gradient(circle_at_30%_30%,rgba(255,255,255,0.16),rgba(88,63,134,0.26)_35%,rgba(13,12,22,0.96)_75%)] shadow-[0_16px_44px_rgba(6,5,10,0.5)]'
+          }`}
+        />
+        <div
+          className={`absolute inset-[7px] rounded-full border ${
+            isLightMode ? 'border-[#d6dff0]' : 'border-white/12'
+          }`}
+        />
+        <div className="relative flex h-full w-full items-center justify-center">
+          <LockIcon
+            className={`h-5 w-5 transition-transform duration-300 group-hover:scale-110 ${
+              isLightMode ? 'text-[#4f48df]' : 'text-white'
+            }`}
+          />
         </div>
-        {/* 签名通知小绿点 */}
-        {hasPendingSign && (
-          <span className="absolute -top-0.5 -right-0.5 block w-3.5 h-3.5 bg-yellow-400 rounded-full animate-ping" />
-        )}
-        {hasPendingSign && (
-          <span className="absolute -top-0.5 -right-0.5 block w-3.5 h-3.5 bg-yellow-400 rounded-full" />
-        )}
+        {hasPendingSign ? (
+          <>
+            <span className="absolute right-0 top-0 block h-3.5 w-3.5 rounded-full bg-amber-400/90 blur-[1px]" />
+            <span className="absolute right-[2px] top-[2px] block h-2.5 w-2.5 rounded-full bg-amber-300 animate-pulse" />
+          </>
+        ) : null}
       </div>
     );
   }
 
-  /* ================================================================== */
-  /* ██  EXPANDED CONNECTED CARD  ████████████████████████████████████ */
-  /* ================================================================== */
   if (connected && !minimized) {
     return (
       <div
-        style={{ width: CARD_W }}
-        className="bg-gradient-to-br from-purple-900 via-purple-800 to-indigo-900 rounded-2xl shadow-2xl overflow-hidden"
+        style={{ width: CARD_W, minHeight: CARD_H }}
+        className={`relative isolate overflow-hidden rounded-[30px] border backdrop-blur-2xl ${cardTone}`}
       >
-        {/* 标题栏 + 最小化按钮 */}
-        <div className="flex items-center justify-between px-4 pt-3 pb-2">
-          <div className="flex items-center gap-2">
-            <div className="relative w-8 h-8 bg-green-500/20 rounded-full flex items-center justify-center">
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4 text-green-400">
-                <polyline points="20 6 9 17 4 12"></polyline>
-              </svg>
-              {hasPendingSign && (
-                <span className="absolute -top-0.5 -right-0.5 block w-2.5 h-2.5 bg-yellow-400 rounded-full animate-ping" />
-              )}
-            </div>
+        <div
+          className={`absolute inset-0 ${
+            isLightMode
+              ? 'bg-[radial-gradient(circle_at_top_left,rgba(137,111,255,0.18),transparent_42%),radial-gradient(circle_at_bottom_right,rgba(255,108,162,0.1),transparent_40%)]'
+              : 'bg-[radial-gradient(circle_at_top_left,rgba(145,93,255,0.2),transparent_42%),radial-gradient(circle_at_bottom_right,rgba(255,85,155,0.12),transparent_40%)]'
+          }`}
+        />
+
+        <div className="relative z-10 flex h-full flex-col p-4">
+          <div className="flex items-start justify-between gap-3">
             <div>
-              <p className="text-white text-sm font-semibold leading-tight">INJ Pass</p>
-              <p className="text-purple-300 text-xs font-mono">
-                {address.slice(0, 6)}...{address.slice(-4)}
+              <div className={`text-[10px] font-medium uppercase tracking-[0.22em] ${brandTextTone}`}>
+                INJ Pass Authorization
+              </div>
+              <h2 className="mt-2 text-[1.05rem] font-semibold tracking-[-0.02em]">
+                Session active
+              </h2>
+              <p className={`mt-1 text-xs leading-5 ${brandTextTone}`}>
+                {walletName || 'Secure wallet session'} is ready for requests.
               </p>
             </div>
+
+            <button
+              onClick={minimize}
+              title="Minimize"
+              className={`flex h-9 w-9 items-center justify-center rounded-2xl border transition-all ${secondaryButtonTone}`}
+            >
+              <MinimizeIcon />
+            </button>
           </div>
-          <button
-            onClick={minimize}
-            title="Minimize"
-            className="w-8 h-8 flex items-center justify-center rounded-lg bg-white/10 hover:bg-white/20 transition-colors text-white/70 hover:text-white"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
-              <line x1="5" y1="12" x2="19" y2="12"></line>
-            </svg>
-          </button>
-        </div>
 
-        <div className="px-4 pb-4 space-y-2.5">
-          {/* 签名待处理时的提示 */}
-          {hasPendingSign && authPopup && !authPopup.closed && (
+          <div className={`mt-4 rounded-[24px] border p-3 ${softSurfaceTone}`}>
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className={`text-[10px] uppercase tracking-[0.2em] ${brandTextTone}`}>
+                  Wallet address
+                </p>
+                <p className="mt-1 font-mono text-[13px]">
+                  {address.slice(0, 8)}...{address.slice(-6)}
+                </p>
+              </div>
+              <span
+                className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] ${
+                  hasPendingSign
+                    ? isLightMode
+                      ? 'border-amber-300 bg-amber-100/90 text-amber-700'
+                      : 'border-amber-400/30 bg-amber-500/10 text-amber-200'
+                    : isLightMode
+                      ? 'border-emerald-300 bg-emerald-50 text-emerald-700'
+                      : 'border-emerald-400/28 bg-emerald-500/10 text-emerald-200'
+                }`}
+              >
+                <span className="h-1.5 w-1.5 rounded-full bg-current" />
+                {hasPendingSign ? 'Awaiting approval' : 'Connected'}
+              </span>
+            </div>
+          </div>
+
+          <div className="mt-3 flex flex-wrap gap-2">
+            <TrustPillBadge label="Passkey Security" icon="passkey" isLightMode={isLightMode} showActivation activationIndex={0} className="!gap-1.5 !px-2.5 !py-1 !text-[10px] !font-medium !tracking-[0.14em] !uppercase sm:!px-2.5 sm:!py-1 sm:!text-[10px]" />
+            <TrustPillBadge label="Sovereign Custody" icon="custody" isLightMode={isLightMode} showActivation activationIndex={1} className="!gap-1.5 !px-2.5 !py-1 !text-[10px] !font-medium !tracking-[0.14em] !uppercase sm:!px-2.5 sm:!py-1 sm:!text-[10px]" />
+            <TrustPillBadge label="Agent Session" icon="lock" isLightMode={isLightMode} showActivation activationIndex={2} className="!gap-1.5 !px-2.5 !py-1 !text-[10px] !font-medium !tracking-[0.14em] !uppercase sm:!px-2.5 sm:!py-1 sm:!text-[10px]" />
+          </div>
+
+          {hasPendingSign && authPopup && !authPopup.closed ? (
             <button
-              onClick={() => { try { authPopup.focus(); } catch (_) {} }}
-              className="w-full py-2 bg-yellow-500/20 border border-yellow-500/40 text-yellow-200 rounded-lg text-xs font-semibold hover:bg-yellow-500/30 transition-all flex items-center justify-center gap-1.5 animate-pulse"
+              onClick={() => {
+                try {
+                  authPopup.focus();
+                } catch {}
+              }}
+              className={`mt-4 inline-flex w-full items-center justify-center gap-2 rounded-[20px] border px-4 py-3 text-sm font-semibold transition-all ${
+                isLightMode
+                  ? 'border-amber-300 bg-amber-100/90 text-amber-700 hover:bg-amber-100'
+                  : 'border-amber-400/30 bg-amber-500/10 text-amber-100 hover:bg-amber-500/16'
+              }`}
             >
-              <span>&#x26A0;&#xFE0F;</span>
-              <span>Signature pending — tap to view</span>
+              <LockIcon />
+              Review request in secure window
             </button>
-          )}
+          ) : null}
 
-          {/* Show wallet 按钮 */}
-          {!hasPendingSign && authPopup && !authPopup.closed && (
+          {!hasPendingSign && authPopup && !authPopup.closed ? (
             <button
-              onClick={() => { try { authPopup.focus(); } catch (_) {} }}
-              className="w-full py-1.5 bg-purple-500/10 border border-purple-500/20 text-purple-300 rounded-lg text-xs hover:bg-purple-500/20 transition-all"
+              onClick={() => {
+                try {
+                  authPopup.focus();
+                } catch {}
+              }}
+              className={`mt-4 inline-flex w-full items-center justify-center gap-2 rounded-[20px] border px-4 py-3 text-sm font-semibold transition-all ${secondaryButtonTone}`}
             >
-              Show wallet popup
+              <OpenIcon />
+              Open secure window
             </button>
-          )}
+          ) : null}
 
-          <button
-            onClick={handleDisconnect}
-            className="w-full py-2 bg-white/10 border border-white/20 text-white rounded-lg text-sm font-semibold hover:bg-white/20 transition-all"
-          >
-            Disconnect
-          </button>
+          <div className="mt-auto grid grid-cols-2 gap-2.5 pt-4">
+            <button
+              onClick={handleDisconnect}
+              className={`inline-flex items-center justify-center gap-2 rounded-[20px] border px-4 py-3 text-sm font-semibold transition-all ${secondaryButtonTone}`}
+            >
+              <DisconnectIcon />
+              Disconnect
+            </button>
+            <button
+              onClick={minimize}
+              className={`inline-flex items-center justify-center gap-2 rounded-[20px] border px-4 py-3 text-sm font-semibold transition-all ${
+                isLightMode
+                  ? 'border-[#c7d6ef] bg-[linear-gradient(180deg,#ffffff_0%,#eff4fb_100%)] text-[#273245] hover:brightness-[1.02]'
+                  : 'border-[#cfb5ff]/26 bg-[linear-gradient(180deg,rgba(255,255,255,0.12),rgba(255,255,255,0.06))] text-white hover:bg-white/[0.14]'
+              }`}
+            >
+              <LockIcon />
+              Minimize
+            </button>
+          </div>
         </div>
       </div>
     );
   }
 
-  /* ================================================================== */
-  /* ██  CONNECT CARD (not connected)  ████████████████████████████████ */
-  /* ================================================================== */
   return (
     <div
-      style={{ width: CONNECT_W }}
-      className="bg-gradient-to-br from-purple-900 via-purple-800 to-indigo-900 rounded-2xl shadow-2xl p-6"
+      style={{ width: CONNECT_W, minHeight: CONNECT_H }}
+      className={`relative isolate overflow-hidden rounded-[32px] border backdrop-blur-2xl ${cardTone}`}
     >
-      <div className="text-center mb-5">
-        <div className="inline-block p-3 bg-purple-500/20 rounded-full mb-3">
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-8 h-8 text-purple-300">
-            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
-            <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
-          </svg>
-        </div>
-        <h2 className="text-xl font-bold text-white mb-1">Connect INJ Pass</h2>
-        <p className="text-purple-200 text-sm">Use your Passkey to connect</p>
+      <div className="pointer-events-none absolute inset-x-0 top-4 z-30 flex justify-center px-4">
+        {errorToast ? (
+          <WalletErrorToast
+            key={errorToast.id}
+            message={errorToast.message}
+            isExiting={errorToast.isExiting}
+            isLightMode={isLightMode}
+          />
+        ) : null}
       </div>
 
-      {error && (
-        <div className="bg-red-500/10 border border-red-500/30 rounded-lg px-3 py-2 mb-4">
-          <p className="text-red-300 text-sm">{error}</p>
+      <div
+        className={`absolute inset-0 ${
+          isLightMode
+            ? 'bg-[radial-gradient(circle_at_0%_0%,rgba(146,115,255,0.17),transparent_35%),radial-gradient(circle_at_100%_0%,rgba(255,132,174,0.12),transparent_32%),linear-gradient(180deg,rgba(255,255,255,0.1),transparent_55%)]'
+            : 'bg-[radial-gradient(circle_at_0%_0%,rgba(146,115,255,0.18),transparent_35%),radial-gradient(circle_at_100%_0%,rgba(255,132,174,0.12),transparent_32%),linear-gradient(180deg,rgba(255,255,255,0.05),transparent_55%)]'
+        }`}
+      />
+
+      <div className="relative z-10 flex h-full flex-col p-5">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <div className={`text-[10px] font-medium uppercase tracking-[0.22em] ${brandTextTone}`}>
+              INJ Pass Authorization
+            </div>
+            <h2 className="mt-2 text-[1.28rem] font-semibold tracking-[-0.03em]">
+              Connect to INJ Pass
+            </h2>
+            <p className={`mt-2 max-w-[21rem] text-sm leading-6 ${brandTextTone}`}>
+              Open a passkey-secured wallet session that matches the same design
+              language as your INJ Pass dashboard.
+            </p>
+          </div>
+
+          <div className="shrink-0">
+            <WelcomeThemeIconButton />
+          </div>
         </div>
-      )}
 
-      <button
-        onClick={handleConnect}
-        disabled={loading}
-        className="w-full bg-white text-purple-900 rounded-lg px-4 py-3 font-bold hover:bg-purple-50 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-      >
-        {loading ? (
-          <>
-            <svg className="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-            </svg>
-            <span>Connecting...</span>
-          </>
-        ) : (
-          <>
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5">
-              <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"></path>
-              <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
-              <line x1="12" x2="12" y1="19" y2="22"></line>
-            </svg>
-            <span>Connect with Passkey</span>
-          </>
-        )}
-      </button>
+        <div className="mt-4 flex flex-wrap gap-2">
+          <TrustPillBadge label="Passkey Security" icon="passkey" isLightMode={isLightMode} showActivation activationIndex={0} className="!gap-1.5 !px-2.5 !py-1 !text-[10px] !font-medium !tracking-[0.14em] !uppercase sm:!px-2.5 sm:!py-1 sm:!text-[10px]" />
+          <TrustPillBadge label="Sovereign Custody" icon="custody" isLightMode={isLightMode} showActivation activationIndex={1} className="!gap-1.5 !px-2.5 !py-1 !text-[10px] !font-medium !tracking-[0.14em] !uppercase sm:!px-2.5 sm:!py-1 sm:!text-[10px]" />
+          <TrustPillBadge label="Agent Session" icon="lock" isLightMode={isLightMode} showActivation activationIndex={2} className="!gap-1.5 !px-2.5 !py-1 !text-[10px] !font-medium !tracking-[0.14em] !uppercase sm:!px-2.5 sm:!py-1 sm:!text-[10px]" />
+        </div>
 
-      <p className="text-purple-300 text-xs text-center mt-3">
-        Protected by WebAuthn biometric authentication
-      </p>
+        <div className={`relative mt-5 overflow-hidden rounded-[24px] border p-4 ${softSurfaceTone}`}>
+          <div
+            className={`pointer-events-none absolute inset-0 rounded-[24px] border ${
+              isLightMode ? 'border-rose-500/28' : 'border-rose-400/26'
+            } motion-safe:animate-[passkeyCardBorderGlow_3.8s_cubic-bezier(0.22,1,0.36,1)_infinite]`}
+          />
+          <span
+            className={`pointer-events-none absolute left-0 top-0 h-px w-[42%] ${
+              isLightMode
+                ? 'bg-[linear-gradient(90deg,transparent,rgba(244,63,94,0.08),rgba(239,68,68,0.9),rgba(244,63,94,0.08),transparent)]'
+                : 'bg-[linear-gradient(90deg,transparent,rgba(251,113,133,0.08),rgba(248,113,113,0.9),rgba(251,113,133,0.08),transparent)]'
+            } motion-safe:animate-[passkeyCardBorderSweep_4.8s_linear_infinite]`}
+          />
+          <span
+            className={`pointer-events-none absolute bottom-0 right-0 h-px w-[38%] ${
+              isLightMode
+                ? 'bg-[linear-gradient(90deg,transparent,rgba(244,63,94,0.06),rgba(239,68,68,0.78),rgba(244,63,94,0.06),transparent)]'
+                : 'bg-[linear-gradient(90deg,transparent,rgba(251,113,133,0.06),rgba(248,113,113,0.8),rgba(251,113,133,0.06),transparent)]'
+            } motion-safe:animate-[passkeyCardBorderSweepReverse_5.6s_linear_infinite]`}
+          />
+
+          <div className="relative z-[1] flex items-start gap-3">
+            <div
+              className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-[18px] border ${
+                isLightMode
+                  ? 'border-[#d1dcf0] bg-white/80 text-[#4f48df]'
+                  : 'border-white/10 bg-white/[0.06] text-white'
+              }`}
+            >
+              <LockIcon className="h-5 w-5" />
+            </div>
+            <div>
+              <p className="text-sm font-semibold tracking-[-0.01em]">
+                Continue with your paired passkey
+              </p>
+              <p className={`mt-1 text-xs leading-5 ${brandTextTone}`}>
+                Your wallet opens in a secure INJ Pass window and stays under
+                your control throughout the session.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <button
+          onClick={handleConnect}
+          disabled={loading}
+          className={`mt-auto inline-flex w-full items-center justify-center gap-2 rounded-[22px] border px-4 py-3.5 text-sm font-semibold transition-all disabled:cursor-not-allowed disabled:opacity-55 ${
+            isLightMode
+              ? 'border-[#cfd9ec] bg-[linear-gradient(180deg,#ffffff_0%,#f0f5fc_100%)] text-[#243043] hover:brightness-[1.02]'
+              : 'border-[#d1b6ff]/26 bg-[linear-gradient(180deg,rgba(255,255,255,0.14),rgba(255,255,255,0.07))] text-white hover:bg-white/[0.15]'
+          }`}
+        >
+          {loading ? (
+            <>
+              <svg
+                className="h-[18px] w-[18px] animate-spin"
+                viewBox="0 0 24 24"
+                fill="none"
+              >
+                <circle
+                  cx="12"
+                  cy="12"
+                  r="9"
+                  stroke="currentColor"
+                  strokeWidth="2.6"
+                  className="opacity-25"
+                />
+                <path
+                  d="M21 12a9 9 0 00-9-9"
+                  stroke="currentColor"
+                  strokeWidth="2.6"
+                  strokeLinecap="round"
+                />
+              </svg>
+              Connecting...
+            </>
+          ) : (
+            <>
+              <FingerprintIcon className="h-[18px] w-[18px]" />
+              Continue with Passkey
+            </>
+          )}
+        </button>
+
+        <p className={`mt-3 text-center text-[11px] leading-5 ${brandTextTone}`}>
+          The connector mirrors your current INJ Pass day or night theme automatically.
+        </p>
+      </div>
     </div>
   );
 }

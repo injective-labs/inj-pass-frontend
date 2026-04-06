@@ -1,20 +1,10 @@
 import type { Metadata, Viewport } from "next";
-import { Inter, Space_Grotesk } from "next/font/google";
 import "./globals.css";
 import { WalletProvider } from "@/contexts/WalletContext";
 import { PinProvider } from "@/contexts/PinContext";
+import { ThemeProvider } from "@/contexts/ThemeContext";
 import Script from "next/script";
 import { SidebarOverlay, GeometricShapes } from "./components/LayoutClient";
-
-const inter = Inter({
-  subsets: ["latin"],
-  variable: "--font-inter",
-});
-
-const spaceGrotesk = Space_Grotesk({
-  subsets: ["latin"],
-  variable: "--font-space-grotesk",
-});
 
 export const metadata: Metadata = {
   title: "INJ Pass",
@@ -46,28 +36,57 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <head>
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link href="https://api.fontshare.com/v2/css?f[]=general-sans@400,500,600,700&display=swap" rel="stylesheet" />
         <Script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js" strategy="beforeInteractive" />
+        <Script id="theme-init" strategy="beforeInteractive">
+          {`
+            try {
+              var storedTheme = localStorage.getItem('injpass_theme_mode');
+              var hour = new Date().getHours();
+              var fallbackTheme = hour >= 7 && hour < 19 ? 'light' : 'dark';
+              var theme = storedTheme === 'light' || storedTheme === 'dark'
+                ? storedTheme
+                : fallbackTheme;
+
+              document.documentElement.dataset.theme = theme;
+              document.documentElement.style.colorScheme = theme;
+
+              var applyBodyTheme = function () {
+                if (document.body) {
+                  document.body.dataset.theme = theme;
+                }
+              };
+
+              applyBodyTheme();
+
+              if (!document.body) {
+                document.addEventListener('DOMContentLoaded', applyBodyTheme, { once: true });
+              }
+            } catch (error) {}
+          `}
+        </Script>
       </head>
-      <body className={`${inter.variable} ${spaceGrotesk.variable} antialiased`}>
-        {/* Sidebar Overlay */}
-        <SidebarOverlay />
-        
-        {/* Sidebar Container */}
-        <div className="sidebar-container">
-          {/* Sidebar content will be injected here */}
-        </div>
+      <body className="antialiased">
+        <ThemeProvider>
+          {/* Sidebar Overlay */}
+          <SidebarOverlay />
+          
+          {/* Sidebar Container */}
+          <div className="sidebar-container">
+            {/* Sidebar content will be injected here */}
+          </div>
 
-        {/* Animated Background and Geometric Shapes */}
-        <GeometricShapes />
+          {/* Animated Background and Geometric Shapes */}
+          <GeometricShapes />
 
-        <PinProvider>
-          <WalletProvider>{children}</WalletProvider>
-        </PinProvider>
+          <PinProvider>
+            <WalletProvider>{children}</WalletProvider>
+          </PinProvider>
+        </ThemeProvider>
       </body>
     </html>
   );

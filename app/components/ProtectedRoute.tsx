@@ -25,7 +25,7 @@ export default function ProtectedRoute({ children, loadingComponent }: Protected
   }, [isUnlocked, address, isCheckingSession, router]);
 
   if (isCheckingSession) {
-    return loadingComponent || <LoadingSpinner />;
+    return loadingComponent || <LoadingSpinner progress={42} statusLabel="Checking wallet access" />;
   }
 
   if (!isUnlocked || !address) {

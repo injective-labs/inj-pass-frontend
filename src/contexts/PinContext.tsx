@@ -36,7 +36,7 @@ async function hashPin(pin: string): Promise<string> {
 export function PinProvider({ children }: { children: ReactNode }) {
   const [hasPin, setHasPin] = useState(false);
   const [isPinLocked, setIsPinLocked] = useState(false);
-  const [autoLockMinutes, setAutoLockMinutesState] = useState(5); // Default: 5 minutes PIN-free window
+  const [autoLockMinutes, setAutoLockMinutesState] = useState(0); // Default: disabled
   const [defaultAuthMethod, setDefaultAuthMethodState] = useState<'passkey' | 'pin'>('passkey');
   const [lastActivity, setLastActivity] = useState<number>(Date.now());
 

@@ -1,144 +1,263 @@
 /**
- * Tunnel Background Animation
- * Creates a deep, immersive tunnel effect with particles moving forward
+ * Ambient background animation
+ * Replaces the previous tunnel effect with a calmer field of drifting particles
+ * and low-contrast brand haze, so the motion supports the page instead of
+ * competing with the content.
  */
 
 'use client';
 
 import { useEffect, useRef } from 'react';
 
-export default function TunnelBackground() {
+type HazeOrb = {
+  x: number;
+  y: number;
+  radius: number;
+  color: string;
+  alpha: number;
+  driftX: number;
+  driftY: number;
+  phase: number;
+  speed: number;
+};
+
+class AmbientParticle {
+  x: number;
+  y: number;
+  radius: number;
+  alpha: number;
+  speedX: number;
+  speedY: number;
+  twinkle: number;
+  twinkleSpeed: number;
+  mode: 'dark' | 'light';
+
+  constructor(width: number, height: number, mode: 'dark' | 'light') {
+    this.mode = mode;
+    this.x = Math.random() * width;
+    this.y = Math.random() * height;
+    this.radius = Math.random() * 1.8 + 0.6;
+    this.alpha = Math.random() * 0.26 + 0.06;
+    this.speedX = (Math.random() - 0.5) * 0.12;
+    this.speedY = (Math.random() - 0.5) * 0.12;
+    this.twinkle = Math.random() * Math.PI * 2;
+    this.twinkleSpeed = Math.random() * 0.012 + 0.004;
+  }
+
+  update(width: number, height: number) {
+    this.x += this.speedX;
+    this.y += this.speedY;
+    this.twinkle += this.twinkleSpeed;
+
+    if (this.x < -20) this.x = width + 20;
+    if (this.x > width + 20) this.x = -20;
+    if (this.y < -20) this.y = height + 20;
+    if (this.y > height + 20) this.y = -20;
+  }
+
+  draw(ctx: CanvasRenderingContext2D) {
+    const opacity = this.alpha * (0.72 + Math.sin(this.twinkle) * 0.28);
+    const gradient = ctx.createRadialGradient(
+      this.x,
+      this.y,
+      0,
+      this.x,
+      this.y,
+      this.radius * 6
+    );
+
+    gradient.addColorStop(
+      0,
+      this.mode === 'light'
+        ? `rgba(114, 82, 184, ${opacity * 0.34})`
+        : `rgba(255,255,255,${opacity})`
+    );
+    gradient.addColorStop(
+      0.35,
+      this.mode === 'light'
+        ? `rgba(233, 103, 161, ${opacity * 0.16})`
+        : `rgba(220,198,255,${opacity * 0.38})`
+    );
+    gradient.addColorStop(1, 'rgba(255,255,255,0)');
+
+    ctx.beginPath();
+    ctx.fillStyle = gradient;
+    ctx.arc(this.x, this.y, this.radius * 6, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
+export default function TunnelBackground({
+  mode = 'dark',
+  className = 'fixed inset-0 z-0',
+}: {
+  mode?: 'dark' | 'light';
+  className?: string;
+}) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
+    const isLightMode = mode === 'light';
     const canvas = canvasRef.current;
     if (!canvas) return;
 
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    // Set canvas size
+    let width = 0;
+    let height = 0;
+    let dpr = 1;
+    let animationId = 0;
+    let particles: AmbientParticle[] = [];
+
+    const hazeOrbs: HazeOrb[] = isLightMode
+      ? [
+          {
+            x: 0.18,
+            y: 0.2,
+            radius: 320,
+            color: '144, 105, 255',
+            alpha: 0.09,
+            driftX: 18,
+            driftY: -10,
+            phase: 0.4,
+            speed: 0.00022,
+          },
+          {
+            x: 0.78,
+            y: 0.18,
+            radius: 260,
+            color: '255, 124, 172',
+            alpha: 0.08,
+            driftX: -16,
+            driftY: 12,
+            phase: 1.6,
+            speed: 0.0002,
+          },
+          {
+            x: 0.56,
+            y: 0.86,
+            radius: 340,
+            color: '119, 106, 255',
+            alpha: 0.06,
+            driftX: 12,
+            driftY: -18,
+            phase: 2.2,
+            speed: 0.00016,
+          },
+        ]
+      : [
+          {
+            x: 0.18,
+            y: 0.22,
+            radius: 320,
+            color: '124, 68, 255',
+            alpha: 0.12,
+            driftX: 18,
+            driftY: -10,
+            phase: 0.4,
+            speed: 0.00022,
+          },
+          {
+            x: 0.78,
+            y: 0.2,
+            radius: 280,
+            color: '255, 92, 156',
+            alpha: 0.1,
+            driftX: -16,
+            driftY: 12,
+            phase: 1.6,
+            speed: 0.0002,
+          },
+          {
+            x: 0.56,
+            y: 0.84,
+            radius: 360,
+            color: '93, 76, 255',
+            alpha: 0.08,
+            driftX: 12,
+            driftY: -18,
+            phase: 2.2,
+            speed: 0.00016,
+          },
+        ];
+
+    const buildParticles = () => {
+      const count = Math.max(28, Math.min(60, Math.floor((width * height) / 28000)));
+      particles = Array.from(
+        { length: count },
+        () => new AmbientParticle(width, height, mode)
+      );
+    };
+
     const resizeCanvas = () => {
-      canvas.width = window.innerWidth;
-      canvas.height = window.innerHeight;
+      dpr = Math.min(window.devicePixelRatio || 1, 1.6);
+      width = window.innerWidth;
+      height = window.innerHeight;
+
+      canvas.width = Math.floor(width * dpr);
+      canvas.height = Math.floor(height * dpr);
+      canvas.style.width = `${width}px`;
+      canvas.style.height = `${height}px`;
+
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      buildParticles();
     };
-    resizeCanvas();
-    window.addEventListener('resize', resizeCanvas);
 
-    // Particle system
-    class Particle {
-      x: number;
-      y: number;
-      z: number;
-      prevZ: number;
+    const drawHaze = (time: number) => {
+      hazeOrbs.forEach((orb) => {
+        const wobble = time * orb.speed + orb.phase;
+        const centerX = width * orb.x + Math.sin(wobble) * orb.driftX;
+        const centerY = height * orb.y + Math.cos(wobble * 1.1) * orb.driftY;
+        const radius = orb.radius + Math.sin(wobble * 0.9) * 16;
+        const gradient = ctx.createRadialGradient(
+          centerX,
+          centerY,
+          0,
+          centerX,
+          centerY,
+          radius
+        );
 
-      constructor() {
-        this.x = Math.random() * 2 - 1; // -1 to 1
-        this.y = Math.random() * 2 - 1; // -1 to 1
-        this.z = Math.random();
-        this.prevZ = this.z;
-      }
+        gradient.addColorStop(0, `rgba(${orb.color}, ${orb.alpha})`);
+        gradient.addColorStop(0.5, `rgba(${orb.color}, ${orb.alpha * 0.36})`);
+        gradient.addColorStop(1, 'rgba(0,0,0,0)');
 
-      update(speed: number) {
-        this.prevZ = this.z;
-        this.z -= speed;
-        
-        // Reset particle when it passes camera
-        if (this.z < 0.001) {
-          this.x = Math.random() * 2 - 1;
-          this.y = Math.random() * 2 - 1;
-          this.z = 1;
-          this.prevZ = this.z;
-        }
-      }
-
-      draw(ctx: CanvasRenderingContext2D, width: number, height: number) {
-        // Project 3D position to 2D screen
-        const scale = 1000;
-        const x = (this.x / this.z) * scale + width / 2;
-        const y = (this.y / this.z) * scale + height / 2;
-        const prevX = (this.x / this.prevZ) * scale + width / 2;
-        const prevY = (this.y / this.prevZ) * scale + height / 2;
-
-        // Calculate size and opacity based on depth
-        const size = (1 - this.z) * 3;
-        const opacity = Math.min(1 - this.z, 0.8);
-
-        // Draw line from previous position (creates trail effect)
         ctx.beginPath();
-        ctx.moveTo(prevX, prevY);
-        ctx.lineTo(x, y);
-        
-        // Create gradient for depth effect
-        const gradient = ctx.createLinearGradient(prevX, prevY, x, y);
-        gradient.addColorStop(0, `rgba(100, 58, 249, ${opacity * 0.3})`); // Purple start
-        gradient.addColorStop(1, `rgba(200, 180, 255, ${opacity})`); // Light purple end
-        
-        ctx.strokeStyle = gradient;
-        ctx.lineWidth = Math.max(size, 1);
-        ctx.stroke();
-
-        // Draw particle dot at current position
-        ctx.beginPath();
-        ctx.arc(x, y, size / 2, 0, Math.PI * 2);
-        ctx.fillStyle = `rgba(255, 255, 255, ${opacity})`;
+        ctx.fillStyle = gradient;
+        ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
         ctx.fill();
-      }
-    }
-
-    // Create particles
-    const particleCount = 800;
-    const particles: Particle[] = [];
-    for (let i = 0; i < particleCount; i++) {
-      particles.push(new Particle());
-    }
-
-    // Animation variables
-    let speed = 0.003;
-    let targetSpeed = 0.003;
-
-    // Mouse interaction
-    const handleMouseMove = (e: MouseEvent) => {
-      const mouseX = (e.clientX / window.innerWidth - 0.5) * 2;
-      const mouseY = (e.clientY / window.innerHeight - 0.5) * 2;
-      const distance = Math.sqrt(mouseX * mouseX + mouseY * mouseY);
-      targetSpeed = 0.003 + distance * 0.004;
+      });
     };
-    window.addEventListener('mousemove', handleMouseMove);
 
-    // Animation loop
-    let animationId: number;
-    const animate = () => {
-      // Smooth speed transition
-      speed += (targetSpeed - speed) * 0.05;
+    const animate = (time: number) => {
+      ctx.clearRect(0, 0, width, height);
 
-      // Clear canvas with fade effect for trails
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.15)';
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      // Gentle dark veil keeps the background cohesive without feeling flat.
+      ctx.fillStyle = isLightMode
+        ? 'rgb(244, 247, 251)'
+        : 'rgba(3, 3, 4, 0.18)';
+      ctx.fillRect(0, 0, width, height);
 
-      // Update and draw particles
-      particles.forEach(particle => {
-        particle.update(speed);
-        particle.draw(ctx, canvas.width, canvas.height);
+      drawHaze(time);
+
+      particles.forEach((particle) => {
+        particle.update(width, height);
+        particle.draw(ctx);
       });
 
-      animationId = requestAnimationFrame(animate);
+      animationId = window.requestAnimationFrame(animate);
     };
-    animate();
 
-    // Cleanup
+    resizeCanvas();
+    window.addEventListener('resize', resizeCanvas);
+    animationId = window.requestAnimationFrame(animate);
+
     return () => {
       window.removeEventListener('resize', resizeCanvas);
-      window.removeEventListener('mousemove', handleMouseMove);
-      cancelAnimationFrame(animationId);
+      window.cancelAnimationFrame(animationId);
     };
-  }, []);
+  }, [mode]);
 
-  return (
-    <canvas
-      ref={canvasRef}
-      className="fixed inset-0 z-0"
-      style={{ background: 'black' }}
-    />
-  );
+  return <canvas ref={canvasRef} className={className} aria-hidden="true" />;
 }

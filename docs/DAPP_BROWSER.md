@@ -61,13 +61,7 @@ Injective Network
 
 ## Supported DApps
 
-Currently featured DApps:
-- **Helix** - Decentralized Derivatives Trading
-- **INJ Ecosystem** - Explore the Injective Ecosystem
-- **Astroport** - AMM & DEX Protocol
-- **Talis** - NFT Marketplace
-- **Injective Hub** - Governance & Staking
-- **DojoSwap** - Swap & Earn Rewards
+The Discover page no longer uses a hard-coded DApp list. Tabs and DApps are loaded from the backend Redis directory managed in the admin dashboard.
 
 ## Usage
 
@@ -82,23 +76,12 @@ Currently featured DApps:
 
 ### For Developers
 
-To add a new DApp to the Discover page:
+To add or edit a DApp:
 
-```typescript
-// In app/discover/page.tsx
-const dapps: DApp[] = [
-  {
-    id: '1',
-    name: 'Your DApp Name',
-    description: 'Short description',
-    icon: 'https://yourdapp.com/favicon.ico',
-    category: 'defi', // 'defi' | 'nft' | 'game' | 'social' | 'dao'
-    url: 'https://yourdapp.com',
-    featured: true // Set to true for featured section
-  },
-  // ... other dapps
-];
-```
+1. Open the `inj-dashboard` admin panel
+2. Create tabs in `Manage Tabs`
+3. Create or edit DApps in the `DApps` module
+4. The frontend will fetch the latest tabs and DApps from `/api/dapps`
 
 ## Security Features
 

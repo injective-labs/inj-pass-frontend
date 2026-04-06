@@ -106,7 +106,7 @@ export default function HistoryPage() {
         // Transform Cosmos transactions to our UI format
         const cosmosTransactions: Transaction[] = cosmosTxHistory.map((tx) => {
           // Check if this is a swap transaction
-          const isSwapTx = (tx as any).isSwap === true;
+          const isSwapTx = (tx as { isSwap?: boolean }).isSwap === true;
           
           // Determine transaction type based on address
           const cosmosAddress = getInjectiveAddress(address);
@@ -211,7 +211,12 @@ export default function HistoryPage() {
   };
 
   if (isCheckingSession || isLoading) {
-    return <LoadingSpinner />;
+    return (
+      <LoadingSpinner
+        progress={isCheckingSession ? 42 : 82}
+        statusLabel={isCheckingSession ? 'Checking wallet session' : 'Loading recent activity'}
+      />
+    );
   }
 
   if (!isUnlocked) {

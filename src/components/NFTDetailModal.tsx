@@ -7,7 +7,6 @@
 'use client';
 
 import { NFT } from '@/services/nft';
-import Image from 'next/image';
 import { useState } from 'react';
 import { ACTIVE_NETWORK } from '@/config/network';
 
@@ -50,11 +49,10 @@ export default function NFTDetailModal({ nft, onClose }: NFTDetailModalProps) {
           {/* NFT Image */}
           <div className="relative w-full aspect-square bg-white/5">
             {nft.image && !imageError ? (
-              <Image
+              <img
                 src={nft.image}
                 alt={nft.name}
-                fill
-                className="object-cover"
+                className="h-full w-full object-cover"
                 onError={() => setImageError(true)}
               />
             ) : (

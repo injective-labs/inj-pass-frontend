@@ -68,6 +68,7 @@ export interface NFTMetadata {
   name?: string;
   description?: string;
   image?: string;
+  edition?: number;
   attributes?: Array<{
     trait_type: string;
     value: string | number;
@@ -87,6 +88,43 @@ export interface NFT {
   metadata?: NFTMetadata;
   collection: string;
   owner: Address;
+}
+
+interface BlockscoutTokenInstance {
+  id?: string;
+  image_url?: string | null;
+  media_url?: string | null;
+  metadata?: NFTMetadata | null;
+  owner?: {
+    hash?: string;
+  } | null;
+  token?: {
+    name?: string | null;
+  } | null;
+}
+
+interface BlockscoutTokenInstancesResponse {
+  items?: BlockscoutTokenInstance[];
+}
+
+function extractTokenIdFromBlockscoutItem(item: BlockscoutTokenInstance): string | null {
+  const edition = item.metadata?.edition;
+  if (typeof edition === 'number' && Number.isFinite(edition)) {
+    return String(edition);
+  }
+
+  const nameMatch = item.metadata?.name?.match(/#(\d+)$/);
+  if (nameMatch?.[1]) {
+    return nameMatch[1];
+  }
+
+  const imageLike = item.metadata?.image || item.image_url || item.media_url || '';
+  const imageMatch = imageLike.match(/\/(\d+)\.(png|jpg|jpeg|webp|gif)(\?.*)?$/i);
+  if (imageMatch?.[1]) {
+    return imageMatch[1];
+  }
+
+  return null;
 }
 
 /**
@@ -127,6 +165,56 @@ async function fetchMetadata(tokenURI: string): Promise<NFTMetadata | null> {
   } catch (error) {
     console.error('Failed to fetch NFT metadata:', error);
     return null;
+  }
+}
+
+async function getNFTsFromBlockscout(
+  contractAddress: Address,
+  ownerAddress: Address,
+): Promise<NFT[]> {
+  try {
+    const apiUrl = NETWORK_CONFIG.isMainnet
+      ? NETWORK_CONFIG.mainnet.explorerApiUrl
+      : NETWORK_CONFIG.testnet.explorerApiUrl;
+
+    const url = `${apiUrl}/api/v2/tokens/${contractAddress}/instances?holder_address_hash=${ownerAddress}`;
+    const response = await fetch(url);
+    if (!response.ok) {
+      console.warn('[NFT] Blockscout fallback request failed:', response.status);
+      return [];
+    }
+
+    const data = (await response.json()) as BlockscoutTokenInstancesResponse;
+    const items = data.items || [];
+
+    return items
+      .map((item) => {
+        const tokenId = extractTokenIdFromBlockscoutItem(item);
+        if (!tokenId) {
+          return null;
+        }
+
+        const metadata = item.metadata || undefined;
+        const name = metadata?.name || `${item.token?.name || 'NFT'} #${tokenId}`;
+        const image = metadata?.image?.startsWith('ipfs://')
+          ? metadata.image.replace('ipfs://', NETWORK_CONFIG.ipfsGateway)
+          : (metadata?.image || item.image_url || undefined);
+
+        return {
+          contractAddress,
+          tokenId,
+          name,
+          description: metadata?.description,
+          image,
+          metadata,
+          collection: item.token?.name || 'Unknown',
+          owner: ((item.owner?.hash as Address) || ownerAddress),
+        } as NFT;
+      })
+      .filter((nft): nft is NFT => nft !== null);
+  } catch (error) {
+    console.error('[NFT] Blockscout fallback failed:', error);
+    return [];
   }
 }
 
@@ -174,6 +262,11 @@ export async function getTokenByIndex(
 
     return tokenId;
   } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (message.toLowerCase().includes('execution reverted')) {
+      console.warn('[NFT] tokenOfOwnerByIndex not available on this contract, will use fallback indexer data.');
+      return null;
+    }
     console.error(`Failed to get token at index ${index}:`, error);
     return null;
   }
@@ -284,6 +377,16 @@ export async function getUserNFTs(
 
     console.log('[NFT] Token IDs:', tokenIds.map(id => id.toString()));
 
+    // Some ERC-721 contracts do not implement ERC721Enumerable.
+    // If tokenOfOwnerByIndex fails but balance > 0, fallback to Blockscout indexer data.
+    if (tokenIds.length === 0 && balance > 0) {
+      const fallbackNFTs = await getNFTsFromBlockscout(contractAddress, ownerAddress);
+      console.log('[NFT] Fallback NFTs via Blockscout:', fallbackNFTs.length);
+      if (fallbackNFTs.length > 0) {
+        return fallbackNFTs;
+      }
+    }
+
     // Get details for all tokens (in parallel, but limit concurrency)
     const nfts: NFT[] = [];
     const batchSize = 5; // Process 5 at a time to avoid rate limits
@@ -309,4 +412,13 @@ export async function getUserNFTs(
  */
 export async function getN1NJ4NFTs(ownerAddress: Address): Promise<NFT[]> {
   return getUserNFTs(N1NJ4_CONTRACT_ADDRESS, ownerAddress);
+}
+
+/**
+ * Check whether a wallet owns at least one N1NJ4 NFT.
+ * Uses the same core rule as NFT-verify: balanceOf(owner) > 0.
+ */
+export async function hasN1NJ4NFT(ownerAddress: Address): Promise<boolean> {
+  const balance = await getNFTBalance(N1NJ4_CONTRACT_ADDRESS, ownerAddress);
+  return balance > 0;
 }
