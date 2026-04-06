@@ -2223,7 +2223,7 @@ export default function AgentsPage() {
                   }`}
                   disabled={true}
                 >
-                  Invite +5
+                  Invite
                 </button>
                 {activeConv?.sandboxAddress && (
                   <button
