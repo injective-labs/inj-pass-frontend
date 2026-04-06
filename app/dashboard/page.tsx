@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { usePin } from '@/contexts/PinContext';
 import { useWallet } from '@/contexts/WalletContext';
-import { estimateGas, getBalance as getChainBalance, getCosmosTxHistory, getTxHistory, sendTransaction } from '@/wallet/chain';
+import { estimateGas, getBalance as getChainBalance, getCosmosTxHistory, getTxHistory, sendTransaction, waitForTransaction } from '@/wallet/chain';
 import { getBalance as getNinjaBalanceFromBackend } from '@/services/points';
 import { Balance, GasEstimate, INJECTIVE_MAINNET } from '@/types/chain';
 import { getTokenPrice } from '@/services/price';
@@ -104,6 +104,25 @@ const MORE_CHANCE_PLANS: Array<{
 
 const CHANCE_CONTRACT_ADDRESS = (process.env.NEXT_PUBLIC_CHANCE_CONTRACT_ADDRESS || '0x258A549Be00FaDC2777266eA6eC87Deb2f650c3c') as Address;
 const CHANCE_MANAGER_ABI = [
+  {
+    type: 'function',
+    name: 'plans',
+    stateMutability: 'view',
+    inputs: [{ name: '', type: 'uint8' }],
+    outputs: [
+      { name: 'priceWei', type: 'uint256' },
+      { name: 'chances', type: 'uint32' },
+      { name: 'cooldownSeconds', type: 'uint32' },
+      { name: 'active', type: 'bool' },
+    ],
+  },
+  {
+    type: 'function',
+    name: 'chanceCooldownEndsAt',
+    stateMutability: 'view',
+    inputs: [{ name: '', type: 'address' }],
+    outputs: [{ name: '', type: 'uint64' }],
+  },
   {
     type: 'function',
     name: 'buyChance',
@@ -728,29 +747,23 @@ export default function DashboardPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isUnlocked, address, isCheckingSession, keystore, router, walletNetworkMode]);
 
+  const syncNinjaBalance = useCallback(async () => {
+    if (!address || walletNetworkMode !== 'mainnet') {
+      setNinjaBalance(0);
+      return;
+    }
+
+    try {
+      const balance = await getNinjaBalanceFromBackend();
+      const safeBalance = Number.isFinite(balance) ? balance : 0;
+      setNinjaBalance(safeBalance);
+    } catch (error) {
+      console.error('Failed to load NINJA balance from backend:', error);
+      setNinjaBalance(0);
+    }
+  }, [address, walletNetworkMode]);
+
   useEffect(() => {
-    let cancelled = false;
-
-    const syncNinjaBalance = async () => {
-      if (!address || walletNetworkMode !== 'mainnet') {
-        if (!cancelled) setNinjaBalance(0);
-        return;
-      }
-
-      try {
-        const balance = await getNinjaBalanceFromBackend();
-        const safeBalance = Number.isFinite(balance) ? balance : 0;
-        if (!cancelled) {
-          setNinjaBalance(safeBalance);
-        }
-      } catch (error) {
-        console.error('Failed to load NINJA balance from backend:', error);
-        if (!cancelled) {
-          setNinjaBalance(0);
-        }
-      }
-    };
-
     void syncNinjaBalance();
 
     const interval = window.setInterval(() => {
@@ -778,13 +791,12 @@ export default function DashboardPage() {
     document.addEventListener('visibilitychange', handleVisibilityChange);
 
     return () => {
-      cancelled = true;
       window.clearInterval(interval);
       window.removeEventListener(NINJA_BALANCE_EVENT, handleNinjaBalanceUpdate);
       window.removeEventListener('focus', handleWindowFocus);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [address, walletNetworkMode]);
+  }, [syncNinjaBalance]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -973,7 +985,13 @@ export default function DashboardPage() {
     }
   }, [cardPanelTab, cardScanState, startCardScanner, walletPanel]);
 
-  const loadData = useCallback(async ({ background = false }: { background?: boolean } = {}) => {
+  const loadData = useCallback(async ({
+    background = false,
+    keepRefreshing = false,
+  }: {
+    background?: boolean;
+    keepRefreshing?: boolean;
+  } = {}) => {
     if (!address) return;
 
     try {
@@ -1006,7 +1024,9 @@ export default function DashboardPage() {
       console.error('Failed to load data:', error);
     } finally {
       setLoading(false);
-      setRefreshing(false);
+      if (!keepRefreshing) {
+        setRefreshing(false);
+      }
       setNetworkSwitching(false);
     }
   }, [address, currentNetworkMeta.chain, ninjaBalance, walletNetworkMode]);
@@ -1105,17 +1125,29 @@ export default function DashboardPage() {
 
   const handleRefresh = () => {
     setRefreshing(true);
-    void loadData({ background: true });
-    
-    // Also refresh staking info if on DeFi tab
-    if (assetTab === 'defi') {
-      loadStakingInfo();
-    }
-    
-    // Also refresh NFTs if on NFTs tab
-    if (assetTab === 'nfts') {
-      loadNFTs();
-    }
+
+    void (async () => {
+      try {
+        const refreshTasks: Array<Promise<unknown>> = [
+          loadData({ background: true, keepRefreshing: true }),
+          syncNinjaBalance(),
+        ];
+
+        // Also refresh staking info if on DeFi tab
+        if (assetTab === 'defi') {
+          refreshTasks.push(loadStakingInfo());
+        }
+
+        // Also refresh NFTs if on NFTs tab
+        if (assetTab === 'nfts') {
+          refreshTasks.push(loadNFTs());
+        }
+
+        await Promise.all(refreshTasks);
+      } finally {
+        setRefreshing(false);
+      }
+    })();
   };
 
   const toggleWalletPanel = (panel: Exclude<WalletPanel, 'overview'>) => {
@@ -1469,6 +1501,39 @@ export default function DashboardPage() {
     setChanceTxHash('');
 
     try {
+      const chanceClient = createPublicClient({
+        transport: http(currentNetworkMeta.chain.rpcUrl),
+      });
+
+      const [planOnChain, cooldownEndsAt] = await Promise.all([
+        chanceClient.readContract({
+          address: CHANCE_CONTRACT_ADDRESS,
+          abi: CHANCE_MANAGER_ABI,
+          functionName: 'plans',
+          args: [selectedPlan.planId],
+        }),
+        chanceClient.readContract({
+          address: CHANCE_CONTRACT_ADDRESS,
+          abi: CHANCE_MANAGER_ABI,
+          functionName: 'chanceCooldownEndsAt',
+          args: [address as Address],
+        }),
+      ]);
+
+      const [onChainPriceWei, , , onChainActive] = planOnChain;
+      if (!onChainActive) {
+        setChanceError('Selected chance plan is not active on-chain right now.');
+        return;
+      }
+
+      const nowSec = Math.floor(Date.now() / 1000);
+      const safeCooldownEndsAt = Number(cooldownEndsAt);
+      if (Number.isFinite(safeCooldownEndsAt) && safeCooldownEndsAt > nowSec) {
+        const remainingSec = safeCooldownEndsAt - nowSec;
+        setChanceError(`Chance is cooling down. Try again in ${remainingSec}s.`);
+        return;
+      }
+
       const clientRef = keccak256(stringToHex(`chance-${selectedPlan.id}-${Date.now()}`));
       const data = encodeFunctionData({
         abi: CHANCE_MANAGER_ABI,
@@ -1479,13 +1544,20 @@ export default function DashboardPage() {
       const hash = await sendTransaction(
         privateKey,
         CHANCE_CONTRACT_ADDRESS,
-        formatEther(selectedPlan.priceWei),
+        formatEther(onChainPriceWei),
         data,
         currentNetworkMeta.chain,
       );
 
       setChanceTxHash(hash);
       resetTxAuth();
+
+      // Wait for on-chain confirmation so downstream profile sync does not read stale chance data.
+      await waitForTransaction(hash, currentNetworkMeta.chain, 1);
+
+      // Give backend worker a short window to ingest ChancePurchased and update profile.
+      await new Promise((resolve) => window.setTimeout(resolve, 1600));
+
       window.dispatchEvent(new CustomEvent(CHANCE_PURCHASE_SUBMITTED_EVENT, {
         detail: {
           txHash: hash,

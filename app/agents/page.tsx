@@ -1493,7 +1493,7 @@ export default function AgentsPage() {
                         No conversations yet
                       </div>
                       <h2 className={`mt-3 text-[23px] font-bold tracking-tight sm:text-[25px] ${isLight ? 'text-slate-900' : 'text-white'}`}>
-                        <span className="lambda-gradient">λ</span> Agent
+                        <span className="lambda-gradient">λ</span> AgentOS
                       </h2>
                       <p className={`mt-2 max-w-xl text-[12px] leading-5 sm:text-[13px] ${isLight ? 'text-slate-500' : 'text-gray-400'}`}>
                         AI-powered wallet assistant for balances, swaps, transfers, and quick Injective checks.
@@ -2230,8 +2230,9 @@ export default function AgentsPage() {
                       ? 'border-violet-200/90 bg-[linear-gradient(135deg,rgba(139,92,246,0.10),rgba(59,130,246,0.06))] text-violet-700 hover:border-violet-300 hover:bg-[linear-gradient(135deg,rgba(139,92,246,0.14),rgba(59,130,246,0.10))]'
                       : 'border-[#6e5dff]/25 bg-gradient-to-r from-[#4c3af9]/18 via-white/[0.04] to-transparent text-white hover:border-[#8b7bff]/40 hover:bg-[#4c3af9]/20'
                   }`}
+                  disabled={true}
                 >
-                  Invite +1,000
+                  Invite +5
                 </button>
                 {activeConv?.sandboxAddress && (
                   <button

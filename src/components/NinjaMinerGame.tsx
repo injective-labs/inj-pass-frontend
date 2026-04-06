@@ -39,6 +39,8 @@ const SESSION_DURATION_MS = 5_000;
 const COOLDOWN_MS = 8 * 60 * 60 * 1000;
 const CHANCE_COOLDOWN_MS = 20_000;
 const SESSION_MAX_EARNED = 3;
+const CHANCE_SYNC_INITIAL_DELAY_MS = 1_800;
+const CHANCE_SYNC_MAX_ATTEMPTS = 8;
 
 function roundTo(value: number, digits = 2) {
   return Number(value.toFixed(digits));
@@ -221,7 +223,9 @@ export default function NinjaMinerGame({ walletAddress, onOpenMoreChance }: Ninj
     const sleep = (ms: number) => new Promise((resolve) => window.setTimeout(resolve, ms));
 
     const syncChanceFromProfile = async () => {
-      for (let attempt = 0; attempt < 8; attempt += 1) {
+      await sleep(CHANCE_SYNC_INITIAL_DELAY_MS);
+
+      for (let attempt = 0; attempt < CHANCE_SYNC_MAX_ATTEMPTS; attempt += 1) {
         try {
           const profile = await getUserProfile();
           if (profile) {
@@ -253,7 +257,8 @@ export default function NinjaMinerGame({ walletAddress, onOpenMoreChance }: Ninj
           console.warn('[NinjaMiner] Failed to refresh profile after chance purchase:', error);
         }
 
-        await sleep(1500);
+        const retryDelayMs = Math.min(1_500 + attempt * 550, 4_500);
+        await sleep(retryDelayMs);
       }
     };
 
@@ -374,12 +379,6 @@ export default function NinjaMinerGame({ walletAddress, onOpenMoreChance }: Ninj
       ? (isTapCoolingDown ? tapCooldownProgress : 100)
       : (isChanceCoolingDown ? chanceCooldownProgress : 100);
   const isLight = theme === 'light';
-
-  const modeStatusLabel = playMode === 'tap'
-    ? (isTapCoolingDown ? `Tap cooldown ${formatDuration(tapCooldownRemainingMs)}` : 'Tap ready')
-    : (chanceAvailable
-      ? (isChanceCoolingDown ? `Chance cooldown ${formatDuration(chanceCooldownRemainingMs)}` : 'Chance ready')
-      : 'No chance left');
 
   const progressLabel = isActive
     ? `Session ${(activeRemainingMs / 1000).toFixed(1)}s`
@@ -515,7 +514,7 @@ export default function NinjaMinerGame({ walletAddress, onOpenMoreChance }: Ninj
                   : (isLight ? 'text-[#5f6f8d] hover:text-[#1f2a44]' : 'text-gray-300 hover:text-white')
               }`}
             >
-              Tap
+              FREE
             </button>
             <button
               type="button"
@@ -527,7 +526,7 @@ export default function NinjaMinerGame({ walletAddress, onOpenMoreChance }: Ninj
                   : (isLight ? 'text-[#5f6f8d] hover:text-[#1f2a44]' : 'text-gray-300 hover:text-white')
               }`}
             >
-              Chance {normalizedState.chanceRemaining}
+              TAP
             </button>
           </div>
         </div>
@@ -542,7 +541,7 @@ export default function NinjaMinerGame({ walletAddress, onOpenMoreChance }: Ninj
               : 'border-white/10 bg-white/[0.05] text-gray-300 hover:bg-white/[0.08] hover:text-white'
           }`}
         >
-          More Chance
+          MORE CHANCE {normalizedState.chanceRemaining}
         </button>
         <div className={`rounded-full border px-3 py-1.5 text-[12px] font-mono font-semibold ${
           isLight ? 'border-slate-300/80 bg-white/88 text-slate-900' : 'border-white/10 bg-white/[0.05] text-white'
