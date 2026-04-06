@@ -20,12 +20,7 @@ import { getInviteCode, getInvitees, getStats } from '@/services/referral';
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
-type Model =
-  | 'claude-sonnet-4-5'
-  | 'claude-sonnet-4-6'
-  | 'gemini-3.1-pro-preview'
-  | 'gpt-5.2'
-  | 'deepseek-v3.2';
+type Model = 'gpt-5.2';
 
 /** Display message shown in the chat UI */
 interface ChatMessage {
@@ -86,11 +81,7 @@ type AssetMentionSymbol = 'INJ' | 'USDC' | 'LAM' | 'USDT';
 type DAppMentionName = 'Omisper' | 'Hash Mahjong';
 
 const MODEL_OPTIONS: { value: Model; label: string }[] = [
-  { value: 'claude-sonnet-4-6',    label: 'Claude Sonnet 4.6' },
-  { value: 'claude-sonnet-4-5',    label: 'Claude Sonnet 4.5' },
-  { value: 'gemini-3.1-pro-preview', label: 'Gemini 3.1 Pro' },
-  { value: 'gpt-5.2',             label: 'GPT-5.2' },
-  { value: 'deepseek-v3.2',       label: 'DeepSeek V3.2' },
+  { value: 'gpt-5.2', label: 'GPT-5.2' },
 ];
 
 const STORAGE_KEY = 'injpass_agent_conversations';
@@ -330,7 +321,7 @@ export default function AgentsPage() {
   const [assetMentions, setAssetMentions] = useState<AssetMentionSymbol[]>([]);
   const [dappMentions, setDappMentions] = useState<DAppMentionName[]>([]);
   const [isAssetDropActive, setIsAssetDropActive] = useState(false);
-  const [model, setModel] = useState<Model>('claude-sonnet-4-6');
+  const [model, setModel] = useState<Model>('gpt-5.2');
   const [isRunning, setIsRunning] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [pendingConfirm, setPendingConfirm] = useState<PendingConfirmation | null>(null);
