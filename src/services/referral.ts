@@ -1,10 +1,5 @@
 import { getAuthToken } from './passkey';
-
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL;
-
-if (!API_BASE_URL) {
-  throw new Error('NEXT_PUBLIC_API_URL environment variable is required');
-}
+import { API_BASE_URL } from './api-base';
 
 export interface InviteCodeResponse {
   inviteCode: string | null;

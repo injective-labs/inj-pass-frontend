@@ -1,90 +1,75 @@
 import { getAuthToken, refreshToken } from './passkey';
+import { API_BASE_URL } from './api-base';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL;
-
-if (!API_BASE_URL) {
-  throw new Error('NEXT_PUBLIC_API_URL environment variable is required');
-}
-
-// ─── Types ───────────────────────────────────────────────────────────────────
-
-export interface ToolUse {
-  name: string;
-  input?: Record<string, any>;
-  id: string;
-}
-
-export interface ToolResult {
-  tool_use_id: string;
+export interface AgentUiMessage {
+  role: 'assistant' | 'tool';
   content: string;
+  isError?: boolean;
 }
 
-export interface ChatMessage {
-  role: 'user' | 'assistant';
-  content?: string;
-  tool_use?: ToolUse[];
-  tool_result?: ToolResult[];
+export interface AgentPendingConfirmation {
+  toolUseId?: string;
+  toolName: string;
+  toolInput: Record<string, unknown>;
+  executionMode?: 'backend_sandbox' | 'client_wallet';
 }
 
-export interface UsageInfo {
-  inputTokens: number;
-  outputTokens: number;
-}
-
-export interface ChatRecordRequest {
-  conversationId?: string;
-  title?: string;
-  messages: ChatMessage[];
-  model: string;
-  usage: UsageInfo;
-}
-
-export interface CostInfo {
-  inputTokens: number;
-  outputTokens: number;
-  ninjaDeducted: number;
-  currency: number;
-}
-
-export interface ChatRecordResponse {
-  ok: boolean;
-  conversationId: string;
-  balance: number;
-  cost?: CostInfo;
-  error?: string;
-  current?: number;
-  required?: number;
-}
-
-export interface SyncConversationRequest {
-  conversationId: string;
-  messages: ChatMessage[];
-}
-
-export interface Conversation {
+export interface StoredConversationSummary {
   id: string;
-  title: string;
+  title: string | null;
   model: string | null;
-  createdAt: Date;
-  updatedAt: Date;
+  createdAt: string;
+  updatedAt: string;
 }
 
-export interface Message {
+export interface StoredConversationMessage {
   id: number;
   conversationId: string;
   role: string;
   content: string;
-  toolUse: any;
-  toolResult: any;
-  createdAt: Date;
+  toolUse?: unknown;
+  toolResult?: unknown;
+  createdAt: string;
 }
 
-export interface ConversationDetail {
-  conversation: Conversation;
-  messages: Message[];
+export interface StoredConversationDetail {
+  conversation: StoredConversationSummary;
+  messages: StoredConversationMessage[];
 }
 
-// ─── Helper ───────────────────────────────────────────────────────────────────
+export interface AgentChatResponse {
+  ok: boolean;
+  conversationId?: string;
+  sandboxAddress?: string | null;
+  messages?: AgentUiMessage[];
+  pendingConfirmation?: AgentPendingConfirmation | null;
+  error?: string;
+}
+
+export interface AgentSweepResponse {
+  ok: boolean;
+  conversationId?: string;
+  sandboxAddress?: string | null;
+  result?: {
+    sandboxAddress: string;
+    recipientAddress: string;
+    transfers: Array<{
+      symbol: 'INJ' | 'USDT' | 'USDC';
+      amount: string;
+      txHash: string;
+      explorerUrl: string;
+    }>;
+    empty: boolean;
+    balancesBefore: {
+      INJ: string;
+      USDT: string;
+      USDC: string;
+    };
+  };
+  error?: string;
+}
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 /**
  * Get auth header with Bearer token
@@ -128,86 +113,39 @@ async function fetchWithAuthRetry(
   });
 }
 
-// ─── API Functions ────────────────────────────────────────────────────────────
+// ─── Agent Bridge APIs ───────────────────────────────────────────────────────
 
-/**
- * Record chat from frontend (frontend executes tools, backend records and charges)
- * This should be called after each AI conversation turn
- */
-export async function recordChat(request: ChatRecordRequest): Promise<ChatRecordResponse> {
+export async function sendAgentMessage(request: {
+  conversationId?: string;
+  message: string;
+  model?: string;
+  sandboxMode?: boolean;
+}): Promise<AgentChatResponse> {
   try {
-    const response = await fetchWithAuthRetry(`${API_BASE_URL}/ai/chat/record`, {
+    const response = await fetchWithAuthRetry(`${API_BASE_URL}/ai/agent/chat`, {
       method: 'POST',
       body: JSON.stringify(request),
     });
 
-    if (response.status === 401) {
-      return {
-        ok: false,
-        conversationId: request.conversationId || '',
-        balance: 0,
-        error: 'Unauthorized',
-      };
-    }
-
     if (!response.ok) {
-      const error = await response.json().catch(() => ({ message: 'Record failed' }));
+      const error = await response.json().catch(() => ({ error: 'Agent chat failed' }));
       return {
         ok: false,
-        conversationId: request.conversationId || '',
-        balance: 0,
-        error: error.error || error.message || 'Record failed',
+        error: error.error || error.message || 'Agent chat failed',
       };
     }
 
-    const result = await response.json();
-    if (result?.ok === false && result?.error === 'Unauthorized') {
-      return {
-        ok: false,
-        conversationId: request.conversationId || '',
-        balance: 0,
-        error: 'Unauthorized',
-      };
-    }
-
-    return result;
+    return response.json();
   } catch (error) {
-    console.error('[AI] Record chat failed:', error);
+    console.error('[AI] Agent chat failed:', error);
     return {
       ok: false,
-      conversationId: request.conversationId || '',
-      balance: 0,
       error: 'Network error',
     };
   }
 }
 
-/**
- * Sync conversation body to backend
- * This is called after AI responds to backup the conversation
- */
-export async function syncConversation(request: SyncConversationRequest): Promise<{ success: boolean }> {
-  try {
-    const response = await fetchWithAuthRetry(`${API_BASE_URL}/ai/sync-body`, {
-      method: 'POST',
-      body: JSON.stringify(request),
-    });
-
-    if (!response.ok) {
-      return { success: false };
-    }
-
-    return response.json();
-  } catch (error) {
-    console.error('[AI] Sync conversation failed:', error);
-    return { success: false };
-  }
-}
-
-/**
- * Get conversation list
- */
-export async function getConversations(): Promise<Conversation[]> {
+export async function getStoredAgentConversations(): Promise<StoredConversationSummary[]> {
   try {
     const response = await fetchWithAuthRetry(`${API_BASE_URL}/ai/conversations`, {
       method: 'GET',
@@ -219,15 +157,14 @@ export async function getConversations(): Promise<Conversation[]> {
 
     return response.json();
   } catch (error) {
-    console.error('[AI] Get conversations failed:', error);
+    console.error('[AI] Get stored conversations failed:', error);
     return [];
   }
 }
 
-/**
- * Get conversation by ID
- */
-export async function getConversation(conversationId: string): Promise<ConversationDetail | null> {
+export async function getStoredAgentConversation(
+  conversationId: string,
+): Promise<StoredConversationDetail | null> {
   try {
     const response = await fetchWithAuthRetry(`${API_BASE_URL}/ai/conversations/${conversationId}`, {
       method: 'GET',
@@ -239,28 +176,91 @@ export async function getConversation(conversationId: string): Promise<Conversat
 
     return response.json();
   } catch (error) {
-    console.error('[AI] Get conversation failed:', error);
+    console.error('[AI] Get stored conversation failed:', error);
     return null;
   }
 }
 
-/**
- * Delete conversation
- */
-export async function deleteConversation(conversationId: string): Promise<boolean> {
+export async function confirmAgentAction(request: {
+  conversationId: string;
+  approve: boolean;
+}): Promise<AgentChatResponse> {
   try {
-    const response = await fetchWithAuthRetry(`${API_BASE_URL}/ai/conversations/${conversationId}`, {
-      method: 'DELETE',
+    const response = await fetchWithAuthRetry(`${API_BASE_URL}/ai/agent/confirm`, {
+      method: 'POST',
+      body: JSON.stringify(request),
     });
 
     if (!response.ok) {
-      return false;
+      const error = await response.json().catch(() => ({ error: 'Agent confirmation failed' }));
+      return {
+        ok: false,
+        error: error.error || error.message || 'Agent confirmation failed',
+      };
     }
 
-    const data = await response.json();
-    return data.success;
+    return response.json();
   } catch (error) {
-    console.error('[AI] Delete conversation failed:', error);
-    return false;
+    console.error('[AI] Agent confirmation failed:', error);
+    return {
+      ok: false,
+      error: 'Network error',
+    };
+  }
+}
+
+export async function submitClientToolResult(request: {
+  conversationId: string;
+  toolUseId: string;
+  result: string;
+}): Promise<AgentChatResponse> {
+  try {
+    const response = await fetchWithAuthRetry(`${API_BASE_URL}/ai/agent/client-tool-result`, {
+      method: 'POST',
+      body: JSON.stringify(request),
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ error: 'Client tool result submit failed' }));
+      return {
+        ok: false,
+        error: error.error || error.message || 'Client tool result submit failed',
+      };
+    }
+
+    return response.json();
+  } catch (error) {
+    console.error('[AI] Client tool result submit failed:', error);
+    return {
+      ok: false,
+      error: 'Network error',
+    };
+  }
+}
+
+export async function sweepAgentSandbox(request: {
+  conversationId: string;
+}): Promise<AgentSweepResponse> {
+  try {
+    const response = await fetchWithAuthRetry(`${API_BASE_URL}/ai/agent/sweep`, {
+      method: 'POST',
+      body: JSON.stringify(request),
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ error: 'Sandbox sweep failed' }));
+      return {
+        ok: false,
+        error: error.error || error.message || 'Sandbox sweep failed',
+      };
+    }
+
+    return response.json();
+  } catch (error) {
+    console.error('[AI] Sandbox sweep failed:', error);
+    return {
+      ok: false,
+      error: 'Network error',
+    };
   }
 }

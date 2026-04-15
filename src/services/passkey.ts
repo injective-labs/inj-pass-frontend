@@ -1,3 +1,5 @@
+import { API_BASE_URL } from './api-base';
+
 export interface PasskeyChallenge {
   challenge: string;
   expiresAt: number;
@@ -26,12 +28,6 @@ export interface TokenRefreshResponse {
   success: boolean;
   token?: string;
   error?: string;
-}
-
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL;
-
-if (!API_BASE_URL) {
-  throw new Error('NEXT_PUBLIC_API_URL environment variable is required');
 }
 
 /**

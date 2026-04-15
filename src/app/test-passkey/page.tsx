@@ -69,7 +69,7 @@ export default function TestPasskeyPage() {
         This test will create a Passkey and verify it with the backend.
       </p>
       <p style={{ color: '#666', marginBottom: '2rem' }}>
-        ⚠️ Make sure backend is running and NEXT_PUBLIC_API_URL is configured
+        ⚠️ Make sure backend is running and `NEXT_PUBLIC_BACKEND_URL` is configured
       </p>
 
       <button

@@ -1,7 +1,6 @@
 import type { DApp } from '@/config/dapps';
 import { NETWORK_CONFIG } from '@/config/network';
-
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL;
+import { API_BASE_URL } from './api-base';
 
 export type DAppTab = {
   id: string;
