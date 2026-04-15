@@ -1,14 +1,6 @@
 export type DAppCategory = string;
 export type DAppPrimaryCategory = DAppCategory;
 
-export type DAppCapability =
-  | 'read'
-  | 'quote'
-  | 'transact'
-  | 'sign'
-  | 'position'
-  | 'game';
-
 export type DAppToolId =
   | 'get_wallet_info'
   | 'get_balance'
@@ -26,7 +18,6 @@ export interface DApp {
   icon: string;
   categories: DAppCategory[];
   primaryCategory?: DAppPrimaryCategory;
-  capabilities?: DAppCapability[];
   toolIds?: DAppToolId[];
   aiDriven?: boolean;
   order: number;
