@@ -161,6 +161,27 @@ function SupportAvatar({ isLight }: { isLight: boolean }) {
   );
 }
 
+function SupportHeaderAvatar({ isLight }: { isLight: boolean }) {
+  return (
+    <div
+      className={`relative mr-3 h-12 w-12 flex-shrink-0 overflow-hidden rounded-xl border shadow-sm ${
+        isLight
+          ? 'border-violet-200 bg-violet-100'
+          : 'border-violet-400/30 bg-violet-950'
+      }`}
+      aria-hidden="true"
+    >
+      <Image
+        src="/Eric.png"
+        alt="Eric avatar"
+        fill
+        sizes="48px"
+        className="scale-[1.45] object-cover object-center [object-position:center_30%]"
+      />
+    </div>
+  );
+}
+
 function TypingDots() {
   return (
     <span className="inline-flex items-center gap-1" aria-label="Eric is thinking">
@@ -421,6 +442,7 @@ export default function SupportChat() {
         >
           <header className={`flex items-center justify-between border-b px-4 py-3 ${headerClass}`}>
             <div className="flex min-w-0 items-center">
+              <SupportHeaderAvatar isLight={isLight} />
               <div className="min-w-0">
                 <h2 className="truncate text-sm font-semibold">Eric</h2>
                 <p className={`truncate text-xs ${mutedTextClass}`}>Speclist in AgentOS</p>
