@@ -1,5 +1,6 @@
 'use client';
 
+import Image from 'next/image';
 import { useEffect, useRef, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import { useTheme } from '@/contexts/ThemeContext';
@@ -142,14 +143,20 @@ function SupportHeadsetIcon() {
 function SupportAvatar({ isLight }: { isLight: boolean }) {
   return (
     <div
-      className={`flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full border shadow-sm ${
+      className={`relative h-9 w-9 flex-shrink-0 overflow-hidden rounded-full border shadow-sm ${
         isLight
-          ? 'border-violet-200 bg-[linear-gradient(135deg,#f5f3ff,#ddd6fe)] text-violet-700'
-          : 'border-violet-400/30 bg-[linear-gradient(135deg,#312e81,#5b21b6)] text-violet-100'
+          ? 'border-violet-200 bg-violet-100'
+          : 'border-violet-400/30 bg-violet-950'
       }`}
       aria-hidden="true"
     >
-      <SupportHeadsetIcon />
+      <Image
+        src="/Eric.png"
+        alt="Eric avatar"
+        fill
+        sizes="36px"
+        className="scale-[1.8] object-cover object-center [object-position:center_32%]"
+      />
     </div>
   );
 }
