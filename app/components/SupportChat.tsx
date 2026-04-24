@@ -105,6 +105,55 @@ function CloseIcon() {
   );
 }
 
+function SupportHeadsetIcon() {
+  return (
+    <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path
+        d="M4 12a8 8 0 0 1 16 0"
+        stroke="currentColor"
+        strokeWidth="1.9"
+        strokeLinecap="round"
+      />
+      <path
+        d="M6 12.5v3.25A2.25 2.25 0 0 0 8.25 18H9.5v-6H8.25A2.25 2.25 0 0 0 6 14.25"
+        stroke="currentColor"
+        strokeWidth="1.9"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M18 12.5v3.25A2.25 2.25 0 0 1 15.75 18H14.5v-6h1.25A2.25 2.25 0 0 1 18 14.25"
+        stroke="currentColor"
+        strokeWidth="1.9"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M14.5 18a2.5 2.5 0 0 1-2.5 2.5H10.5"
+        stroke="currentColor"
+        strokeWidth="1.9"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function SupportAvatar({ isLight }: { isLight: boolean }) {
+  return (
+    <div
+      className={`flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full border shadow-sm ${
+        isLight
+          ? 'border-violet-200 bg-[linear-gradient(135deg,#f5f3ff,#ddd6fe)] text-violet-700'
+          : 'border-violet-400/30 bg-[linear-gradient(135deg,#312e81,#5b21b6)] text-violet-100'
+      }`}
+      aria-hidden="true"
+    >
+      <SupportHeadsetIcon />
+    </div>
+  );
+}
+
 function TypingDots() {
   return (
     <span className="inline-flex items-center gap-1" aria-label="Eric is thinking">
@@ -416,13 +465,18 @@ export default function SupportChat() {
               return (
                 <div
                   key={message.id}
-                  className={`max-w-[86%] rounded-lg px-3 py-2 text-sm leading-6 ${bubbleClass}`}
+                  className={`flex items-end gap-2 ${isUser ? 'justify-end' : 'justify-start'}`}
                 >
-                  {isPendingAssistant ? (
-                    <TypingDots />
-                  ) : (
-                    <p className={`whitespace-pre-wrap break-words ${isUser && !isLight ? 'text-white' : ''}`}>{message.content}</p>
-                  )}
+                  {!isUser ? <SupportAvatar isLight={isLight} /> : null}
+                  <div
+                    className={`max-w-[86%] rounded-lg px-3 py-2 text-sm leading-6 ${bubbleClass}`}
+                  >
+                    {isPendingAssistant ? (
+                      <TypingDots />
+                    ) : (
+                      <p className={`whitespace-pre-wrap break-words ${isUser && !isLight ? 'text-white' : ''}`}>{message.content}</p>
+                    )}
+                  </div>
                 </div>
               );
             })}
@@ -502,14 +556,15 @@ export default function SupportChat() {
       <button
         type="button"
         onClick={isOpen ? closeChat : openChat}
-        className={`fixed bottom-[calc(env(safe-area-inset-bottom)+1rem)] right-4 z-[80] inline-flex h-12 origin-bottom-right items-center justify-center rounded-full border px-5 text-sm font-semibold shadow-2xl transition-[opacity,transform,border-color,background-color,box-shadow] duration-[320ms] ease-[cubic-bezier(0.22,1,0.36,1)] hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] ${
+        className={`fixed bottom-[calc(env(safe-area-inset-bottom)+1rem)] right-4 z-[80] inline-flex h-12 origin-bottom-right items-center justify-center gap-2 rounded-full border px-5 text-sm font-semibold shadow-2xl transition-[opacity,transform,border-color,background-color,box-shadow] duration-[320ms] ease-[cubic-bezier(0.22,1,0.36,1)] hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] ${
           isLight
-            ? 'border-slate-200 bg-white text-slate-950 shadow-[0_18px_46px_rgba(15,23,42,0.16)] hover:border-slate-300 hover:bg-slate-50 hover:shadow-[0_22px_54px_rgba(15,23,42,0.2)]'
-            : 'border-white/10 bg-[#10131a] text-white shadow-[0_18px_46px_rgba(0,0,0,0.34)] hover:border-white/20 hover:bg-[#151b24] hover:shadow-[0_22px_54px_rgba(0,0,0,0.42)]'
+            ? 'border-violet-300 bg-[linear-gradient(135deg,#8b5cf6,#7c3aed)] text-white shadow-[0_18px_46px_rgba(124,58,237,0.32)] hover:border-violet-200 hover:bg-[linear-gradient(135deg,#9d72ff,#8b5cf6)] hover:shadow-[0_22px_54px_rgba(124,58,237,0.4)]'
+            : 'border-violet-400/35 bg-[linear-gradient(135deg,#6d28d9,#4c1d95)] text-white shadow-[0_18px_46px_rgba(76,29,149,0.46)] hover:border-violet-300/55 hover:bg-[linear-gradient(135deg,#7c3aed,#5b21b6)] hover:shadow-[0_22px_54px_rgba(91,33,182,0.54)]'
         }`}
         aria-label={isOpen ? 'Close Eric support' : 'Open Eric support'}
         title={isOpen ? 'Close support' : 'Open support'}
       >
+        <SupportHeadsetIcon />
         <span>Support</span>
       </button>
     </>
