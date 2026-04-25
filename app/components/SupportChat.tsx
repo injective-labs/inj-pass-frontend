@@ -154,7 +154,8 @@ function SupportAvatar({ isLight }: { isLight: boolean }) {
         src="/Eric.png"
         alt="Eric avatar"
         fill
-        sizes="36px"
+        sizes="96px"
+        quality={100}
         className="scale-[1.8] object-cover object-center [object-position:center_32%]"
       />
     </div>
@@ -175,7 +176,8 @@ function SupportHeaderAvatar({ isLight }: { isLight: boolean }) {
         src="/Eric.png"
         alt="Eric avatar"
         fill
-        sizes="48px"
+        sizes="96px"
+        quality={100}
         className="scale-[1.45] object-cover object-center [object-position:center_30%]"
       />
     </div>
