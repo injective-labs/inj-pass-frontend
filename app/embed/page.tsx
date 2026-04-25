@@ -1,18 +1,20 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import TrustPillBadge from '@/components/TrustPillBadge';
 import WelcomeThemeIconButton from '@/components/WelcomeThemeIconButton';
 import { WalletErrorToast } from '@/components/WalletErrorToast';
 import { useTheme } from '@/contexts/ThemeContext';
 import { triggerWalletConnect, isValidOrigin } from '@/lib/auth-bridge';
 import { useWalletErrorToast } from '@/lib/useWalletErrorToast';
+import { creditNinja, debitNinja, getNinjaStatus } from '@/services/points';
+import { getAuthToken, refreshToken, verifyToken } from '@/services/passkey';
 
 const BALL_SIZE = 58;
 const CARD_W = 392;
 const CARD_H = 314;
 const CONNECT_W = 392;
-const CONNECT_H = 360;
+const CONNECT_H = 620;
 
 function requestResize(width: number, height: number) {
   window.parent.postMessage(
@@ -23,6 +25,25 @@ function requestResize(width: number, height: number) {
     },
     '*'
   );
+}
+
+async function ensureEmbedSession(): Promise<string> {
+  const existingToken = getAuthToken();
+  if (!existingToken) {
+    throw new Error('No active INJ Pass session. Please reconnect.');
+  }
+
+  const verified = await verifyToken(existingToken);
+  if (verified.valid) {
+    return existingToken;
+  }
+
+  const refreshed = await refreshToken(existingToken);
+  if (!refreshed) {
+    throw new Error('INJ Pass session expired. Please reconnect.');
+  }
+
+  return refreshed;
 }
 
 function LockIcon({ className = 'h-4 w-4' }: { className?: string }) {
@@ -118,6 +139,8 @@ export default function EmbedPage() {
   const [hasPendingSign, setHasPendingSign] = useState(false);
   const [minimized, setMinimized] = useState(false);
   const { errorToast, showErrorToast, dismissErrorToast } = useWalletErrorToast();
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  const lastReportedSizeRef = useRef<{ width: number; height: number } | null>(null);
 
   useEffect(() => {
     if (!connected) {
@@ -128,6 +151,53 @@ export default function EmbedPage() {
       requestResize(CARD_W, CARD_H);
     }
   }, [connected, minimized]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || minimized) {
+      return;
+    }
+
+    const node = rootRef.current;
+    if (!node) {
+      return;
+    }
+
+    const updateSize = () => {
+      const rect = node.getBoundingClientRect();
+      const measuredHeight = Math.ceil(rect.height);
+      const nextWidth = connected ? CARD_W : CONNECT_W;
+      const fallbackHeight = connected ? CARD_H : CONNECT_H;
+      const nextHeight = Math.max(fallbackHeight, measuredHeight);
+      const lastReported = lastReportedSizeRef.current;
+
+      if (
+        lastReported
+        && Math.abs(lastReported.width - nextWidth) < 2
+        && Math.abs(lastReported.height - nextHeight) < 2
+      ) {
+        return;
+      }
+
+      lastReportedSizeRef.current = {
+        width: nextWidth,
+        height: nextHeight,
+      };
+      requestResize(nextWidth, nextHeight);
+    };
+
+    updateSize();
+
+    const observer = new ResizeObserver(() => {
+      updateSize();
+    });
+    observer.observe(node);
+
+    window.addEventListener('resize', updateSize);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('resize', updateSize);
+    };
+  }, [connected, minimized, hasPendingSign, loading, errorToast, walletName, address]);
 
   useEffect(() => {
     if (connected && !minimized) {
@@ -183,17 +253,17 @@ export default function EmbedPage() {
     const handleMessage = (event: MessageEvent) => {
       if (!isValidOrigin(event.origin)) return;
       const { type, data } = event.data;
+      const postBack = (payload: Record<string, unknown>) => {
+        event.source?.postMessage(payload, { targetOrigin: event.origin });
+      };
 
       if (type === 'INJPASS_SIGN_REQUEST') {
         if (!connected) {
-          event.source?.postMessage(
-            {
-              type: 'INJPASS_SIGN_RESPONSE',
-              requestId: data.id,
-              error: 'Wallet not connected',
-            },
-            { targetOrigin: event.origin }
-          );
+          postBack({
+            type: 'INJPASS_SIGN_RESPONSE',
+            requestId: data.id,
+            error: 'Wallet not connected',
+          });
           return;
         }
 
@@ -213,15 +283,80 @@ export default function EmbedPage() {
 
           setHasPendingSign(true);
         } else {
-          event.source?.postMessage(
-            {
-              type: 'INJPASS_SIGN_RESPONSE',
-              requestId: data.id,
-              error: 'Auth popup is closed. Please reconnect.',
-            },
-            { targetOrigin: event.origin }
-          );
+          postBack({
+            type: 'INJPASS_SIGN_RESPONSE',
+            requestId: data.id,
+            error: 'Auth popup is closed. Please reconnect.',
+          });
         }
+      }
+
+      if (type === 'INJPASS_GET_NINJA_STATUS') {
+        void (async () => {
+          try {
+            if (!connected) {
+              throw new Error('Wallet not connected');
+            }
+
+            await ensureEmbedSession();
+            const status = await getNinjaStatus();
+            postBack({
+              type: 'INJPASS_NINJA_STATUS_RESPONSE',
+              requestId: data?.id,
+              status,
+            });
+          } catch (error) {
+            postBack({
+              type: 'INJPASS_NINJA_STATUS_RESPONSE',
+              requestId: data?.id,
+              error: error instanceof Error ? error.message : 'Failed to fetch NINJA status',
+            });
+          }
+        })();
+      }
+
+      if (type === 'INJPASS_CREDIT_NINJA' || type === 'INJPASS_DEBIT_NINJA') {
+        void (async () => {
+          try {
+            if (!connected) {
+              throw new Error('Wallet not connected');
+            }
+
+            const amount = Number(data?.amount);
+            if (!Number.isFinite(amount) || amount <= 0) {
+              throw new Error('Invalid NINJA amount');
+            }
+
+            await ensureEmbedSession();
+            const adjustResult = type === 'INJPASS_CREDIT_NINJA'
+              ? await creditNinja(amount, {
+                  reason: typeof data?.reason === 'string' ? data.reason : undefined,
+                  source: typeof data?.source === 'string' ? data.source : 'embed_sdk',
+                })
+              : await debitNinja(amount, {
+                  reason: typeof data?.reason === 'string' ? data.reason : undefined,
+                  source: typeof data?.source === 'string' ? data.source : 'embed_sdk',
+                });
+
+            if (!adjustResult.success) {
+              throw new Error(adjustResult.error || 'Failed to adjust NINJA');
+            }
+
+            postBack({
+              type: 'INJPASS_NINJA_ADJUST_RESPONSE',
+              requestId: data?.id,
+              operation: type === 'INJPASS_CREDIT_NINJA' ? 'credit' : 'debit',
+              result: adjustResult,
+            });
+          } catch (error) {
+            postBack({
+              type: 'INJPASS_NINJA_ADJUST_RESPONSE',
+              requestId: data?.id,
+              operation: type === 'INJPASS_CREDIT_NINJA' ? 'credit' : 'debit',
+              error: error instanceof Error ? error.message : 'Failed to adjust NINJA',
+            });
+          }
+        })();
       }
 
       if (type === 'SIGN_RESPONSE') {
@@ -294,8 +429,9 @@ export default function EmbedPage() {
   if (connected && minimized) {
     return (
       <div
+        ref={rootRef}
         onClick={expand}
-        style={{ width: BALL_SIZE, height: BALL_SIZE }}
+        style={{ width: '100%', maxWidth: BALL_SIZE, height: BALL_SIZE }}
         className="group relative cursor-pointer select-none"
       >
         <div
@@ -330,7 +466,8 @@ export default function EmbedPage() {
   if (connected && !minimized) {
     return (
       <div
-        style={{ width: CARD_W, minHeight: CARD_H }}
+        ref={rootRef}
+        style={{ width: '100%', maxWidth: CARD_W, minHeight: CARD_H }}
         className={`relative isolate overflow-hidden rounded-[30px] border backdrop-blur-2xl ${cardTone}`}
       >
         <div
@@ -456,7 +593,8 @@ export default function EmbedPage() {
 
   return (
     <div
-      style={{ width: CONNECT_W, minHeight: CONNECT_H }}
+      ref={rootRef}
+      style={{ width: '100%', maxWidth: CONNECT_W, minHeight: CONNECT_H }}
       className={`relative isolate overflow-hidden rounded-[32px] border backdrop-blur-2xl ${cardTone}`}
     >
       <div className="pointer-events-none absolute inset-x-0 top-4 z-30 flex justify-center px-4">

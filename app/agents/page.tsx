@@ -3,24 +3,28 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useWallet } from '@/contexts/WalletContext';
-import { getTokenBalances, executeSwap, getSwapQuote } from '@/services/dex-swap';
-import { sendTransaction } from '@/wallet/chain/evm/sendTransaction';
-import { getTxHistory } from '@/wallet/chain/evm/getTxHistory';
-import { privateKeyToHex } from '@/utils/wallet';
-import { unlockByPasskey } from '@/wallet/key-management/createByPasskey';
-import { decryptKey } from '@/wallet/keystore';
-import { TOKENS_MAINNET } from '@/services/tokens';
-import { privateKeyToAccount } from 'viem/accounts';
-import { parseUnits } from 'viem';
+import { getTokenBalances } from '@/services/dex-swap';
 import type { Address } from 'viem';
 import { AGENT_CREDITS_STATS } from '@/config/agent-credits';
 import { useTheme } from '@/contexts/ThemeContext';
-import { recordChat } from '@/services/ai';
+import TransactionAuthModal from '@/components/TransactionAuthModal';
+import {
+  confirmAgentAction,
+  getStoredAgentConversation,
+  getStoredAgentConversations,
+  sendAgentMessage,
+  type StoredConversationDetail,
+  submitClientToolResult,
+  sweepAgentSandbox,
+} from '@/services/ai';
+import { fetchDapps } from '@/services/dapps';
 import { getInviteCode, getInvitees, getStats } from '@/services/referral';
+import { executeSwap } from '@/services/dex-swap';
+import { sendTransaction } from '@/wallet/chain';
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
-type Model = 'gpt-5.1';
+type Model = 'gpt-5.1' | 'gpt-4o-mini';
 
 /** Display message shown in the chat UI */
 interface ChatMessage {
@@ -30,30 +34,11 @@ interface ChatMessage {
   isError?: boolean;
 }
 
-/** Anthropic API message format stored alongside display messages */
-interface ApiBlock {
-  type: string;
-  text?: string;
-  id?: string;
-  name?: string;
-  input?: Record<string, unknown>;
-  tool_use_id?: string;
-  content?: string;
-}
-
-interface ApiMessage {
-  role: 'user' | 'assistant';
-  content: string | ApiBlock[];
-}
-
 interface Conversation {
   id: string;
-  backendConversationId?: string;
   title: string;
   createdAt: number;
   messages: ChatMessage[];
-  apiHistory: ApiMessage[];
-  /** Sandbox wallet — only present when sandbox mode was enabled at conversation creation */
   sandboxKey?: string;     // 64-char hex, no 0x prefix
   sandboxAddress?: string; // 0x address
 }
@@ -61,11 +46,10 @@ interface Conversation {
 /** State while waiting for the user to confirm a destructive tool */
 interface PendingConfirmation {
   convId: string;
-  toolUseId: string;
+  toolUseId?: string;
   toolName: string;
   toolInput: Record<string, unknown>;
-  /** The full assistant api message that triggered the tool call */
-  assistantApiMessage: ApiMessage;
+  executionMode?: 'backend_sandbox' | 'client_wallet';
 }
 
 type SettingsTab = 'credits' | 'tasks' | 'payments' | 'telegram';
@@ -78,10 +62,11 @@ interface InviteFriend {
 }
 
 type AssetMentionSymbol = 'INJ' | 'USDC' | 'LAM' | 'USDT';
-type DAppMentionName = 'Omisper' | 'Hash Mahjong';
+type DAppMentionName = string;
 
 const MODEL_OPTIONS: { value: Model; label: string }[] = [
   { value: 'gpt-5.1', label: 'GPT-5.1' },
+  { value: 'gpt-4o-mini', label: 'GPT-4o-mini' },
 ];
 
 const STORAGE_KEY = 'injpass_agent_conversations';
@@ -93,28 +78,51 @@ const TOKEN_ICONS: Record<string, string> = {
   USDC: '/USDC_Logo.png',
 };
 
-const DAPP_MENTION_META: Record<
-  DAppMentionName,
-  { prompt: string; label: string; lightTone: string; darkTone: string }
-> = {
-  Omisper: {
-    prompt: '@Omisper',
-    label: '@Omisper',
-    lightTone: 'border-fuchsia-200/90 bg-fuchsia-500/10 text-fuchsia-700',
-    darkTone: 'border-fuchsia-400/30 bg-fuchsia-500/12 text-fuchsia-200',
+interface DAppMentionMeta {
+  prompt: string;
+  label: string;
+  themeKey?: string;
+}
+
+const DAPP_TONE_PRESETS: Record<string, { light: string; dark: string }> = {
+  violet: {
+    light: 'border-violet-200/90 bg-violet-500/10 text-violet-700',
+    dark: 'border-violet-400/30 bg-violet-500/12 text-violet-200',
   },
-  'Hash Mahjong': {
-    prompt: '@HashMahjong',
-    label: '@HashMahjong',
-    lightTone: 'border-cyan-200/90 bg-cyan-500/10 text-cyan-700',
-    darkTone: 'border-cyan-400/30 bg-cyan-500/12 text-cyan-200',
+  sky: {
+    light: 'border-sky-200/90 bg-sky-500/10 text-sky-700',
+    dark: 'border-sky-400/30 bg-sky-500/12 text-sky-200',
+  },
+  emerald: {
+    light: 'border-emerald-200/90 bg-emerald-500/10 text-emerald-700',
+    dark: 'border-emerald-400/30 bg-emerald-500/12 text-emerald-200',
+  },
+  amber: {
+    light: 'border-amber-200/90 bg-amber-500/10 text-amber-700',
+    dark: 'border-amber-400/30 bg-amber-500/12 text-amber-200',
+  },
+  cyan: {
+    light: 'border-cyan-200/90 bg-cyan-500/10 text-cyan-700',
+    dark: 'border-cyan-400/30 bg-cyan-500/12 text-cyan-200',
+  },
+  fuchsia: {
+    light: 'border-fuchsia-200/90 bg-fuchsia-500/10 text-fuchsia-700',
+    dark: 'border-fuchsia-400/30 bg-fuchsia-500/12 text-fuchsia-200',
   },
 };
+
+const DAPP_TONE_KEYS = Object.keys(DAPP_TONE_PRESETS);
 
 // ─── Helpers ───────────────────────────────────────────────────────────────
 
 function uid() {
   return Math.random().toString(36).slice(2, 10);
+}
+
+function privateKeyToHex(privateKey: Uint8Array): `0x${string}` {
+  return `0x${Array.from(privateKey)
+    .map((byte) => byte.toString(16).padStart(2, '0'))
+    .join('')}` as `0x${string}`;
 }
 
 function formatWalletLabel(walletAddress: string | null, walletName: string | null): string {
@@ -138,13 +146,63 @@ function normalizeAssetMentionSymbol(symbol?: string): AssetMentionSymbol | null
   return null;
 }
 
-function loadConversations(): Conversation[] {
+function normalizeDAppMentionName(name?: string | null): string | null {
+  const normalized = (name ?? '').trim();
+  return normalized ? normalized : null;
+}
+
+function normalizeDAppMentionPrompt(prompt?: string | null): string | null {
+  const normalized = normalizeDAppMentionName(prompt);
+  if (!normalized) return null;
+  const plain = normalized.startsWith('@') ? normalized.slice(1) : normalized;
+  const compact = plain.replace(/\s+/g, '');
+  return compact ? `@${compact}` : null;
+}
+
+function hashString(value: string): number {
+  let hash = 0;
+  for (let i = 0; i < value.length; i += 1) {
+    hash = (hash << 5) - hash + value.charCodeAt(i);
+    hash |= 0;
+  }
+  return Math.abs(hash);
+}
+
+function getDAppTone(themeKey: string | undefined, name: string, isLight: boolean): string {
+  const normalizedThemeKey = themeKey?.trim().toLowerCase();
+  const fallbackKey = DAPP_TONE_KEYS[hashString(name.toLowerCase()) % DAPP_TONE_KEYS.length] ?? 'violet';
+  const key = normalizedThemeKey && DAPP_TONE_PRESETS[normalizedThemeKey] ? normalizedThemeKey : fallbackKey;
+  const preset = DAPP_TONE_PRESETS[key] ?? DAPP_TONE_PRESETS.violet;
+  return isLight ? preset.light : preset.dark;
+}
+
+function buildDAppMentionMeta(name: string): DAppMentionMeta {
+  const cleanName = name.trim();
+  const compact = cleanName.replace(/\s+/g, '');
+  return {
+    prompt: `@${compact}`,
+    label: `@${cleanName}`,
+  };
+}
+
+function getConversationStorageKey(walletAddress?: string | null): string {
+  const normalized = walletAddress?.trim().toLowerCase();
+  return normalized ? `${STORAGE_KEY}:${normalized}` : `${STORAGE_KEY}:anonymous`;
+}
+
+function loadConversations(walletAddress?: string | null): Conversation[] {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = localStorage.getItem(getConversationStorageKey(walletAddress));
     if (!raw) return [];
     const parsed = JSON.parse(raw) as Conversation[];
-    // Normalise old records that pre-date the apiHistory field
-    return parsed.map((c) => ({ ...c, apiHistory: Array.isArray(c.apiHistory) ? c.apiHistory : [] }));
+    return parsed.map((c) => ({
+      id: c.id,
+      title: c.title,
+      createdAt: c.createdAt,
+      messages: Array.isArray(c.messages) ? c.messages : [],
+      sandboxKey: c.sandboxKey,
+      sandboxAddress: c.sandboxAddress,
+    }));
   } catch {
     return [];
   }
@@ -152,69 +210,110 @@ function loadConversations(): Conversation[] {
 
 // ─── Sandbox helpers ────────────────────────────────────────────────────────
 
-function isSandboxEnabled(): boolean {
+function loadSandboxModePreference(): boolean {
   if (typeof window === 'undefined') return true;
   const val = localStorage.getItem(SANDBOX_MODE_KEY);
   return val === null || val === 'true'; // default: enabled
 }
 
-function generateSandboxWallet(): { key: string; addr: string } {
-  const bytes = crypto.getRandomValues(new Uint8Array(32));
-  const hex = Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('');
-  const account = privateKeyToAccount(`0x${hex}` as `0x${string}`);
-  return { key: hex, addr: account.address };
-}
-
-function hexToUint8(hex: string): Uint8Array {
-  const bytes = new Uint8Array(hex.length / 2);
-  for (let i = 0; i < hex.length; i += 2) bytes[i / 2] = parseInt(hex.slice(i, i + 2), 16);
-  return bytes;
-}
-
-/** ABI-encode an ERC-20 transfer(address,uint256) call */
-function encodeERC20Transfer(to: string, amount: bigint): `0x${string}` {
-  const paddedTo = to.replace(/^0x/i, '').toLowerCase().padStart(64, '0');
-  const paddedAmt = amount.toString(16).padStart(64, '0');
-  return `0xa9059cbb${paddedTo}${paddedAmt}` as `0x${string}`;
-}
-
-function saveConversations(convs: Conversation[]) {
+function saveConversations(
+  convs: Conversation[],
+  walletAddress?: string | null,
+) {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(convs));
+    localStorage.setItem(
+      getConversationStorageKey(walletAddress),
+      JSON.stringify(convs),
+    );
   } catch { /* storage full */ }
 }
 
-function toRecordMessages(history: ApiMessage[]) {
-  return history.map((msg) => {
-    if (typeof msg.content === 'string') {
-      return {
-        role: msg.role,
-        content: msg.content,
-      };
+function restoreMessagesFromStoredConversation(
+  detail: StoredConversationDetail,
+): ChatMessage[] {
+  const restored: ChatMessage[] = [];
+
+  for (const message of detail.messages) {
+    if (message.role === 'user') {
+      const hasToolResult =
+        Array.isArray(message.toolResult) && message.toolResult.length > 0;
+
+      if (hasToolResult) {
+        continue;
+      }
+
+      const text = typeof message.content === 'string' ? message.content.trim() : '';
+      if (!text) {
+        continue;
+      }
+
+      restored.push({
+        id: `restored-user-${message.id}`,
+        role: 'user',
+        content: text,
+      });
+      continue;
     }
 
-    const blocks = msg.content;
-    const toolUse = blocks
-      .filter((b) => b.type === 'tool_use' && b.name && b.id)
-      .map((b) => ({
-        name: b.name as string,
-        input: b.input as Record<string, unknown> | undefined,
-        id: b.id as string,
-      }));
-    const toolResult = blocks
-      .filter((b) => b.type === 'tool_result' && b.tool_use_id)
-      .map((b) => ({
-        tool_use_id: b.tool_use_id as string,
-        content: b.content ?? '',
-      }));
+    if (message.role === 'assistant') {
+      const raw = typeof message.content === 'string' ? message.content.trim() : '';
+      if (!raw) {
+        continue;
+      }
 
-    return {
-      role: msg.role,
-      content: JSON.stringify(blocks),
-      tool_use: toolUse.length ? toolUse : undefined,
-      tool_result: toolResult.length ? toolResult : undefined,
-    };
-  });
+      let assistantText = raw;
+      try {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) {
+          const textBlocks = parsed
+            .filter((block) => block && typeof block === 'object' && block.type === 'text')
+            .map((block) => String(block.text ?? '').trim())
+            .filter(Boolean);
+          assistantText = textBlocks.join('\n').trim();
+        }
+      } catch {
+        assistantText = raw;
+      }
+
+      if (!assistantText) {
+        continue;
+      }
+
+      restored.push({
+        id: `restored-assistant-${message.id}`,
+        role: 'assistant',
+        content: assistantText,
+      });
+    }
+  }
+
+  return restored;
+}
+
+async function restoreConversationsFromBackend(
+  walletAddress: string,
+): Promise<Conversation[]> {
+  const summaries = await getStoredAgentConversations();
+  if (summaries.length === 0) {
+    return [];
+  }
+
+  const details = await Promise.all(
+    summaries.map((summary) => getStoredAgentConversation(summary.id)),
+  );
+
+  return details
+    .filter((detail): detail is StoredConversationDetail => Boolean(detail))
+    .map((detail) => ({
+      id: detail.conversation.id,
+      title: detail.conversation.title?.trim() || 'New chat',
+      createdAt: new Date(detail.conversation.createdAt).getTime() || Date.now(),
+      messages: restoreMessagesFromStoredConversation(detail),
+      sandboxAddress: undefined,
+      sandboxKey: undefined,
+    }))
+    .filter((conversation) => conversation.messages.length > 0)
+    .sort((a, b) => b.createdAt - a.createdAt);
 }
 
 // ─── Hash Mahjong game logic (ported from hash-mahjong-two.vercel.app) ──────
@@ -307,7 +406,7 @@ function hmPlayResult(txHash: string) {
 export default function AgentsPage() {
   const router = useRouter();
   const { theme } = useTheme();
-  const { isUnlocked, address, privateKey, keystore, isCheckingSession, unlock, resetTxAuth } = useWallet();
+  const { isUnlocked, address, isCheckingSession, privateKey, resetTxAuth } = useWallet();
 
   const [isEmbedded] = useState(
     () => typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('embed') === '1'
@@ -320,18 +419,18 @@ export default function AgentsPage() {
   const [input, setInput] = useState('');
   const [assetMentions, setAssetMentions] = useState<AssetMentionSymbol[]>([]);
   const [dappMentions, setDappMentions] = useState<DAppMentionName[]>([]);
+  const [dappMentionMetaMap, setDappMentionMetaMap] = useState<Record<string, DAppMentionMeta>>({});
   const [isAssetDropActive, setIsAssetDropActive] = useState(false);
   const [model, setModel] = useState<Model>('gpt-5.1');
   const [isRunning, setIsRunning] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [pendingConfirm, setPendingConfirm] = useState<PendingConfirmation | null>(null);
   const [confirmLoading, setConfirmLoading] = useState(false);
-  const [showAuthModal, setShowAuthModal] = useState(false);
-  const [authLoading, setAuthLoading] = useState(false);
-  const [authError, setAuthError] = useState('');
-  const [authPassword, setAuthPassword] = useState('');
+  const [showAgentAuthModal, setShowAgentAuthModal] = useState(false);
+  const [postAgentAuthAction, setPostAgentAuthAction] = useState<'send' | 'swap' | null>(null);
   const [showInviteManager, setShowInviteManager] = useState(false);
   const [showAgentSettings, setShowAgentSettings] = useState(false);
+  const [sandboxModeEnabled, setSandboxModeEnabled] = useState<boolean>(() => loadSandboxModePreference());
 
   const navigateApp = useCallback((path: string) => {
     if (typeof window !== 'undefined' && isEmbedded && window.top) {
@@ -354,9 +453,11 @@ export default function AgentsPage() {
   const [harvestLoading, setHarvestLoading] = useState(false);
   const [showSandboxPanel, setShowSandboxPanel] = useState(false);
   const [showSandboxKey, setShowSandboxKey] = useState(false);
+  const [conversationStorageReady, setConversationStorageReady] = useState(false);
 
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const confirmPrimaryButtonRef = useRef<HTMLButtonElement>(null);
 
   const activeConv = conversations.find((c) => c.id === activeId) ?? null;
   const messages = activeConv?.messages ?? [];
@@ -380,10 +481,9 @@ export default function AgentsPage() {
         LAM: 'border-amber-400/30 bg-amber-500/12 text-amber-200',
         USDT: 'border-emerald-400/30 bg-emerald-500/12 text-emerald-200',
       };
-  const dappMentionTone: Record<DAppMentionName, string> = {
-    Omisper: isLight ? DAPP_MENTION_META.Omisper.lightTone : DAPP_MENTION_META.Omisper.darkTone,
-    'Hash Mahjong': isLight ? DAPP_MENTION_META['Hash Mahjong'].lightTone : DAPP_MENTION_META['Hash Mahjong'].darkTone,
-  };
+  const getMentionMeta = useCallback((name: string): DAppMentionMeta => {
+    return dappMentionMetaMap[name] ?? buildDAppMentionMeta(name);
+  }, [dappMentionMetaMap]);
   const rootShellClass = `overflow-hidden ${isLight ? 'text-slate-900' : 'text-white'} ${
     isCompactStage
       ? 'relative h-full min-h-0 bg-transparent p-0'
@@ -460,27 +560,96 @@ export default function AgentsPage() {
     }
   }, [hasEmbeddedAgentAccess, isCheckingSession, isEmbedded, navigateApp]);
 
-  // ── Load persisted history ──────────────────────────────────────────────
+  // ── Load persisted history per wallet ───────────────────────────────────
   useEffect(() => {
-    const saved = loadConversations();
-    setConversations(saved);
-    if (saved.length > 0) setActiveId(saved[0].id);
-  }, []);
+    let cancelled = false;
+
+    async function loadConversationState() {
+      if (!address) {
+        setConversations([]);
+        setActiveId(null);
+        setConversationStorageReady(false);
+        return;
+      }
+
+      const saved = loadConversations(address);
+      if (cancelled) return;
+
+      if (saved.length > 0) {
+        setConversations(saved);
+        setActiveId(saved[0].id);
+        setConversationStorageReady(true);
+        return;
+      }
+
+      const restored = await restoreConversationsFromBackend(address);
+      if (cancelled) return;
+
+      setConversations(restored);
+      setActiveId(restored.length > 0 ? restored[0].id : null);
+      saveConversations(restored, address);
+      setConversationStorageReady(true);
+    }
+
+    void loadConversationState();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [address]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isRunning]);
 
   useEffect(() => {
+    let mounted = true;
+
+    async function loadDAppMentionMeta() {
+      const { dapps } = await fetchDapps();
+      if (!mounted || dapps.length === 0) return;
+
+      const next: Record<string, DAppMentionMeta> = {};
+      for (const dapp of dapps) {
+        const name = normalizeDAppMentionName(dapp.name);
+        if (!name) continue;
+        const base = buildDAppMentionMeta(name);
+        const prompt = normalizeDAppMentionPrompt(dapp.mentionPrompt);
+        const label = normalizeDAppMentionName(dapp.mentionLabel);
+        const themeKey = normalizeDAppMentionName(dapp.mentionThemeKey);
+        next[name] = {
+          prompt: prompt ?? base.prompt,
+          label: label ? (label.startsWith('@') ? label : `@${label}`) : base.label,
+          themeKey: themeKey ?? undefined,
+        };
+      }
+
+      setDappMentionMetaMap((current) => ({ ...next, ...current }));
+    }
+
+    void loadDAppMentionMeta();
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
     const handleAssetMentionMessage = (event: MessageEvent) => {
-      const data = event.data as { type?: string; symbol?: string; dapp?: DAppMentionName } | undefined;
+      const data = event.data as { type?: string; symbol?: string; dapp?: string } | undefined;
       if (!data) return;
       const normalizedSymbol = normalizeAssetMentionSymbol(data.symbol);
+      const normalizedDapp = normalizeDAppMentionName(data.dapp);
       if (data.type === 'injpass:add-asset-mention' && normalizedSymbol) {
         setAssetMentions((current) => current.includes(normalizedSymbol) ? current : [...current, normalizedSymbol]);
       }
-      if (data.type === 'injpass:add-dapp-mention' && data.dapp && data.dapp in DAPP_MENTION_META) {
-        setDappMentions((current) => current.includes(data.dapp!) ? current : [...current, data.dapp!]);
+      if (data.type === 'injpass:add-dapp-mention' && normalizedDapp) {
+        setDappMentions((current) => current.includes(normalizedDapp) ? current : [...current, normalizedDapp]);
+        setDappMentionMetaMap((current) => (
+          current[normalizedDapp]
+            ? current
+            : { ...current, [normalizedDapp]: buildDAppMentionMeta(normalizedDapp) }
+        ));
       }
       textareaRef.current?.focus();
     };
@@ -499,8 +668,12 @@ export default function AgentsPage() {
   }, [input]);
 
   useEffect(() => {
-    saveConversations(conversations);
-  }, [conversations]);
+    if (!conversationStorageReady || !address) {
+      return;
+    }
+
+    saveConversations(conversations, address);
+  }, [address, conversationStorageReady, conversations]);
 
   useEffect(() => {
     if (!showInviteManager) return;
@@ -542,7 +715,7 @@ export default function AgentsPage() {
   // Poll sandbox wallet balance
   useEffect(() => {
     const sandboxAddr = activeConv?.sandboxAddress;
-    if (!sandboxAddr || !isSandboxEnabled()) { setSandboxBalances(null); return; }
+    if (!sandboxAddr || !sandboxModeEnabled) { setSandboxBalances(null); return; }
     let alive = true;
     async function refresh() {
       try {
@@ -554,21 +727,30 @@ export default function AgentsPage() {
     const timer = setInterval(refresh, 30_000);
     return () => { alive = false; clearInterval(timer); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeId, activeConv?.sandboxAddress]);
+  }, [activeId, activeConv?.sandboxAddress, sandboxModeEnabled]);
 
   // ─── Conversation management ────────────────────────────────────────────
 
   function newConversation() {
     const id = uid();
-    const sandbox = isSandboxEnabled() ? generateSandboxWallet() : undefined;
     const conv: Conversation = {
-      id, title: 'New chat', createdAt: Date.now(), messages: [], apiHistory: [],
-      sandboxKey: sandbox?.key,
-      sandboxAddress: sandbox?.addr,
+      id, title: 'New chat', createdAt: Date.now(), messages: [],
     };
     setConversations((prev) => [conv, ...prev]);
     setActiveId(id);
     setSidebarOpen(false);
+  }
+
+  function setSandboxMode(nextValue: boolean) {
+    setSandboxModeEnabled(nextValue);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(SANDBOX_MODE_KEY, nextValue ? 'true' : 'false');
+    }
+
+    setPendingConfirm(null);
+    setShowSandboxPanel(false);
+    setShowSandboxKey(false);
+    newConversation();
   }
 
   function deleteConversation(id: string) {
@@ -588,206 +770,37 @@ export default function AgentsPage() {
     updateConv(convId, (c) => ({ ...c, messages: [...c.messages, msg] }));
   }
 
-  function appendApi(convId: string, msg: ApiMessage) {
-    updateConv(convId, (c) => ({ ...c, apiHistory: [...(c.apiHistory ?? []), msg] }));
-  }
-
-  function getApiHistory(convId: string): ApiMessage[] {
-    return conversations.find((c) => c.id === convId)?.apiHistory ?? [];
-  }
-
-  // ─── PIN-Free check ──────────────────────────────────────────────────────
-
-  function isPinFreeActive(): boolean {
-    if (!privateKey) return false;
-    const minutes = parseInt(localStorage.getItem('auto_lock_minutes') ?? '0', 10);
-    if (minutes <= 0) return false;
-    const lastAuth = parseInt(localStorage.getItem('injpass_last_tx_auth') ?? '0', 10);
-    return Date.now() - lastAuth <= minutes * 60 * 1000;
-  }
-
-  // ─── Tool execution ──────────────────────────────────────────────────────
-
-  async function executeTool(
-    name: string,
-    input: Record<string, unknown>,
-    overridePk?: Uint8Array,
-  ): Promise<string> {
-    if (!address) return JSON.stringify({ error: 'Wallet not connected' });
-
-    // Sandbox mode: use sandbox wallet instead of user's real wallet
-    const sandboxKey = activeConv?.sandboxKey ? hexToUint8(activeConv.sandboxKey) : undefined;
-    const sandboxAddr = activeConv?.sandboxAddress ?? null;
-    const inSandbox = isSandboxEnabled() && !!sandboxKey && !!sandboxAddr;
-    const activeAddr = (inSandbox ? sandboxAddr : address) as Address;
-    const pk = inSandbox ? sandboxKey : (overridePk ?? privateKey);
-
-    try {
-      if (name === 'get_wallet_info') {
-        return JSON.stringify({
-          address: activeAddr,
-          network: 'Injective EVM Mainnet',
-          chainId: 1776,
-          ...(inSandbox ? { note: 'SANDBOX wallet — not the user\'s real wallet' } : {}),
-        });
-      }
-
-      if (name === 'get_balance') {
-        const balances = await getTokenBalances(['INJ', 'USDT', 'USDC'], activeAddr);
-        if (inSandbox) setSandboxBalances({ INJ: balances.INJ ?? '0', USDT: balances.USDT ?? '0', USDC: balances.USDC ?? '0' });
-        return JSON.stringify({ INJ: balances.INJ, USDT: balances.USDT, USDC: balances.USDC });
-      }
-
-      if (name === 'get_swap_quote') {
-        const { fromToken, toToken, amount, slippage = 0.5 } = input as {
-          fromToken: string; toToken: string; amount: string; slippage?: number;
-        };
-        const quote = await getSwapQuote(fromToken, toToken, amount, Number(slippage));
-        return JSON.stringify({
-          fromToken: quote.fromToken,
-          toToken: quote.toToken,
-          amountIn: quote.amountIn,
-          expectedOutput: quote.expectedOutput,
-          minOutput: quote.minOutput,
-          priceImpact: quote.priceImpact,
-          route: quote.route,
-        });
-      }
-
-      if (name === 'execute_swap') {
-        if (!pk) return JSON.stringify({ error: 'Wallet locked' });
-        const { fromToken, toToken, amount, slippage = 0.5 } = input as {
-          fromToken: string; toToken: string; amount: string; slippage?: number;
-        };
-        const pkHex = privateKeyToHex(pk);
-        const txHash = await executeSwap({
-          fromToken, toToken, amountIn: amount,
-          slippage: Number(slippage),
-          userAddress: activeAddr,
-          privateKey: pkHex,
-        });
-        resetTxAuth(); // extend the PIN-free window
-        return JSON.stringify({
-          success: true,
-          txHash,
-          explorerUrl: `https://blockscout.injective.network/tx/${txHash}`,
-        });
-      }
-
-      if (name === 'send_token') {
-        if (!pk) return JSON.stringify({ error: 'Wallet locked' });
-        const { toAddress, amount } = input as { toAddress: string; amount: string };
-        const txHash = await sendTransaction(pk, toAddress, amount);
-        resetTxAuth(); // extend the PIN-free window
-        return JSON.stringify({
-          success: true,
-          txHash,
-          explorerUrl: `https://blockscout.injective.network/tx/${txHash}`,
-        });
-      }
-
-      if (name === 'get_tx_history') {
-        const limit = (input.limit as number) ?? 10;
-        const history = await getTxHistory(activeAddr, limit);
-        return JSON.stringify(history);
-      }
-
-      if (name === 'play_hash_mahjong') {
-        if (!pk) return JSON.stringify({ error: 'Wallet locked' });
-        const txHash = await sendTransaction(pk, HM_GAME_ADDRESS, HM_PLAY_COST);
-        const result = hmPlayResult(txHash);
-        resetTxAuth();
-        return JSON.stringify({
-          txHash,
-          tiles: result.tiles,
-          seed10: result.seed10,
-          win: result.win,
-          rule: result.rule ? `${result.rule.name} (${result.rule.payout})` : null,
-          explorerUrl: `https://blockscout.injective.network/tx/${txHash}`,
-        });
-      }
-
-      if (name === 'play_hash_mahjong_multi') {
-        if (!pk) return JSON.stringify({ error: 'Wallet locked' });
-        const rounds = Math.min(Math.max(1, Number(input.rounds) || 5), 20);
-        const results: { round: number; txHash: string; tiles: string; win: boolean; rule: string | null }[] = [];
-        for (let i = 0; i < rounds; i++) {
-          const txHash = await sendTransaction(pk, HM_GAME_ADDRESS, HM_PLAY_COST);
-          const r = hmPlayResult(txHash);
-          results.push({
-            round: i + 1,
-            txHash,
-            tiles: r.tiles,
-            win: r.win,
-            rule: r.rule ? `${r.rule.name} (${r.rule.payout})` : null,
-          });
-        }
-        resetTxAuth();
-        const wins = results.filter(r => r.win);
-        return JSON.stringify({
-          totalRounds: rounds,
-          wins: wins.length,
-          losses: rounds - wins.length,
-          winRate: `${((wins.length / rounds) * 100).toFixed(1)}%`,
-          bestRule: wins.reduce<string | null>((best, r) => r.rule ?? best, null),
-          results,
-        });
-      }
-
-      return JSON.stringify({ error: `Unknown tool: ${name}` });
-    } catch (err) {
-      return JSON.stringify({ error: err instanceof Error ? err.message : String(err) });
-    }
-  }
-
   // ─── Sandbox harvest ─────────────────────────────────────────────────────
 
   async function harvestSandbox() {
-    if (!activeConv?.sandboxKey || !address) return;
-    const pk = hexToUint8(activeConv.sandboxKey);
-    const sandboxAddr = activeConv.sandboxAddress as Address;
+    if (!activeId) return;
     setHarvestLoading(true);
     try {
-      const bals = await getTokenBalances(['INJ', 'USDT', 'USDC'], sandboxAddr);
-      // ERC-20: USDT
-      if (parseFloat(bals.USDT ?? '0') > 0) {
-        const amt = parseUnits(bals.USDT, 6);
-        await sendTransaction(pk, TOKENS_MAINNET.USDT.address, '0', encodeERC20Transfer(address, amt));
-      }
-      // ERC-20: USDC
-      if (parseFloat(bals.USDC ?? '0') > 0) {
-        const amt = parseUnits(bals.USDC, 6);
-        await sendTransaction(pk, TOKENS_MAINNET.USDC.address, '0', encodeERC20Transfer(address, amt));
-      }
-      // Native INJ — leave 0.001 for gas
-      const injBal = parseFloat(bals.INJ ?? '0');
-      if (injBal > 0.002) {
-        await sendTransaction(pk, address, (injBal - 0.001).toFixed(6));
-      }
-      // AI feedback in chat
-      const convId = activeId;
-      if (convId) {
-        const harvested = [
-          parseFloat(bals.USDT ?? '0') > 0 && `${parseFloat(bals.USDT).toFixed(2)} USDT`,
-          parseFloat(bals.USDC ?? '0') > 0 && `${parseFloat(bals.USDC).toFixed(2)} USDC`,
-          injBal > 0.002 && `${(injBal - 0.001).toFixed(4)} INJ`,
-        ].filter(Boolean).join(', ');
-        appendDisplay(convId, {
-          id: uid(),
-          role: 'assistant',
-          content: harvested
-            ? `Sweep complete — transferred ${harvested} from the sandbox wallet to your real wallet (${address?.slice(0, 10)}…${address?.slice(-6)}).`
-            : `Nothing to sweep — the sandbox wallet balance is too low to cover gas fees.`,
-        });
+      const result = await sweepAgentSandbox({ conversationId: activeId });
+      if (!result.ok) {
+        throw new Error(result.error || 'Sandbox sweep failed');
       }
 
-      // Refresh balances
-      setTimeout(async () => {
-        const nb = await getTokenBalances(['INJ', 'USDT', 'USDC'], sandboxAddr);
+      const transfers = result.result?.transfers ?? [];
+      appendDisplay(activeId, {
+        id: uid(),
+        role: 'assistant',
+        content: transfers.length > 0
+          ? `Sweep complete — transferred ${transfers.map((item) => `${Number(item.amount).toFixed(item.symbol === 'INJ' ? 4 : 2)} ${item.symbol}`).join(', ')} back to your main wallet.`
+          : 'Nothing to sweep — the sandbox wallet balance is too low to cover gas fees or already empty.',
+      });
+
+      if (activeConv?.sandboxAddress) {
+        const nb = await getTokenBalances(['INJ', 'USDT', 'USDC'], activeConv.sandboxAddress as Address);
         setSandboxBalances({ INJ: nb.INJ ?? '0', USDT: nb.USDT ?? '0', USDC: nb.USDC ?? '0' });
-      }, 4000);
+      }
     } catch (err) {
-      console.error('[harvest]', err);
+      appendDisplay(activeId, {
+        id: uid(),
+        role: 'assistant',
+        content: `❌ Sweep failed: ${err instanceof Error ? err.message : 'Unknown error'}`,
+        isError: true,
+      });
     } finally {
       setHarvestLoading(false);
       setShowSandboxPanel(false);
@@ -798,132 +811,45 @@ export default function AgentsPage() {
   // Runs until the model returns a final text response with no more tool calls.
   // Destructive tools (swap, send) pause and wait for the confirmation modal.
 
-  const runLoop = useCallback(async (convId: string, history: ApiMessage[]) => {
+  const runLoop = useCallback(async (convId: string, userText: string) => {
     setIsRunning(true);
 
     try {
-      // eslint-disable-next-line no-constant-condition
-      while (true) {
-        const res = await fetch('/api/agents', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            messages: history,
-            model,
-            systemExtra: (isSandboxEnabled() && activeConv?.sandboxAddress)
-              ? `SANDBOX MODE ACTIVE: You are controlling a disposable sandbox wallet (address: ${activeConv.sandboxAddress}). This is NOT the user's real wallet. All operations (swaps, sends, game plays) will use this sandbox address. The user can sweep any sandbox funds to their real wallet at any time using the harvest button.`
-              : undefined,
-          }),
+      const result = await sendAgentMessage({
+        conversationId: convId,
+        message: userText,
+        model,
+        sandboxMode: sandboxModeEnabled,
+      });
+
+      if (!result.ok) {
+        throw new Error(result.error || 'AI error');
+      }
+
+      if (result.sandboxAddress) {
+        updateConv(convId, (current) => ({
+          ...current,
+          sandboxAddress: result.sandboxAddress ?? current.sandboxAddress,
+        }));
+      }
+
+      for (const message of result.messages ?? []) {
+        appendDisplay(convId, {
+          id: uid(),
+          role: message.role,
+          content: message.content,
+          isError: message.isError,
         });
+      }
 
-        if (!res.ok) {
-          const err = await res.json();
-          throw new Error(err.error ?? 'API error');
-        }
-
-        const data = await res.json();
-        const blocks: ApiBlock[] = data.content ?? [];
-        const usage = (data?.usage ?? {}) as {
-          input_tokens?: number;
-          output_tokens?: number;
-        };
-
-        // Build the assistant api message and persist it
-        const assistantApiMsg: ApiMessage = { role: 'assistant', content: blocks };
-        history = [...history, assistantApiMsg];
-        appendApi(convId, assistantApiMsg);
-
-        try {
-          const active = conversations.find((c) => c.id === convId);
-          const result = await recordChat({
-            conversationId: active?.backendConversationId,
-            title: active?.title || 'New Chat',
-            messages: toRecordMessages(history),
-            model,
-            usage: {
-              inputTokens: Number(usage.input_tokens ?? 0),
-              outputTokens: Number(usage.output_tokens ?? 0),
-            },
-          });
-
-          if (result.ok && result.conversationId) {
-            updateConv(convId, (current) => ({
-              ...current,
-              backendConversationId: result.conversationId,
-            }));
-          }
-        } catch (recordError) {
-          console.error('[AI] Failed to record chat turn:', recordError);
-        }
-
-        // Render text blocks
-        const textContent = blocks
-          .filter((b) => b.type === 'text')
-          .map((b) => b.text ?? '')
-          .join('\n')
-          .trim();
-
-        if (textContent) {
-          appendDisplay(convId, { id: uid(), role: 'assistant', content: textContent });
-        }
-
-        // Find tool_use blocks
-        const toolUseBlocks = blocks.filter((b) => b.type === 'tool_use');
-
-        // No more tools → done
-        if (toolUseBlocks.length === 0) break;
-
-        // Process tools in sequence
-        let shouldPause = false;
-
-        for (const tool of toolUseBlocks) {
-          const toolName = tool.name!;
-          const toolInput = (tool.input ?? {}) as Record<string, unknown>;
-          const toolId = tool.id!;
-          const isDestructive =
-            toolName === 'execute_swap' ||
-            toolName === 'send_token' ||
-            toolName === 'play_hash_mahjong' ||
-            toolName === 'play_hash_mahjong_multi';
-
-          if (isDestructive && !isPinFreeActive()) {
-            // Pause and show confirmation modal
-            setPendingConfirm({
-              convId,
-              toolUseId: toolId,
-              toolName,
-              toolInput,
-              assistantApiMessage: assistantApiMsg,
-            });
-            setIsRunning(false);
-            shouldPause = true;
-            break;
-          }
-
-          // Safe tool — execute immediately and show result
-          const resultContent = await executeTool(toolName, toolInput);
-
-          // Show in UI
-          appendDisplay(convId, {
-            id: uid(),
-            role: 'tool',
-            content: formatToolResult(toolName, resultContent),
-          });
-
-          // Add tool_result to history
-          const toolResultMsg: ApiMessage = {
-            role: 'user',
-            content: [{
-              type: 'tool_result',
-              tool_use_id: toolId,
-              content: resultContent,
-            }],
-          };
-          history = [...history, toolResultMsg];
-          appendApi(convId, toolResultMsg);
-        }
-
-        if (shouldPause) return; // resume handled by handleConfirm / handleCancel
+      if (result.pendingConfirmation) {
+        setPendingConfirm({
+          convId,
+          toolUseId: result.pendingConfirmation.toolUseId,
+          toolName: result.pendingConfirmation.toolName,
+          toolInput: result.pendingConfirmation.toolInput,
+          executionMode: result.pendingConfirmation.executionMode,
+        });
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Unknown error';
@@ -931,103 +857,240 @@ export default function AgentsPage() {
     } finally {
       setIsRunning(false);
     }
-  }, [conversations, model]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [model, sandboxModeEnabled]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ─── Confirm destructive tool ────────────────────────────────────────────
 
+  async function executeClientWalletPendingAction(currentPending: PendingConfirmation) {
+    if (!currentPending.toolUseId) {
+      throw new Error('Missing client tool use id');
+    }
+    if (!privateKey || !address) {
+      throw new Error('Unlock your main wallet first to sign this transaction.');
+    }
+
+    let resultPayload: Record<string, unknown>;
+    if (currentPending.toolName === 'execute_swap') {
+      const { fromToken, toToken, amount, slippage } = currentPending.toolInput as {
+        fromToken: string;
+        toToken: string;
+        amount: string;
+        slippage?: number;
+      };
+      const txHash = await executeSwap({
+        fromToken,
+        toToken,
+        amountIn: amount,
+        slippage: slippage ?? 0.5,
+        userAddress: address as Address,
+        privateKey: privateKeyToHex(privateKey),
+      });
+      resetTxAuth();
+      resultPayload = {
+        success: true,
+        txHash,
+        explorerUrl: `https://blockscout.injective.network/tx/${txHash}`,
+      };
+    } else if (currentPending.toolName === 'send_token') {
+      const { toAddress, amount } = currentPending.toolInput as {
+        toAddress: string;
+        amount: string;
+      };
+      const txHash = await sendTransaction(privateKey, toAddress, amount);
+      resetTxAuth();
+      resultPayload = {
+        success: true,
+        txHash,
+        explorerUrl: `https://blockscout.injective.network/tx/${txHash}`,
+      };
+    } else {
+      throw new Error(`Unsupported client wallet action: ${currentPending.toolName}`);
+    }
+
+    const result = await submitClientToolResult({
+      conversationId: currentPending.convId,
+      toolUseId: currentPending.toolUseId,
+      result: JSON.stringify(resultPayload),
+    });
+
+    if (!result.ok) {
+      throw new Error(result.error || 'Client tool result submit failed');
+    }
+
+    for (const message of result.messages ?? []) {
+      appendDisplay(currentPending.convId, {
+        id: uid(),
+        role: message.role,
+        content: message.content,
+        isError: message.isError,
+      });
+    }
+
+    setPendingConfirm(result.pendingConfirmation ? {
+      convId: currentPending.convId,
+      toolUseId: result.pendingConfirmation.toolUseId,
+      toolName: result.pendingConfirmation.toolName,
+      toolInput: result.pendingConfirmation.toolInput,
+      executionMode: result.pendingConfirmation.executionMode,
+    } : null);
+  }
+
   async function handleConfirm() {
     if (!pendingConfirm) return;
-    // If private key not yet in memory, ask the user to re-authenticate first
-    if (!privateKey) {
-      setShowAuthModal(true);
+    setConfirmLoading(true);
+    try {
+      if (pendingConfirm.executionMode === 'client_wallet') {
+        if (!privateKey || !address) {
+          setShowAgentAuthModal(true);
+          setPostAgentAuthAction(
+            pendingConfirm.toolName === 'execute_swap' ? 'swap' : 'send',
+          );
+          return;
+        }
+
+        await executeClientWalletPendingAction(pendingConfirm);
+        return;
+      }
+
+      const result = await confirmAgentAction({
+        conversationId: pendingConfirm.convId,
+        approve: true,
+      });
+
+      if (!result.ok) {
+        throw new Error(result.error || 'Confirmation failed');
+      }
+
+      if (result.sandboxAddress) {
+        updateConv(pendingConfirm.convId, (current) => ({
+          ...current,
+          sandboxAddress: result.sandboxAddress ?? current.sandboxAddress,
+        }));
+      }
+
+      for (const message of result.messages ?? []) {
+        appendDisplay(pendingConfirm.convId, {
+          id: uid(),
+          role: message.role,
+          content: message.content,
+          isError: message.isError,
+        });
+      }
+
+      setPendingConfirm(result.pendingConfirmation ? {
+        convId: pendingConfirm.convId,
+        toolUseId: result.pendingConfirmation.toolUseId,
+        toolName: result.pendingConfirmation.toolName,
+        toolInput: result.pendingConfirmation.toolInput,
+        executionMode: result.pendingConfirmation.executionMode,
+      } : null);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Confirmation failed';
+      appendDisplay(pendingConfirm.convId, {
+        id: uid(),
+        role: 'assistant',
+        content: `❌ Error: ${msg}`,
+        isError: true,
+      });
+    } finally {
+      setConfirmLoading(false);
+    }
+  }
+
+  function handleAgentAuthSuccess() {
+    setShowAgentAuthModal(false);
+  }
+
+  useEffect(() => {
+    if (!postAgentAuthAction || !pendingConfirm || !privateKey) {
       return;
     }
-    await executeConfirmedTool();
-  }
 
-  async function executeConfirmedTool(overridePk?: Uint8Array) {
-    if (!pendingConfirm) return;
-    const { convId, toolUseId, toolName, toolInput } = pendingConfirm;
-    setConfirmLoading(true);
+    const actionMatches =
+      (postAgentAuthAction === 'swap' && pendingConfirm.toolName === 'execute_swap') ||
+      (postAgentAuthAction === 'send' && pendingConfirm.toolName === 'send_token');
 
-    const resultContent = await executeTool(toolName, toolInput, overridePk);
-    const parsed = JSON.parse(resultContent);
+    if (!actionMatches) {
+      setPostAgentAuthAction(null);
+      return;
+    }
 
-    appendDisplay(convId, {
-      id: uid(),
-      role: 'tool',
-      content: parsed.error
-        ? `❌ **${toolName}** failed: ${parsed.error}`
-        : `✅ **${toolName}** executed\nTx Hash: \`${parsed.txHash}\`\n[View on Blockscout](${parsed.explorerUrl})`,
-    });
+    let cancelled = false;
 
-    const toolResultMsg: ApiMessage = {
-      role: 'user',
-      content: [{ type: 'tool_result', tool_use_id: toolUseId, content: resultContent }],
+    const run = async () => {
+      setConfirmLoading(true);
+      try {
+        await executeClientWalletPendingAction(pendingConfirm);
+      } catch (err) {
+        if (!cancelled) {
+          const msg = err instanceof Error ? err.message : 'Confirmation failed';
+          appendDisplay(pendingConfirm.convId, {
+            id: uid(),
+            role: 'assistant',
+            content: `❌ Error: ${msg}`,
+            isError: true,
+          });
+        }
+      } finally {
+        if (!cancelled) {
+          setConfirmLoading(false);
+          setPostAgentAuthAction(null);
+        }
+      }
     };
-    appendApi(convId, toolResultMsg);
 
-    const currentHistory = [...getApiHistory(convId), toolResultMsg];
+    void run();
 
-    setPendingConfirm(null);
-    setConfirmLoading(false);
+    return () => {
+      cancelled = true;
+    };
+  }, [pendingConfirm, postAgentAuthAction, privateKey]);
 
-    await runLoop(convId, currentHistory);
-  }
-
-  async function handleAuthWithPasskey() {
-    if (!keystore?.credentialId) return;
-    setAuthLoading(true);
-    setAuthError('');
-    try {
-      const entropy = await unlockByPasskey(keystore.credentialId);
-      const pk = await decryptKey(keystore.encryptedPrivateKey, entropy);
-      unlock(pk, keystore);
-      setShowAuthModal(false);
-      setAuthLoading(false);
-      await executeConfirmedTool(pk);
-    } catch (err) {
-      setAuthError(err instanceof Error ? err.message : 'Authentication failed');
-      setAuthLoading(false);
+  useEffect(() => {
+    if (!pendingConfirm || showAgentAuthModal) {
+      return;
     }
-  }
 
-  async function handleAuthWithPassword() {
-    if (!keystore || !authPassword) return;
-    setAuthLoading(true);
-    setAuthError('');
-    try {
-      const encoder = new TextEncoder();
-      const rawEntropy = encoder.encode(authPassword);
-      const entropy = new Uint8Array(Math.max(rawEntropy.length, 32));
-      entropy.set(rawEntropy);
-      const pk = await decryptKey(keystore.encryptedPrivateKey, entropy);
-      unlock(pk, keystore);
-      setShowAuthModal(false);
-      setAuthPassword('');
-      setAuthLoading(false);
-      await executeConfirmedTool(pk);
-    } catch {
-      setAuthError('Incorrect password');
-      setAuthLoading(false);
-    }
-  }
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
 
-  function handleCancel() {
-    if (!pendingConfirm) return;
-    appendDisplay(pendingConfirm.convId, {
-      id: uid(),
-      role: 'assistant',
-      content: '🚫 Operation cancelled.',
+    window.requestAnimationFrame(() => {
+      confirmPrimaryButtonRef.current?.focus();
     });
-    setPendingConfirm(null);
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [pendingConfirm, showAgentAuthModal]);
+
+  async function handleCancel() {
+    if (!pendingConfirm) return;
+    setConfirmLoading(true);
+    try {
+      const result = await confirmAgentAction({
+        conversationId: pendingConfirm.convId,
+        approve: false,
+      });
+
+      for (const message of result.messages ?? []) {
+        appendDisplay(pendingConfirm.convId, {
+          id: uid(),
+          role: message.role,
+          content: message.content,
+          isError: message.isError,
+        });
+      }
+    } finally {
+      setPendingConfirm(null);
+      setConfirmLoading(false);
+    }
   }
 
   // ─── Send message ────────────────────────────────────────────────────────
 
   async function handleSend() {
     const mentionText = [
-      ...dappMentions.map((dapp) => DAPP_MENTION_META[dapp].prompt),
+      ...dappMentions.map((dapp) => getMentionMeta(dapp).prompt),
       ...assetMentions.map((symbol) => `$${symbol}`),
     ].join(' ');
     const text = [mentionText, input.trim()].filter(Boolean).join(' ').trim();
@@ -1037,28 +1100,19 @@ export default function AgentsPage() {
     setDappMentions([]);
 
     let convId = activeId;
-    let currentHistory: ApiMessage[] = [];
-
     if (!convId) {
       const id = uid();
-      const conv: Conversation = { id, title: text.slice(0, 40), createdAt: Date.now(), messages: [], apiHistory: [] };
+      const conv: Conversation = { id, title: text.slice(0, 40), createdAt: Date.now(), messages: [] };
       setConversations((prev) => [conv, ...prev]);
       setActiveId(id);
       convId = id;
-    } else {
-      currentHistory = getApiHistory(convId);
-      if (messages.length === 0) {
-        updateConv(convId, (c) => ({ ...c, title: text.slice(0, 40) }));
-      }
+    } else if (messages.length === 0) {
+      updateConv(convId, (c) => ({ ...c, title: text.slice(0, 40) }));
     }
 
     // Add user message
     appendDisplay(convId, { id: uid(), role: 'user', content: text });
-    const userApiMsg: ApiMessage = { role: 'user', content: text };
-    appendApi(convId, userApiMsg);
-    currentHistory = [...currentHistory, userApiMsg];
-
-    await runLoop(convId, currentHistory);
+    await runLoop(convId, text);
   }
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
@@ -1072,7 +1126,11 @@ export default function AgentsPage() {
     event.preventDefault();
     const symbol = normalizeAssetMentionSymbol(event.dataTransfer.getData('application/x-injpass-asset'));
     const rawDapp = event.dataTransfer.getData('application/x-injpass-dapp');
-    const dapp = rawDapp in DAPP_MENTION_META ? (rawDapp as DAppMentionName) : null;
+    const plainText = event.dataTransfer.getData('text/plain');
+    const plainTextDapp = plainText.startsWith('injpass-dapp:')
+      ? plainText.slice('injpass-dapp:'.length)
+      : '';
+    const dapp = normalizeDAppMentionName(rawDapp || plainTextDapp);
 
     if (symbol) {
       setAssetMentions((current) => current.includes(symbol) ? current : [...current, symbol]);
@@ -1080,6 +1138,11 @@ export default function AgentsPage() {
 
     if (dapp) {
       setDappMentions((current) => current.includes(dapp) ? current : [...current, dapp]);
+      setDappMentionMetaMap((current) => (
+        current[dapp]
+          ? current
+          : { ...current, [dapp]: buildDAppMentionMeta(dapp) }
+      ));
     }
 
     setIsAssetDropActive(false);
@@ -1654,8 +1717,19 @@ export default function AgentsPage() {
 
         {/* ── Confirmation modal ── */}
         {pendingConfirm && (
-          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm flex items-end sm:items-center justify-center z-50 p-4">
-            <div className={compactModalClass}>
+          <div
+            className={`fixed inset-0 z-[90] flex items-end justify-center bg-black/70 p-4 backdrop-blur-sm transition-opacity sm:items-center ${
+              showAgentAuthModal ? 'pointer-events-none opacity-0' : 'opacity-100'
+            }`}
+            aria-hidden={showAgentAuthModal}
+          >
+            <div
+              className={compactModalClass}
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="agent-confirm-title"
+              tabIndex={-1}
+            >
               <div className={`px-5 pt-5 pb-4 border-b ${isLight ? 'border-slate-200/80' : 'border-white/10'}`}>
                 <div className="flex items-center gap-3">
                   <div className="w-9 h-9 rounded-full bg-amber-500/20 flex items-center justify-center flex-shrink-0">
@@ -1664,7 +1738,7 @@ export default function AgentsPage() {
                     </svg>
                   </div>
                   <div>
-                    <h3 className="font-bold text-sm">Confirm Transaction</h3>
+                    <h3 id="agent-confirm-title" className="font-bold text-sm">Confirm Transaction</h3>
                     <p className="text-xs text-gray-400">AI Agent is requesting approval</p>
                   </div>
                 </div>
@@ -1763,83 +1837,16 @@ export default function AgentsPage() {
                   <button onClick={handleCancel} disabled={confirmLoading} className="flex-1 py-3 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 font-bold text-sm transition-colors">
                     Cancel
                   </button>
-                  <button onClick={handleConfirm} disabled={confirmLoading} className="flex-1 py-3 rounded-xl bg-white hover:bg-gray-100 text-black font-bold text-sm transition-colors flex items-center justify-center gap-2">
+                  <button
+                    ref={confirmPrimaryButtonRef}
+                    onClick={handleConfirm}
+                    disabled={confirmLoading}
+                    className="flex-1 py-3 rounded-xl bg-white hover:bg-gray-100 text-black font-bold text-sm transition-colors flex items-center justify-center gap-2"
+                  >
                     {confirmLoading && <div className="w-4 h-4 border-2 border-black/20 border-t-black rounded-full animate-spin" />}
                     {confirmLoading ? 'Processing…' : 'Confirm'}
                   </button>
                 </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* ── Re-auth modal (privateKey not in memory) ── */}
-        {showAuthModal && (
-          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm flex items-end sm:items-center justify-center z-50 p-4">
-            <div className={compactModalClass}>
-              <div className={`px-5 pt-5 pb-4 border-b ${isLight ? 'border-slate-200/80' : 'border-white/10'}`}>
-                <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-full bg-blue-500/20 flex items-center justify-center flex-shrink-0">
-                    <svg className="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                    </svg>
-                  </div>
-                  <div>
-                    <h3 className="font-bold text-sm">Verify Identity</h3>
-                    <p className="text-xs text-gray-400">Re-authenticate to sign this transaction</p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="px-5 py-4">
-                {authError && (
-                  <div className="mb-3 px-3 py-2 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-xs">
-                    {authError}
-                  </div>
-                )}
-
-                {keystore?.source === 'passkey' && (
-                  <button
-                    onClick={handleAuthWithPasskey}
-                    disabled={authLoading}
-                    className="w-full py-3 rounded-xl bg-white text-black font-bold text-sm hover:bg-gray-100 transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
-                  >
-                    {authLoading
-                      ? <><div className="w-4 h-4 border-2 border-black/20 border-t-black rounded-full animate-spin" />Verifying…</>
-                      : <>🔑 Authenticate with Passkey</>}
-                  </button>
-                )}
-
-                {keystore?.source === 'import' && (
-                  <div className="space-y-3">
-                    <input
-                      type="password"
-                      value={authPassword}
-                      onChange={(e) => setAuthPassword(e.target.value)}
-                      onKeyDown={(e) => e.key === 'Enter' && handleAuthWithPassword()}
-                      placeholder="Enter your wallet password"
-                      className={`w-full rounded-xl px-4 py-3 text-sm focus:outline-none transition-colors ${isLight ? 'bg-slate-900/[0.03] border border-slate-200/80 text-slate-900 placeholder:text-slate-400 focus:border-slate-300' : 'bg-white/5 border border-white/10 text-white placeholder-gray-500 focus:border-white/30'}`}
-                      autoFocus
-                    />
-                    <button
-                      onClick={handleAuthWithPassword}
-                      disabled={authLoading || !authPassword}
-                      className="w-full py-3 rounded-xl bg-white text-black font-bold text-sm hover:bg-gray-100 transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
-                    >
-                      {authLoading
-                        ? <><div className="w-4 h-4 border-2 border-black/20 border-t-black rounded-full animate-spin" />Verifying…</>
-                        : '🔓 Unlock & Sign'}
-                    </button>
-                  </div>
-                )}
-
-                <button
-                  onClick={() => { setShowAuthModal(false); setAuthError(''); setAuthPassword(''); }}
-                  disabled={authLoading}
-                  className="w-full mt-2 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-gray-400 font-semibold text-sm transition-colors"
-                >
-                  Cancel
-                </button>
               </div>
             </div>
           </div>
@@ -2200,6 +2207,36 @@ export default function AgentsPage() {
           <div className={`${isCompactStage ? 'max-w-none' : isEmbedded ? 'max-w-4xl' : 'max-w-3xl'} mx-auto`}>
             {isCompactStage && (
               <div className="mb-3.5 flex flex-wrap items-center justify-start gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => setSandboxMode(true)}
+                  className={`rounded-full border px-2.5 py-1 text-[10px] font-semibold transition-colors ${
+                    sandboxModeEnabled
+                      ? isLight
+                        ? 'border-emerald-300 bg-emerald-50 text-emerald-700'
+                        : 'border-emerald-400/30 bg-emerald-400/12 text-emerald-300'
+                      : isLight
+                        ? 'border-slate-200/80 bg-white/70 text-slate-500'
+                        : 'border-white/10 bg-white/[0.04] text-gray-400'
+                  }`}
+                >
+                  Sandbox
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSandboxMode(false)}
+                  className={`rounded-full border px-2.5 py-1 text-[10px] font-semibold transition-colors ${
+                    !sandboxModeEnabled
+                      ? isLight
+                        ? 'border-amber-300 bg-amber-50 text-amber-700'
+                        : 'border-amber-400/30 bg-amber-400/12 text-amber-300'
+                      : isLight
+                        ? 'border-slate-200/80 bg-white/70 text-slate-500'
+                        : 'border-white/10 bg-white/[0.04] text-gray-400'
+                  }`}
+                >
+                  Main Wallet
+                </button>
                 <div className={`rounded-full border px-2.5 py-1 text-[10px] font-medium ${
                   isLight
                     ? 'border-slate-200/80 bg-white/70 text-slate-500'
@@ -2229,12 +2266,12 @@ export default function AgentsPage() {
                   <button
                     onClick={() => setShowSandboxPanel((p) => !p)}
                     className={`rounded-full border px-2.5 py-1 text-[10px] font-semibold transition-colors ${
-                      isSandboxEnabled()
+                      sandboxModeEnabled
                         ? 'border-emerald-400/25 bg-emerald-400/10 text-emerald-300 hover:bg-emerald-400/20'
                         : 'border-amber-400/25 bg-amber-400/10 text-amber-300 hover:bg-amber-400/20'
                     }`}
                   >
-                    {isSandboxEnabled() ? 'Sandbox' : 'Takeover'} · {activeConv.sandboxAddress.slice(0, 8)}…{activeConv.sandboxAddress.slice(-6)}
+                    {sandboxModeEnabled ? 'Sandbox' : 'Main Wallet'} · {activeConv.sandboxAddress.slice(0, 8)}…{activeConv.sandboxAddress.slice(-6)}
                   </button>
                 )}
               </div>
@@ -2246,12 +2283,12 @@ export default function AgentsPage() {
                 <button
                   onClick={() => setShowSandboxPanel(p => !p)}
                   className={`text-[10px] font-semibold rounded-full px-2.5 py-0.5 cursor-pointer transition-colors ${
-                    isSandboxEnabled()
+                    sandboxModeEnabled
                       ? 'text-emerald-400/90 bg-emerald-400/10 border border-emerald-400/25 hover:bg-emerald-400/20'
                       : 'text-amber-400/90 bg-amber-400/10 border border-amber-400/25 hover:bg-amber-400/20'
                   }`}
                 >
-                  {isSandboxEnabled() ? 'Sandbox' : '接管'} · {activeConv.sandboxAddress.slice(0, 10)}…{activeConv.sandboxAddress.slice(-6)}
+                  {sandboxModeEnabled ? 'Sandbox' : 'Main Wallet'} · {activeConv.sandboxAddress.slice(0, 10)}…{activeConv.sandboxAddress.slice(-6)}
                 </button>
               </div>
             )}
@@ -2268,11 +2305,49 @@ export default function AgentsPage() {
               >
                 {/* ── Front face: normal input bar ── */}
                 <div style={{ backfaceVisibility: 'hidden', WebkitBackfaceVisibility: 'hidden' } as React.CSSProperties}>
+                  <div className={`mb-2 flex flex-wrap items-center justify-between gap-2 px-1 ${isCompactStage ? 'hidden' : ''}`}>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setSandboxMode(true)}
+                        className={`rounded-full border px-3 py-1 text-[11px] font-semibold transition-colors ${
+                          sandboxModeEnabled
+                            ? isLight
+                              ? 'border-emerald-300 bg-emerald-50 text-emerald-700'
+                              : 'border-emerald-400/30 bg-emerald-400/12 text-emerald-300'
+                            : isLight
+                              ? 'border-slate-200/80 bg-white/80 text-slate-500 hover:border-slate-300 hover:text-slate-700'
+                              : 'border-white/10 bg-white/[0.03] text-gray-400 hover:bg-white/[0.06] hover:text-gray-200'
+                        }`}
+                      >
+                        Sandbox Mode
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setSandboxMode(false)}
+                        className={`rounded-full border px-3 py-1 text-[11px] font-semibold transition-colors ${
+                          !sandboxModeEnabled
+                            ? isLight
+                              ? 'border-amber-300 bg-amber-50 text-amber-700'
+                              : 'border-amber-400/30 bg-amber-400/12 text-amber-300'
+                            : isLight
+                              ? 'border-slate-200/80 bg-white/80 text-slate-500 hover:border-slate-300 hover:text-slate-700'
+                              : 'border-white/10 bg-white/[0.03] text-gray-400 hover:bg-white/[0.06] hover:text-gray-200'
+                        }`}
+                      >
+                        Main Wallet Mode
+                      </button>
+                    </div>
+                    <div className={`text-[10px] ${isLight ? 'text-slate-500' : 'text-gray-400'}`}>
+                      Mode switch starts a new chat so signing behavior matches the session.
+                    </div>
+                  </div>
                   <div
                     onDragOver={(event) => {
                       if (
                         event.dataTransfer.types.includes('application/x-injpass-asset') ||
-                        event.dataTransfer.types.includes('application/x-injpass-dapp')
+                        event.dataTransfer.types.includes('application/x-injpass-dapp') ||
+                        event.dataTransfer.types.includes('text/plain')
                       ) {
                         event.preventDefault();
                         event.dataTransfer.dropEffect = 'copy';
@@ -2306,20 +2381,24 @@ export default function AgentsPage() {
                       )}
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-hide py-1">
-                          {dappMentions.map((dapp) => (
-                            <button
-                              key={dapp}
-                              type="button"
-                              onClick={() => removeDAppMention(dapp)}
-                              className={`inline-flex flex-shrink-0 items-center gap-1 rounded-full border px-2.5 py-1 text-[10px] font-semibold transition-all ${dappMentionTone[dapp]}`}
-                              title={`Remove ${DAPP_MENTION_META[dapp].label}`}
-                            >
-                              <span>{DAPP_MENTION_META[dapp].label}</span>
-                              <svg className="h-3 w-3 opacity-70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.2} d="M6 18L18 6M6 6l12 12" />
-                              </svg>
-                            </button>
-                          ))}
+                          {dappMentions.map((dapp) => {
+                            const mention = getMentionMeta(dapp);
+                            const tone = getDAppTone(mention.themeKey, dapp, isLight);
+                            return (
+                              <button
+                                key={dapp}
+                                type="button"
+                                onClick={() => removeDAppMention(dapp)}
+                                className={`inline-flex flex-shrink-0 items-center gap-1 rounded-full border px-2.5 py-1 text-[10px] font-semibold transition-all ${tone}`}
+                                title={`Remove ${mention.label}`}
+                              >
+                                <span>{mention.label}</span>
+                                <svg className="h-3 w-3 opacity-70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.2} d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                              </button>
+                            );
+                          })}
                           {assetMentions.map((symbol) => (
                             <button
                               key={symbol}
@@ -2396,25 +2475,26 @@ export default function AgentsPage() {
 
                       {/* Actions */}
                       <div className="flex items-center gap-2 flex-shrink-0">
-                        {/* Show private key */}
-                        <button
-                          onClick={() => setShowSandboxKey(p => !p)}
-                          title={showSandboxKey ? 'Hide private key' : 'Show private key'}
-                          className={`w-8 h-8 rounded-xl border flex items-center justify-center transition-all ${
-                            showSandboxKey
-                              ? 'bg-white/15 border-white/30'
-                              : 'bg-white/5 hover:bg-white/10 border-white/10'
-                          }`}
-                        >
-                          <svg className="w-4 h-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.75 5.25a3 3 0 013 3m3 0a6 6 0 01-7.029 5.912c-.563-.097-1.159.026-1.563.43L10.5 17.25H8.25v2.25H6v2.25H2.25v-2.818c0-.597.237-1.17.659-1.591l6.499-6.499c.404-.404.527-1 .43-1.563A6 6 0 1121.75 8.25z" />
-                          </svg>
-                        </button>
+                        {activeConv?.sandboxKey && (
+                          <button
+                            onClick={() => setShowSandboxKey(p => !p)}
+                            title={showSandboxKey ? 'Hide private key' : 'Show private key'}
+                            className={`w-8 h-8 rounded-xl border flex items-center justify-center transition-all ${
+                              showSandboxKey
+                                ? 'bg-white/15 border-white/30'
+                                : 'bg-white/5 hover:bg-white/10 border-white/10'
+                            }`}
+                          >
+                            <svg className="w-4 h-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.75 5.25a3 3 0 013 3m3 0a6 6 0 01-7.029 5.912c-.563-.097-1.159.026-1.563.43L10.5 17.25H8.25v2.25H6v2.25H2.25v-2.818c0-.597.237-1.17.659-1.591l6.499-6.499c.404-.404.527-1 .43-1.563A6 6 0 1121.75 8.25z" />
+                            </svg>
+                          </button>
+                        )}
                         {/* Sweep / withdraw */}
                         <button
                           onClick={() => !harvestLoading && harvestSandbox()}
-                          disabled={harvestLoading}
-                          title="Sweep all funds to your real wallet"
+                          disabled={harvestLoading || !activeConv?.sandboxAddress}
+                          title={activeConv?.sandboxAddress ? 'Sweep all funds to your real wallet' : 'No sandbox wallet attached to this conversation'}
                           className="w-8 h-8 rounded-xl bg-white/5 hover:bg-emerald-500/20 border border-white/10 hover:border-emerald-500/30 flex items-center justify-center transition-all disabled:opacity-40"
                         >
                           {harvestLoading
@@ -2465,6 +2545,16 @@ export default function AgentsPage() {
           </div>
         </div>
       </div>
+
+      <TransactionAuthModal
+        isOpen={showAgentAuthModal}
+        onClose={() => {
+          setShowAgentAuthModal(false);
+          setPostAgentAuthAction(null);
+        }}
+        onSuccess={handleAgentAuthSuccess}
+        transactionType={postAgentAuthAction ?? 'send'}
+      />
     </div>
   );
 }

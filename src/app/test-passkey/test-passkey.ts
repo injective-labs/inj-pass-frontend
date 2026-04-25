@@ -1,12 +1,9 @@
+import { API_BASE_URL as API_URL } from '@/services/api-base';
+
 /**
  * Test Passkey integration
  * Run this in browser console or create a test page
  */
-
-// Test configuration
-const API_URL = process.env.NEXT_PUBLIC_API_URL || (() => {
-  throw new Error('NEXT_PUBLIC_API_URL environment variable is required');
-})();
 
 // Helper functions
 function arrayBufferToBase64(buffer: ArrayBuffer): string {

@@ -26,6 +26,7 @@ export default function TransactionAuthModal({
   const [error, setError] = useState('');
   const [verifying, setVerifying] = useState(false);
   const pinInputRef = useRef<HTMLInputElement>(null);
+  const primaryActionRef = useRef<HTMLButtonElement>(null);
   const requiresPasskeyUnlock = !privateKey;
 
   useEffect(() => {
@@ -40,8 +41,24 @@ export default function TransactionAuthModal({
       window.requestAnimationFrame(() => {
         pinInputRef.current?.focus();
       });
+      return;
     }
+
+    window.requestAnimationFrame(() => {
+      primaryActionRef.current?.focus();
+    });
   }, [defaultAuthMethod, isOpen, requiresPasskeyUnlock]);
+
+  useEffect(() => {
+    if (!isOpen || variant !== 'modal') return undefined;
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [isOpen, variant]);
 
   if (!isOpen && variant === 'modal') return null;
 
@@ -105,9 +122,13 @@ export default function TransactionAuthModal({
       <div
         className="bg-black border border-white/10 rounded-2xl max-w-md w-full shadow-2xl"
         onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="tx-auth-modal-title"
+        tabIndex={-1}
       >
         <div className="p-5 border-b border-white/5">
-          <h3 className="text-lg font-bold text-white">
+          <h3 id="tx-auth-modal-title" className="text-lg font-bold text-white">
             Verify {transactionType === 'send' ? 'Send' : transactionType === 'swap' ? 'Swap' : 'Chance Purchase'} Transaction
           </h3>
         </div>
@@ -165,6 +186,7 @@ export default function TransactionAuthModal({
               Cancel
             </button>
             <button
+              ref={primaryActionRef}
               onClick={handleVerify}
               disabled={verifying || (defaultAuthMethod === 'pin' && !requiresPasskeyUnlock && pin.length !== 6)}
               className="flex-1 py-3 rounded-xl bg-white text-black font-bold text-sm hover:bg-gray-100 transition-all disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center gap-2"
@@ -211,7 +233,7 @@ export default function TransactionAuthModal({
 
   return (
     <div 
-      className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+      className="fixed inset-0 z-[120] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4"
       onClick={onClose}
     >
       {authCard}

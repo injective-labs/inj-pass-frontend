@@ -5,6 +5,7 @@ import { PinProvider } from "@/contexts/PinContext";
 import { ThemeProvider } from "@/contexts/ThemeContext";
 import Script from "next/script";
 import { SidebarOverlay, GeometricShapes } from "./components/LayoutClient";
+import SupportChat from "./components/SupportChat";
 
 export const metadata: Metadata = {
   title: "INJ Pass",
@@ -84,7 +85,10 @@ export default function RootLayout({
           <GeometricShapes />
 
           <PinProvider>
-            <WalletProvider>{children}</WalletProvider>
+            <WalletProvider>
+              {children}
+              <SupportChat />
+            </WalletProvider>
           </PinProvider>
         </ThemeProvider>
       </body>

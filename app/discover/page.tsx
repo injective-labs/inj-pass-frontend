@@ -258,6 +258,12 @@ export default function DiscoverPage() {
     window.open(dapp.url, '_blank', 'noopener,noreferrer');
   };
 
+  const handleDAppDragStart = (event: React.DragEvent<HTMLElement>, dapp: DApp) => {
+    event.dataTransfer.effectAllowed = 'copy';
+    event.dataTransfer.setData('application/x-injpass-dapp', dapp.name);
+    event.dataTransfer.setData('text/plain', `injpass-dapp:${dapp.name}`);
+  };
+
   const openQRScanner = async () => {
     try {
       if (!isCameraSupported()) {
@@ -346,16 +352,15 @@ export default function DiscoverPage() {
       : [];
   const effectiveCategoryTabs = resolvedCategoryTabs;
   const effectiveTabCount = Math.max(effectiveCategoryTabs.length, 1);
-  const aiCategoryIds = categoryTabs.filter((tab) => isAiTab(tab)).map((tab) => tab.id);
   const visibleDapps = isAiMode
-    ? dapps.filter((dapp) => dapp.categories.some((category) => aiCategoryIds.includes(category)))
+    ? dapps.filter((dapp) => Boolean(dapp.aiDriven))
     : dapps;
   const hasSearch = searchQuery.trim().length > 0;
   const filteredDapps = visibleDapps.filter((dapp) => {
     const matchesCategory =
       hasSearch ||
       (isAiMode
-        ? Boolean(activeCategory) && dapp.categories.includes(activeCategory)
+        ? Boolean(activeCategory)
         : !activeCategory || dapp.categories.includes(activeCategory));
     const matchesSearch =
       dapp.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -454,6 +459,8 @@ export default function DiscoverPage() {
                 <button
                   key={dapp.id}
                   onClick={() => handleDAppClick(dapp)}
+                  draggable
+                  onDragStart={(event) => handleDAppDragStart(event, dapp)}
                   className={`flex min-w-[102px] flex-col items-center justify-center gap-2 rounded-[1.35rem] border px-3 py-3.5 text-center transition-all hover:-translate-y-[1px] sm:min-w-[112px] sm:rounded-[1.45rem] sm:py-4 ${
                     useWalletSurfaceTheme
                       ? 'border-white/10 bg-black hover:bg-white/[0.05]'
@@ -487,7 +494,13 @@ export default function DiscoverPage() {
               </div>
               <div className="grid grid-cols-2 gap-4 md:grid-cols-4 md:gap-6">
                 {featuredDapps.map((dapp) => (
-                  <div key={dapp.id} onClick={() => handleDAppClick(dapp)} className="group flex cursor-pointer flex-col items-center gap-2">
+                  <div
+                    key={dapp.id}
+                    onClick={() => handleDAppClick(dapp)}
+                    draggable
+                    onDragStart={(event) => handleDAppDragStart(event, dapp)}
+                    className="group flex cursor-grab flex-col items-center gap-2 active:cursor-grabbing"
+                  >
                     <div className={`flex h-16 w-16 items-center justify-center overflow-hidden rounded-full border p-2 shadow-lg transition-all group-hover:scale-110 ${
                       isLight
                         ? 'border-slate-200/80 bg-transparent shadow-[0_10px_24px_rgba(148,163,184,0.10)]'
@@ -551,7 +564,13 @@ export default function DiscoverPage() {
             ) : (
               <div className="grid grid-cols-2 gap-4 md:grid-cols-4 md:gap-6">
                 {filteredDapps.map((dapp) => (
-                  <div key={dapp.id} onClick={() => handleDAppClick(dapp)} className="group flex cursor-pointer flex-col items-center gap-2">
+                  <div
+                    key={dapp.id}
+                    onClick={() => handleDAppClick(dapp)}
+                    draggable
+                    onDragStart={(event) => handleDAppDragStart(event, dapp)}
+                    className="group flex cursor-grab flex-col items-center gap-2 active:cursor-grabbing"
+                  >
                     <div className={`flex h-16 w-16 items-center justify-center overflow-hidden rounded-full border p-2 shadow-lg transition-all group-hover:scale-110 ${
                       isLight
                         ? 'border-slate-200/80 bg-transparent shadow-[0_10px_24px_rgba(148,163,184,0.10)]'
