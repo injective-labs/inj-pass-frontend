@@ -6,7 +6,7 @@ export interface PointsTransaction {
   type: string;
   amount: number;
   balanceAfter: number;
-  metadata: Record<string, any>;
+  metadata: Record<string, unknown>;
   createdAt: string;
 }
 
@@ -26,8 +26,22 @@ export interface ConsumeChanceResponse {
   error?: string;
 }
 
+export interface NinjaStatusResponse {
+  balance: number;
+  chanceRemaining: number;
+  chanceCooldownEndsAt: number;
+}
+
 export interface BalanceResponse {
   balance: number;
+}
+
+export interface AdjustNinjaResponse {
+  success: boolean;
+  balance?: number;
+  delta?: number;
+  transactionId?: number;
+  error?: string;
 }
 
 export interface NinjaMinerState {
@@ -125,6 +139,89 @@ export async function getBalance(): Promise<number> {
     console.error('[Points] Get balance failed:', error);
     return 0;
   }
+}
+
+export async function getNinjaStatus(): Promise<NinjaStatusResponse> {
+  try {
+    const response = await fetch(`${API_BASE_URL}/points/status`, {
+      method: 'GET',
+      headers: getAuthHeader(),
+    });
+
+    if (!response.ok) {
+      return {
+        balance: 0,
+        chanceRemaining: 0,
+        chanceCooldownEndsAt: 0,
+      };
+    }
+
+    const data = await response.json() as Partial<NinjaStatusResponse>;
+    return {
+      balance: Number.isFinite(Number(data.balance)) ? Number(data.balance) : 0,
+      chanceRemaining: Number.isFinite(Number(data.chanceRemaining))
+        ? Math.max(0, Math.floor(Number(data.chanceRemaining)))
+        : 0,
+      chanceCooldownEndsAt: Number.isFinite(Number(data.chanceCooldownEndsAt))
+        ? Math.max(0, Math.floor(Number(data.chanceCooldownEndsAt)))
+        : 0,
+    };
+  } catch (error) {
+    console.error('[Points] Get ninja status failed:', error);
+    return {
+      balance: 0,
+      chanceRemaining: 0,
+      chanceCooldownEndsAt: 0,
+    };
+  }
+}
+
+async function adjustNinja(
+  operation: 'credit' | 'debit',
+  amount: number,
+  options?: { reason?: string; source?: string },
+): Promise<AdjustNinjaResponse> {
+  try {
+    const response = await fetch(`${API_BASE_URL}/points/${operation}`, {
+      method: 'POST',
+      headers: getAuthHeader(),
+      body: JSON.stringify({
+        amount,
+        reason: options?.reason,
+        source: options?.source,
+      }),
+    });
+
+    const payload = await response.json().catch(() => ({ success: false, error: `${operation} failed` }));
+    if (!response.ok) {
+      return {
+        success: false,
+        error: payload?.error || `${operation} failed`,
+      };
+    }
+
+    return payload as AdjustNinjaResponse;
+  } catch (error) {
+    console.error(`[Points] ${operation} ninja failed:`, error);
+    return {
+      success: false,
+      error: 'Network error',
+    };
+  }
+}
+
+export async function creditNinja(
+  amount: number,
+  options?: { reason?: string; source?: string },
+): Promise<AdjustNinjaResponse> {
+  return adjustNinja('credit', amount, options);
+}
+
+export async function debitNinja(
+  amount: number,
+  options?: { reason?: string; source?: string },
+): Promise<AdjustNinjaResponse> {
+  return adjustNinja('debit', amount, options);
 }
 
 /**

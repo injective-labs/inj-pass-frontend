@@ -42,6 +42,10 @@
     <button id="sign" disabled>2. Sign Message</button>
     <button id="disconnect" disabled>3. Disconnect</button>
     <br>
+    <button id="get-ninja" disabled>4. Get Ninja Status</button>
+    <button id="credit-ninja" disabled>5. Credit Ninja</button>
+    <button id="debit-ninja" disabled>6. Debit Ninja</button>
+    <br>
     <button id="show">Show Wallet</button>
     <button id="hide">Hide Wallet</button>
   </div>
@@ -58,6 +62,9 @@
     const connectBtn = document.getElementById('connect');
     const signBtn = document.getElementById('sign');
     const disconnectBtn = document.getElementById('disconnect');
+    const getNinjaBtn = document.getElementById('get-ninja');
+    const creditNinjaBtn = document.getElementById('credit-ninja');
+    const debitNinjaBtn = document.getElementById('debit-ninja');
     
     let wallet = null;
 
@@ -92,6 +99,9 @@
         connectBtn.disabled = true;
         signBtn.disabled = false;
         disconnectBtn.disabled = false;
+        getNinjaBtn.disabled = false;
+        creditNinjaBtn.disabled = false;
+        debitNinjaBtn.disabled = false;
       } catch (error) {
         log(`❌ Connection failed: ${error.message}`, 'error');
         connectBtn.disabled = false;
@@ -128,6 +138,72 @@
       connectBtn.disabled = false;
       signBtn.disabled = true;
       disconnectBtn.disabled = true;
+      getNinjaBtn.disabled = true;
+      creditNinjaBtn.disabled = true;
+      debitNinjaBtn.disabled = true;
+    };
+
+    getNinjaBtn.onclick = async () => {
+      try {
+        log('💠 Fetching NINJA status...');
+        const status = await connector.getNinjaStatus();
+        log(
+          `✅ NINJA status: balance=${status.balance}, chanceRemaining=${status.chanceRemaining}, chanceCooldownEndsAt=${status.chanceCooldownEndsAt}`,
+          'success'
+        );
+      } catch (error) {
+        log(`❌ Failed to fetch NINJA status: ${error.message}`, 'error');
+      }
+    };
+
+    creditNinjaBtn.onclick = async () => {
+      const rawAmount = prompt('Enter NINJA amount to credit:', '10');
+      if (!rawAmount) return;
+
+      const amount = Number(rawAmount);
+      if (!Number.isFinite(amount) || amount <= 0) {
+        log('❌ Invalid credit amount', 'error');
+        return;
+      }
+
+      try {
+        log(`➕ Crediting ${amount} NINJA...`);
+        const result = await connector.creditNinja(amount, {
+          source: 'test-iframe',
+          reason: 'manual top-up test'
+        });
+        log(
+          `✅ Credit success: balance=${result.balance}, delta=${result.delta}, tx=${result.transactionId}`,
+          'success'
+        );
+      } catch (error) {
+        log(`❌ Credit failed: ${error.message}`, 'error');
+      }
+    };
+
+    debitNinjaBtn.onclick = async () => {
+      const rawAmount = prompt('Enter NINJA amount to debit for AI billing:', '3');
+      if (!rawAmount) return;
+
+      const amount = Number(rawAmount);
+      if (!Number.isFinite(amount) || amount <= 0) {
+        log('❌ Invalid debit amount', 'error');
+        return;
+      }
+
+      try {
+        log(`➖ Debiting ${amount} NINJA for AI billing...`);
+        const result = await connector.debitNinja(amount, {
+          source: 'test-iframe-ai',
+          reason: 'ai_usage_charge'
+        });
+        log(
+          `✅ Debit success: balance=${result.balance}, delta=${result.delta}, tx=${result.transactionId}`,
+          'success'
+        );
+      } catch (error) {
+        log(`❌ Debit failed: ${error.message}`, 'error');
+      }
     };
 
     // Show/Hide
