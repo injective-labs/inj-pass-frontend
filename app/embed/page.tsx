@@ -200,13 +200,6 @@ export default function EmbedPage() {
   }, [connected, minimized, hasPendingSign, loading, errorToast, walletName, address]);
 
   useEffect(() => {
-    if (connected && !minimized) {
-      const timeoutId = window.setTimeout(() => setMinimized(true), 1200);
-      return () => window.clearTimeout(timeoutId);
-    }
-  }, [connected, minimized]);
-
-  useEffect(() => {
     if (hasPendingSign && minimized) {
       setMinimized(false);
     }
