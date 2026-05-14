@@ -2033,13 +2033,23 @@ export default function DashboardPage() {
       copyValue: currentUsdtAddress,
       contractValue: currentUsdtAddress ? truncateMiddle(currentUsdtAddress, 8, 6) : 'No contract yet',
     },
+    {
+      symbol: 'XAUT',
+      icon: '/tether_logo.png',
+      balance: '0.00 XAUT',
+      usdValue: formatUnitValue(0, balanceDisplayUnit),
+      change: '+0.00%',
+      changeClass: 'text-gray-500',
+      copyValue: null,
+      contractValue: 'UI only',
+    },
   ] as const;
   const compactAssetCardHeight = 64;
-  const compactAssetCardGap = 12;
+  const compactAssetCardGap = 6;
   const renderCompactAssetSurface = (surface: 'left' | 'right') => {
     const shouldPromoteNinja = surface === 'left' && isAiStage && aiCompactNinjaPromoted;
     const compactDisplayOrder = shouldPromoteNinja
-      ? ['LAM', 'INJ', 'USDC', 'USDT']
+      ? ['LAM', 'INJ', 'USDC', 'USDT', 'XAUT']
       : dashboardTokenCards.map((token) => token.symbol);
     const compactListHeight = dashboardTokenCards.length * compactAssetCardHeight + (dashboardTokenCards.length - 1) * compactAssetCardGap;
 
@@ -3370,7 +3380,7 @@ export default function DashboardPage() {
               {isCardPanel ? (
                 renderCompactAssetSurface('right')
               ) : (
-              <div key={`asset-surface-${walletNetworkMode}-${assetSurfaceMotionKey}`} className="dashboard-surface-enter relative flex flex-1 flex-col">
+              <div key={`asset-surface-${walletNetworkMode}-${assetSurfaceMotionKey}`} className="dashboard-surface-enter relative flex min-h-0 flex-1 flex-col">
         {/* Asset Tabs - Smooth Sliding Background */}
         <div className="relative mb-3 rounded-xl bg-white/5 p-1 sm:mb-4">
           {/* Sliding Background */}
@@ -3444,7 +3454,7 @@ export default function DashboardPage() {
         {/* Asset List */}
         <div className="min-h-0 flex-1 overflow-y-auto pr-0 sm:pr-1">
           {assetTab === 'tokens' && (
-            <div className="space-y-3">
+            <div className="space-y-3 pb-4">
               {dashboardTokenCards.map((token) => (
                 <div key={token.symbol} className="relative" style={{ perspective: '1400px' }}>
                   <div
