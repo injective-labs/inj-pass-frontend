@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import TunnelBackground from '@/components/TunnelBackground';
 import TrustPillBadge from '@/components/TrustPillBadge';
 import WelcomeThemeIconButton from '@/components/WelcomeThemeIconButton';
@@ -10,6 +10,9 @@ import { useWalletErrorToast } from '@/lib/useWalletErrorToast';
 import { unlockByPasskey } from '@/wallet/key-management/createByPasskey';
 import { loadWallet } from '@/wallet/keystore/storage';
 import { decryptKey } from '@/wallet/keystore';
+import { signAndSendTransaction } from '@/wallet/chain/evm/sendTransaction';
+import { INJECTIVE_MAINNET, INJECTIVE_TESTNET, type TransactionRequest } from '@/types/chain';
+import { NETWORK_CONFIG } from '@/config/network';
 import { secp256k1 } from '@noble/curves/secp256k1.js';
 import { keccak_256 } from '@noble/hashes/sha3.js';
 import type {
@@ -18,6 +21,47 @@ import type {
   WalletConnectRequest,
   WalletConnectResponse,
 } from '@/lib/auth-bridge';
+
+/** Embedded-dApp transaction request relayed from the /embed iframe. */
+interface EmbedTxRequest {
+  to: string;
+  data?: string;
+  value?: string;
+  gas?: string;
+}
+
+/**
+ * Convert an EIP-1193 `eth_sendTransaction` payload (hex-quantity strings, as
+ * ethers/wagmi produce) into the viem-backed TransactionRequest shape. Missing
+ * gas/fee/nonce are left undefined so viem fills them at broadcast time.
+ */
+function normalizeTx(tx: EmbedTxRequest): TransactionRequest {
+  const req: TransactionRequest = { to: tx.to };
+  if (tx.data) req.data = tx.data as `0x${string}`;
+  if (tx.value !== undefined && tx.value !== null && tx.value !== '')
+    req.value = BigInt(tx.value);
+  if (tx.gas !== undefined && tx.gas !== null && tx.gas !== '')
+    req.gasLimit = BigInt(tx.gas);
+  return req;
+}
+
+/** Human-readable INJ amount from a hex/decimal wei string (18 decimals). */
+function formatInjValue(value?: string): string {
+  if (!value) return '0';
+  try {
+    const wei = BigInt(value);
+    if (wei === 0n) return '0';
+    const whole = wei / 1_000_000_000_000_000_000n;
+    const frac = (wei % 1_000_000_000_000_000_000n)
+      .toString()
+      .padStart(18, '0')
+      .slice(0, 6)
+      .replace(/0+$/, '');
+    return frac ? `${whole}.${frac}` : `${whole}`;
+  } catch {
+    return value;
+  }
+}
 
 function hashPersonalMessage(message: string): Uint8Array {
   const msgBytes = new TextEncoder().encode(message);
@@ -28,6 +72,34 @@ function hashPersonalMessage(message: string): Uint8Array {
   combined.set(prefix);
   combined.set(msgBytes, prefix.length);
   return keccak_256(combined);
+}
+
+/** Extract a user-friendly error message from verbose RPC/viem errors. */
+function friendlyErrorMessage(raw: string): string {
+  const lower = raw.toLowerCase();
+  if (lower.includes('insufficient funds') || lower.includes('sender balance')) {
+    return 'Insufficient funds to cover transaction cost + gas.';
+  }
+  if (lower.includes('user rejected') || lower.includes('user denied')) {
+    return 'Transaction rejected by user.';
+  }
+  if (lower.includes('nonce')) {
+    return 'Nonce too low. Please try again.';
+  }
+  if (lower.includes('gas required exceeds allowance') || lower.includes('out of gas')) {
+    return 'Transaction gas limit too low.';
+  }
+  if (lower.includes('execution reverted')) {
+    const match = raw.match(/execution reverted[:\s]*(.*?)(?:\s*Version:|$)/i);
+    return match?.[1]?.trim() || 'Contract execution reverted.';
+  }
+  if (lower.includes('timeout') || lower.includes('timed out')) {
+    return 'Transaction timed out.';
+  }
+  // For other errors, truncate to first sentence
+  const firstSentence = raw.match(/^[^.!?]+[.!?]/);
+  if (firstSentence && firstSentence[0].length < 120) return firstSentence[0];
+  return raw.length > 120 ? raw.slice(0, 117) + '...' : raw;
 }
 
 function BrandLockIcon({ className = 'h-5 w-5' }: { className?: string }) {
@@ -112,7 +184,7 @@ function AuthPageContent() {
   const { requestId, originParam, action } = query;
 
   const [status, setStatus] = useState<
-    'waiting' | 'sign_pending' | 'processing' | 'success' | 'error' | 'ready'
+    'waiting' | 'sign_pending' | 'tx_pending' | 'processing' | 'success' | 'error' | 'ready'
   >('waiting');
   const [message, setMessage] = useState('');
   const [currentSignRequest, setCurrentSignRequest] = useState<{
@@ -120,12 +192,18 @@ function AuthPageContent() {
     message: string;
     origin: string;
   } | null>(null);
+  const [currentTxRequest, setCurrentTxRequest] = useState<{
+    requestId: string;
+    tx: EmbedTxRequest;
+    origin: string;
+  } | null>(null);
+  const [errorMessage, setErrorMessage] = useState('');
   const { errorToast, showErrorToast, dismissErrorToast } = useWalletErrorToast();
 
   const BALL_W = 82;
   const BALL_H = 82;
   const FULL_W = 400;
-  const FULL_H = 530;
+  const FULL_H = 800;
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -146,6 +224,12 @@ function AuthPageContent() {
     }
   }, [status]);
 
+  // Use a ref for status so the message listener never needs re-registration.
+  // This prevents the brief window where messages could be lost between
+  // cleanup and re-registration when status changes.
+  const statusRef = useRef(status);
+  statusRef.current = status;
+
   useEffect(() => {
     const handleSignRequest = (event: MessageEvent) => {
       const isLocalhost = event.origin.startsWith('http://localhost:');
@@ -153,8 +237,8 @@ function AuthPageContent() {
       const isSameDomain = event.origin === window.location.origin;
       if (!isLocalhost && !isSameOrigin && !isSameDomain) return;
 
-      const { type, requestId: reqId, message: msg } = event.data;
-      if (type === 'SIGN_REQUEST' && status === 'ready') {
+      const { type, requestId: reqId, message: msg, tx } = event.data;
+      if (type === 'SIGN_REQUEST' && statusRef.current === 'ready') {
         setCurrentSignRequest({
           requestId: reqId,
           message: msg,
@@ -162,11 +246,19 @@ function AuthPageContent() {
         });
         setStatus('sign_pending');
       }
+      if (type === 'TX_REQUEST' && statusRef.current === 'ready') {
+        setCurrentTxRequest({
+          requestId: reqId,
+          tx: tx as EmbedTxRequest,
+          origin: event.origin,
+        });
+        setStatus('tx_pending');
+      }
     };
 
     window.addEventListener('message', handleSignRequest);
     return () => window.removeEventListener('message', handleSignRequest);
-  }, [originParam, status]);
+  }, [originParam]);
 
   useEffect(() => {
     if (action === 'sign_persistent') {
@@ -180,11 +272,12 @@ function AuthPageContent() {
     const { requestId: reqId, message: msg, origin: reqOrigin } =
       currentSignRequest;
 
+    setErrorMessage('');
     setStatus('processing');
     setMessage('Unlocking your INJ Pass...');
-    dismissErrorToast(true);
 
     try {
+      dismissErrorToast(true);
       const keystore = loadWallet();
       if (!keystore?.credentialId) throw new Error('Wallet not found');
 
@@ -207,34 +300,52 @@ function AuthPageContent() {
       window.opener?.postMessage(
         {
           type: 'SIGN_RESPONSE',
-          data: {
-            requestId: reqId,
-            signature: Array.from(ethSig),
-            address: keystore.address,
-          },
+          requestId: reqId,
+          signature: Array.from(ethSig),
+          address: keystore.address,
         },
         reqOrigin
       );
+      try {
+        const bc = new BroadcastChannel('injpass_tx');
+        bc.postMessage({
+          type: 'SIGN_RESPONSE',
+          requestId: reqId,
+          signature: Array.from(ethSig),
+          address: keystore.address,
+        });
+        bc.close();
+      } catch {}
 
       setCurrentSignRequest(null);
       setStatus('success');
       setMessage('Authorization complete');
       setTimeout(() => setStatus('ready'), 1800);
     } catch (err) {
-      const errMsg = err instanceof Error ? err.message : 'Signing failed';
-      showErrorToast(errMsg);
+      const rawMsg = err instanceof Error ? err.message : 'Signing failed';
+      const friendlyMsg = friendlyErrorMessage(rawMsg);
+      console.error('[INJ Pass /auth] Sign failed:', rawMsg);
+      showErrorToast(friendlyMsg);
       window.opener?.postMessage(
         {
           type: 'SIGN_RESPONSE',
-          data: { requestId: reqId, error: errMsg },
+          requestId: reqId,
+          error: friendlyMsg,
         },
         currentSignRequest.origin
       );
+      try {
+        const bc = new BroadcastChannel('injpass_tx');
+        bc.postMessage({ type: 'SIGN_RESPONSE', requestId: reqId, error: friendlyMsg });
+        bc.close();
+      } catch {}
       setCurrentSignRequest(null);
+      setErrorMessage(friendlyMsg);
       setStatus('error');
       setTimeout(() => {
+        setErrorMessage('');
         setStatus('ready');
-      }, 2000);
+      }, 6000);
     }
   };
 
@@ -243,15 +354,105 @@ function AuthPageContent() {
       window.opener?.postMessage(
         {
           type: 'SIGN_RESPONSE',
-          data: {
-            requestId: currentSignRequest.requestId,
-            error: 'User rejected the request.',
-          },
+          requestId: currentSignRequest.requestId,
+          error: 'User rejected the request.',
         },
         currentSignRequest.origin
       );
     }
     setCurrentSignRequest(null);
+    setStatus('ready');
+  };
+
+  const handleConfirmTx = async () => {
+    if (!currentTxRequest) return;
+
+    const { requestId: reqId, tx, origin: reqOrigin } = currentTxRequest;
+
+    setErrorMessage('');
+    setStatus('processing');
+    setMessage('Unlocking your INJ Pass...');
+
+    try {
+      dismissErrorToast(true);
+      const keystore = loadWallet();
+      if (!keystore?.credentialId) throw new Error('Wallet not found');
+
+      const entropy = await unlockByPasskey(keystore.credentialId);
+      setMessage('Signing & broadcasting transaction...');
+
+      const privateKey = await decryptKey(keystore.encryptedPrivateKey, entropy);
+      const activeChain = NETWORK_CONFIG.isMainnet ? INJECTIVE_MAINNET : INJECTIVE_TESTNET;
+      const txHash = await signAndSendTransaction(privateKey, normalizeTx(tx), activeChain);
+
+      console.log('[INJ Pass /auth] TX broadcast success, txHash:', txHash);
+
+      // Send response via both channels:
+      // 1. window.opener → embed page → dApp (may fail if opener is cross-origin)
+      // 2. BroadcastChannel → dApp directly (reliable fallback)
+      // NOTE: requestId must be at top level (flat) to match embed's listener
+      window.opener?.postMessage(
+        {
+          type: 'TX_RESPONSE',
+          requestId: reqId,
+          txHash,
+        },
+        reqOrigin
+      );
+      console.log('[INJ Pass /auth] TX_RESPONSE sent via postMessage to opener, requestId:', reqId);
+      try {
+        const bc = new BroadcastChannel('injpass_tx');
+        bc.postMessage({ type: 'TX_RESPONSE', requestId: reqId, txHash });
+        console.log('[INJ Pass /auth] TX_RESPONSE sent via BroadcastChannel, requestId:', reqId);
+        bc.close();
+      } catch (bcErr) {
+        console.error('[INJ Pass /auth] BroadcastChannel send failed:', bcErr);
+      }
+
+      setCurrentTxRequest(null);
+      setStatus('success');
+      setMessage('Transaction submitted');
+      setTimeout(() => setStatus('ready'), 1800);
+    } catch (err) {
+      const rawMsg = err instanceof Error ? err.message : 'Transaction failed';
+      const friendlyMsg = friendlyErrorMessage(rawMsg);
+      console.error('[INJ Pass /auth] TX failed:', rawMsg);
+      showErrorToast(friendlyMsg);
+      window.opener?.postMessage(
+        {
+          type: 'TX_RESPONSE',
+          requestId: reqId,
+          error: friendlyMsg,
+        },
+        reqOrigin
+      );
+      try {
+        const bc = new BroadcastChannel('injpass_tx');
+        bc.postMessage({ type: 'TX_RESPONSE', requestId: reqId, error: friendlyMsg });
+        bc.close();
+      } catch {}
+      setCurrentTxRequest(null);
+      setErrorMessage(friendlyMsg);
+      setStatus('error');
+      setTimeout(() => {
+        setErrorMessage('');
+        setStatus('ready');
+      }, 6000);
+    }
+  };
+
+  const handleRejectTx = () => {
+    if (currentTxRequest) {
+      window.opener?.postMessage(
+        {
+          type: 'TX_RESPONSE',
+          requestId: currentTxRequest.requestId,
+          error: 'User rejected the request.',
+        },
+        currentTxRequest.origin
+      );
+    }
+    setCurrentTxRequest(null);
     setStatus('ready');
   };
 
@@ -283,9 +484,9 @@ function AuthPageContent() {
       processingStarted = true;
       setStatus('processing');
       setMessage('Preparing secure authorization...');
-      dismissErrorToast(true);
 
       try {
+        dismissErrorToast(true);
         const keystore = loadWallet();
         if (!keystore || !keystore.credentialId) {
           throw new Error(
@@ -308,14 +509,17 @@ function AuthPageContent() {
         setStatus('ready');
         setMessage('Ready to sign transactions');
       } catch (err) {
-        const errorMsg = err instanceof Error ? err.message : 'Connection failed';
-        showErrorToast(errorMsg);
+        const rawMsg = err instanceof Error ? err.message : 'Connection failed';
+        const friendlyMsg = friendlyErrorMessage(rawMsg);
+        console.error('[INJ Pass /auth] Connect failed:', rawMsg);
+        showErrorToast(friendlyMsg);
+        setErrorMessage(friendlyMsg);
         setStatus('error');
 
         const response: WalletConnectResponse = {
           type: 'WALLET_CONNECT_RESPONSE',
           requestId: request.requestId,
-          error: errorMsg,
+          error: friendlyMsg,
         };
 
         window.opener?.postMessage(response, targetOrigin);
@@ -337,9 +541,9 @@ function AuthPageContent() {
       processingStarted = true;
       setStatus('processing');
       setMessage('Preparing secure signature...');
-      dismissErrorToast(true);
 
       try {
+        dismissErrorToast(true);
         const keystore = loadWallet();
         if (!keystore || !keystore.credentialId) {
           throw new Error('Wallet not found');
@@ -378,15 +582,18 @@ function AuthPageContent() {
         setMessage('Authorization complete');
         setTimeout(() => window.close(), 1500);
       } catch (err) {
-        const errorMsg =
+        const rawMsg =
           err instanceof Error ? err.message : 'Authentication failed';
-        showErrorToast(errorMsg);
+        const friendlyMsg = friendlyErrorMessage(rawMsg);
+        console.error('[INJ Pass /auth] Auth failed:', rawMsg);
+        showErrorToast(friendlyMsg);
+        setErrorMessage(friendlyMsg);
         setStatus('error');
 
         const response: AuthResponse = {
           type: 'PASSKEY_SIGN_RESPONSE',
           requestId: request.requestId,
-          error: errorMsg,
+          error: friendlyMsg,
         };
 
         window.opener?.postMessage(response, targetOrigin);
@@ -411,6 +618,26 @@ function AuthPageContent() {
 
       if (data.type === 'PASSKEY_SIGN' && data.requestId === requestId) {
         await handlePasskeySign(data as AuthRequest, event.origin);
+      }
+
+      if (data.type === 'SIGN_REQUEST' && data.requestId === requestId) {
+        setCurrentSignRequest({
+          requestId: data.requestId,
+          message: data.message,
+          origin: event.origin,
+        });
+        setStatus('sign_pending');
+      }
+
+      if (data.type === 'TX_REQUEST' && data.requestId === requestId) {
+        // Handle TX_REQUEST regardless of current status, so transactions
+        // can be reviewed even when the popup was opened for wallet connection.
+        setCurrentTxRequest({
+          requestId: data.requestId,
+          tx: data.tx as EmbedTxRequest,
+          origin: event.origin,
+        });
+        setStatus('tx_pending');
       }
     };
 
@@ -474,6 +701,8 @@ function AuthPageContent() {
   const title =
     status === 'sign_pending'
       ? 'Review authorization request'
+      : status === 'tx_pending'
+        ? 'Review transaction request'
       : status === 'processing'
         ? 'Authorizing with passkey'
         : status === 'success'
@@ -487,12 +716,14 @@ function AuthPageContent() {
   const description =
     status === 'sign_pending'
       ? `Review the request from ${callerLabel} before approving with your passkey.`
+      : status === 'tx_pending'
+        ? `Review the transaction from ${callerLabel} before approving with your passkey.`
       : status === 'processing'
         ? message || 'Preparing secure authorization...'
       : status === 'success'
           ? 'The secure session is ready and will return to its compact state.'
       : status === 'error'
-            ? 'Review the alert above and try the authorization flow again.'
+            ? errorMessage || 'An unexpected error occurred. Please try again.'
             : action === 'connect'
               ? 'Your paired wallet stays self-custodial while INJ Pass opens the secure session.'
               : 'INJ Pass is preparing the next authorization flow.';
@@ -567,7 +798,7 @@ function AuthPageContent() {
                     : 'border-white/10 bg-white/[0.06] text-white'
                 }`}
               >
-                {status === 'sign_pending' ? (
+                {status === 'sign_pending' || status === 'tx_pending' ? (
                   <SparkIcon />
                 ) : status === 'processing' ? (
                   <FingerprintIcon />
@@ -636,6 +867,63 @@ function AuthPageContent() {
                     className={`rounded-[22px] border px-4 py-3 text-sm font-semibold transition-all ${primaryButtonTone}`}
                   >
                     Sign with Passkey
+                  </button>
+                </div>
+              </div>
+            ) : status === 'tx_pending' && currentTxRequest ? (
+              <div className="mt-4 flex min-h-0 flex-1 flex-col gap-2.5">
+                <div className={`rounded-[20px] border px-4 py-3 ${surfaceTone}`}>
+                  <div className="flex items-center justify-between gap-3">
+                    <p className={`text-[10px] uppercase tracking-[0.2em] ${headerTone}`}>
+                      Amount
+                    </p>
+                    <p className="font-mono text-sm font-semibold">
+                      {formatInjValue(currentTxRequest.tx.value)} INJ
+                    </p>
+                  </div>
+                  <div className="mt-2">
+                    <p className={`text-[10px] uppercase tracking-[0.2em] ${headerTone}`}>
+                      To
+                    </p>
+                    <p className="mt-1 break-all font-mono text-[11px] leading-5">
+                      {currentTxRequest.tx.to}
+                    </p>
+                  </div>
+                  {currentTxRequest.tx.data && currentTxRequest.tx.data !== '0x' ? (
+                    <div className="mt-2">
+                      <p className={`text-[10px] uppercase tracking-[0.2em] ${headerTone}`}>
+                        Data
+                      </p>
+                      <div className={`mt-1 max-h-14 overflow-auto rounded-[12px] border px-2.5 py-1.5 font-mono text-[10px] leading-4 ${isLightMode ? 'border-[#d7dfed] bg-white/80 text-[#243043]' : 'border-white/10 bg-black/20 text-white/82'}`}>
+                        {currentTxRequest.tx.data}
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
+
+                <div className={`rounded-[20px] border px-4 py-2.5 ${surfaceTone}`}>
+                  <p className={`text-[10px] uppercase tracking-[0.2em] ${headerTone}`}>
+                    Requested by
+                  </p>
+                  <p className="mt-1 text-xs">{callerOriginToLabel(currentTxRequest.origin)}</p>
+                </div>
+
+                <div className={`rounded-[16px] border px-3 py-2 text-xs ${isLightMode ? 'border-amber-200 bg-amber-50 text-amber-700' : 'border-amber-400/20 bg-amber-500/10 text-amber-100'}`}>
+                  Passkey approval is required to sign this transaction.
+                </div>
+
+                <div className="mt-auto grid grid-cols-2 gap-2 pt-1 flex-shrink-0">
+                  <button
+                    onClick={handleRejectTx}
+                    className={`rounded-[18px] border px-3 py-2.5 text-sm font-semibold transition-all ${secondaryButtonTone}`}
+                  >
+                    Reject
+                  </button>
+                  <button
+                    onClick={handleConfirmTx}
+                    className={`rounded-[18px] border px-3 py-2.5 text-sm font-semibold transition-all ${primaryButtonTone}`}
+                  >
+                    Approve with Passkey
                   </button>
                 </div>
               </div>

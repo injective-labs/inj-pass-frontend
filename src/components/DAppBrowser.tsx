@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useWallet } from '@/contexts/WalletContext';
 import { createWeb3Provider, injectWeb3Provider } from '@/services/web3-provider';
-import { NETWORK_CONFIG } from '@/config/network';
+import { NETWORK_CONFIG, ACTIVE_NETWORK } from '@/config/network';
 
 interface DAppBrowserProps {
   url: string;
@@ -47,7 +47,7 @@ export default function DAppBrowser({ url, name, onClose }: DAppBrowserProps) {
     // Create Web3 provider
     const provider = createWeb3Provider({
       address: address as `0x${string}`,
-      chainId: 888, // Injective EVM chain ID
+      chainId: ACTIVE_NETWORK.chainId,
       onSignTransaction: async (tx) => {
         console.log('[DAppBrowser] Sign transaction request:', tx);
         
@@ -93,9 +93,8 @@ export default function DAppBrowser({ url, name, onClose }: DAppBrowserProps) {
       },
       onSwitchChain: async (chainId) => {
         console.log('[DAppBrowser] Switch chain request:', chainId);
-        // Injective only supports chain 888
-        if (chainId !== 888) {
-          throw new Error('Only Injective network is supported');
+        if (chainId !== ACTIVE_NETWORK.chainId) {
+          throw new Error(`Only ${ACTIVE_NETWORK.name} network is supported`);
         }
       },
     });

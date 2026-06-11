@@ -7,6 +7,8 @@
  * @author Alex <jsxj81@163.com>
  */
 
+import { INJECTIVE_TESTNET } from '@/types/chain';
+
 export interface FaucetNetwork {
   id: string;
   name: string;
@@ -27,14 +29,14 @@ export const FAUCET_NETWORKS: FaucetNetwork[] = [
   {
     id: 'injective',
     name: 'INJ',
-    chainName: 'Injective Testnet',
-    rpcUrl: 'https://k8s.testnet.json-rpc.injective.network/',
-    chainId: 1439,
+    chainName: INJECTIVE_TESTNET.name,
+    rpcUrl: INJECTIVE_TESTNET.rpcUrl,
+    chainId: INJECTIVE_TESTNET.id,
     amount: '0.1',
     symbol: 'INJ',
     color: '#00B2FF',
     isBase: true,
-    explorerUrl: 'https://testnet.blockscout.injective.network/tx/',
+    explorerUrl: INJECTIVE_TESTNET.explorerUrl,
   },
   {
     id: 'sepolia',

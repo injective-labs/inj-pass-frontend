@@ -10,7 +10,7 @@ import {
   type Address,
 } from 'viem';
 import { NETWORK_CONFIG } from '@/config/network';
-import { INJECTIVE_MAINNET_CHAIN } from '@/types/chain';
+import { DEFAULT_CHAIN_VIEM } from '@/types/chain';
 
 // N1NJ4 NFT Contract Address on Injective EVM
 export const N1NJ4_CONTRACT_ADDRESS = '0x816070929010a3d202d8a6b89f92bee33b7e8769' as Address;
@@ -132,7 +132,7 @@ function extractTokenIdFromBlockscoutItem(item: BlockscoutTokenInstance): string
  */
 function createClient() {
   return createPublicClient({
-    chain: INJECTIVE_MAINNET_CHAIN,
+    chain: DEFAULT_CHAIN_VIEM,
     transport: http(),
   });
 }
