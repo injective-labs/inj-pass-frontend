@@ -117,8 +117,35 @@ console.log('Connected:', wallet.address);
 const signature = await wallet.signer.signMessage('Hello World');
 console.log('Signature:', signature);
 
+// Send an EVM transaction (signed & broadcast inside the secure popup)
+const txHash = await wallet.signer.sendTransaction({
+  to: '0x...',
+  data: '0x...',      // contract calldata (optional)
+  value: '0x0',       // wei, hex string (optional)
+});
+console.log('Tx:', txHash);
+
 // Disconnect
 connector.disconnect();
+```
+
+### Drop-in `window.ethereum` (EVM dApps)
+
+For EVM dApps built on ethers/wagmi/viem, expose an EIP-1193 provider and assign
+it to `window.ethereum` — existing contract code then works unchanged. Read-only
+RPC calls are served from `rpcUrl`; account/signing/transaction calls route to the
+INJ Pass popup (passkey confirmation).
+
+```typescript
+const connector = new InjPassConnector({
+  embedUrl: import.meta.env.VITE_INJPASS_EMBED_URL,
+  rpcUrl: 'https://k8s.testnet.json-rpc.injective.network/', // required for reads
+  chainId: 1439,                                             // Injective inEVM testnet
+});
+
+await connector.connect();
+window.ethereum = connector.getEthereumProvider();
+// → new ethers.BrowserProvider(window.ethereum), wagmi injected(), etc.
 ```
 
 > **Important**: 
@@ -278,6 +305,28 @@ Signs a message using the wallet's private key (secp256k1).
 **Throws:**
 - `Error('Signing timeout')` - If signing takes > 30s
 - `Error(...)` - If user rejects or signing fails
+
+#### `sendTransaction(tx): Promise<string>` _(v2.4+)_
+Signs **and broadcasts** an EVM transaction inside the secure popup, returning the
+transaction hash. The private key never leaves the popup.
+
+**Parameters:**
+- `tx.to`: recipient / contract address (`0x...`)
+- `tx.data?`: calldata (`0x...`)
+- `tx.value?`: wei, hex-quantity string (`0x...`)
+- `tx.gas?`: gas limit, hex-quantity string (optional; auto-estimated if omitted)
+
+**Returns:**
+- `Promise<string>`: broadcast transaction hash (`0x...`)
+
+**Throws:**
+- `Error('Transaction timeout')` - If approval takes > 120s
+- `Error(...)` - If user rejects, or signing/broadcast fails
+
+### InjPassConnector — `getEthereumProvider()` _(v2.4+)_
+Returns an EIP-1193 provider (`window.ethereum`-compatible) backed by the connected
+wallet. Read-only methods are answered via `config.rpcUrl`; account/signing/transaction
+methods route to the popup. Requires `rpcUrl` (and `chainId`) in the connector config.
 ## Security Considerations
 
 ### 1. Content Security Policy (CSP)

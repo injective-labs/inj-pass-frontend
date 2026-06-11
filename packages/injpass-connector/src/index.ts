@@ -68,6 +68,22 @@ export interface InjPassConfig {
    * @default true
    */
   autoHide?: boolean;
+
+  /**
+   * EVM JSON-RPC endpoint, used by `getEthereumProvider()` to answer read-only
+   * methods (eth_call, eth_estimateGas, eth_getTransactionReceipt, ...) directly,
+   * without round-tripping to the wallet. Required if you use `getEthereumProvider()`.
+   *
+   * @example 'https://k8s.testnet.json-rpc.injective.network/'
+   */
+  rpcUrl?: string;
+
+  /**
+   * EVM chain id reported by `getEthereumProvider()` (eth_chainId).
+   *
+   * @example 1439 // Injective inEVM testnet
+   */
+  chainId?: number;
 }
 
 export interface ConnectedWallet {
@@ -76,9 +92,18 @@ export interface ConnectedWallet {
   signer: InjPassSigner;
 }
 
+/** Minimal EIP-1193 provider surface (compatible with `window.ethereum`). */
+export interface Eip1193Provider {
+  isInjPass: boolean;
+  isMetaMask: boolean;
+  request: (args: { method: string; params?: unknown[] }) => Promise<unknown>;
+  on: (event: string, handler: (...args: unknown[]) => void) => void;
+  removeListener: (event: string, handler: (...args: unknown[]) => void) => void;
+}
+
 export class InjPassConnector {
   private iframe: HTMLIFrameElement | null = null;
-  private config: Required<Omit<InjPassConfig, 'containerId'>> & Pick<InjPassConfig, 'containerId'>;
+  private config: Required<Omit<InjPassConfig, 'containerId' | 'rpcUrl' | 'chainId'>> & Pick<InjPassConfig, 'containerId'>;
   private embedOrigin: string;
   private connected = false;
   private pendingRequests = new Map<string, {
@@ -87,6 +112,9 @@ export class InjPassConnector {
   }>();
   private messageHandler: ((event: MessageEvent) => void) | null = null;
   private disconnectListeners: Set<() => void> = new Set();
+  private rpcUrl?: string;
+  private chainId?: number;
+  private connectedWallet: ConnectedWallet | null = null;
 
   constructor(config: InjPassConfig) {
     if (!config.embedUrl) {
@@ -107,6 +135,8 @@ export class InjPassConnector {
       containerId: config.containerId,
     };
     this.embedOrigin = parsedEmbedUrl.origin;
+    this.rpcUrl = config.rpcUrl;
+    this.chainId = config.chainId;
 
     // Auto-cleanup when page is closed/unloaded
     // This ensures the iframe and popup are properly closed when dApp is closed
@@ -167,12 +197,15 @@ export class InjPassConnector {
 
           // Don't hide — the embed page shrinks itself to a ball
           const signer = new InjPassSigner(this.iframe!, this.embedOrigin);
-          
-          resolve({
+
+          const wallet: ConnectedWallet = {
             address,
             walletName,
             signer,
-          });
+          };
+          this.connectedWallet = wallet;
+
+          resolve(wallet);
         }
 
         // Embed page requests iframe resize (ball ↔ card)
@@ -237,6 +270,7 @@ export class InjPassConnector {
     }
 
     this.connected = false;
+    this.connectedWallet = null;
     this.pendingRequests.clear();
 
     // Notify all disconnect listeners
@@ -280,6 +314,151 @@ export class InjPassConnector {
     if (this.iframe) {
       this.iframe.style.display = 'none';
     }
+  }
+
+  /**
+   * Build an EIP-1193 provider (compatible with `window.ethereum`) backed by the
+   * connected INJ Pass wallet.
+   *
+   * - Read-only RPC methods (eth_call, eth_estimateGas, eth_getTransactionReceipt, ...)
+   *   are answered directly via `config.rpcUrl`.
+   * - Account / signing / transaction methods are routed to the wallet, which
+   *   confirms with passkey in the secure popup. The private key never leaves it.
+   *
+   * Assign the result to `window.ethereum` so existing wallet libraries
+   * (ethers `BrowserProvider`, wagmi `injected`) work unchanged.
+   *
+   * @example
+   * const c = new InjPassConnector({ embedUrl, rpcUrl, chainId: 1439 });
+   * window.ethereum = c.getEthereumProvider();
+   */
+  getEthereumProvider(): Eip1193Provider {
+    const eventListeners = new Map<string, Set<(...args: unknown[]) => void>>();
+
+    const rpcRequest = async (method: string, params: unknown[] = []): Promise<unknown> => {
+      if (!this.rpcUrl) {
+        throw new Error(
+          `INJ Pass provider: rpcUrl is required to handle "${method}". ` +
+          'Pass { rpcUrl } to InjPassConnector.'
+        );
+      }
+      const res = await fetch(this.rpcUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ jsonrpc: '2.0', id: Date.now(), method, params }),
+      });
+      const json = await res.json();
+      if (json.error) {
+        // Preserve `code` and `data` so callers (e.g. ethers `BrowserProvider`)
+        // can decode the revert payload (0x08c379a0…) into a real reason such as
+        // "execution reverted: amount<min" instead of an opaque "missing revert data".
+        const err = new Error(json.error.message || `RPC error for ${method}`) as Error & {
+          code?: number;
+          data?: unknown;
+        };
+        if (typeof json.error.code === 'number') err.code = json.error.code;
+        if (json.error.data !== undefined) err.data = json.error.data;
+        throw err;
+      }
+      return json.result;
+    };
+
+    const ensureConnected = async (): Promise<ConnectedWallet> => {
+      if (!this.connectedWallet) {
+        await this.connect();
+      }
+      if (!this.connectedWallet) {
+        throw new Error('INJ Pass wallet not connected');
+      }
+      return this.connectedWallet;
+    };
+
+    const toHex = (bytes: Uint8Array) =>
+      '0x' + Array.from(bytes).map((b) => b.toString(16).padStart(2, '0')).join('');
+
+    const provider: Eip1193Provider = {
+      isInjPass: true,
+      isMetaMask: true, // many dApps gate on this; the shim is fully EIP-1193
+
+      request: async ({ method, params = [] }) => {
+        switch (method) {
+          case 'eth_requestAccounts': {
+            const wallet = await ensureConnected();
+            return [wallet.address];
+          }
+
+          case 'eth_accounts':
+            return this.connectedWallet ? [this.connectedWallet.address] : [];
+
+          case 'eth_chainId':
+            if (typeof this.chainId === 'number') return '0x' + this.chainId.toString(16);
+            return rpcRequest('eth_chainId', params);
+
+          case 'net_version':
+            if (typeof this.chainId === 'number') return this.chainId.toString();
+            return rpcRequest('net_version', params);
+
+          case 'eth_sendTransaction': {
+            const wallet = await ensureConnected();
+            const tx = (params[0] || {}) as {
+              to?: string; data?: string; value?: string; gas?: string;
+            };
+            console.log('[INJ Pass SDK] eth_sendTransaction called:', {
+              to: tx.to,
+              value: tx.value,
+              dataLength: tx.data?.length,
+            });
+            const txHash = await wallet.signer.sendTransaction({
+              to: tx.to ?? '',
+              data: tx.data,
+              value: tx.value,
+              gas: tx.gas,
+            });
+            console.log('[INJ Pass SDK] eth_sendTransaction resolved, txHash:', txHash);
+            return txHash;
+          }
+
+          case 'personal_sign':
+          case 'eth_sign': {
+            const wallet = await ensureConnected();
+            // personal_sign => [message, address]; eth_sign => [address, message]
+            const message = method === 'personal_sign' ? params[0] : params[1];
+            const sig = await wallet.signer.signMessage(String(message));
+            return toHex(sig);
+          }
+
+          case 'eth_signTypedData':
+          case 'eth_signTypedData_v3':
+          case 'eth_signTypedData_v4': {
+            const wallet = await ensureConnected();
+            const data = params[1] ?? params[0];
+            const sig = await wallet.signer.signMessage(
+              typeof data === 'string' ? data : JSON.stringify(data),
+            );
+            return toHex(sig);
+          }
+
+          case 'wallet_switchEthereumChain':
+          case 'wallet_addEthereumChain':
+            return null; // wallet is fixed to Injective inEVM
+
+          default:
+            // Everything else (reads) is forwarded to the JSON-RPC endpoint.
+            return rpcRequest(method, params);
+        }
+      },
+
+      on: (event, handler) => {
+        if (!eventListeners.has(event)) eventListeners.set(event, new Set());
+        eventListeners.get(event)!.add(handler);
+      },
+
+      removeListener: (event, handler) => {
+        eventListeners.get(event)?.delete(handler);
+      },
+    };
+
+    return provider;
   }
 
   private createIframe(): void {
@@ -372,14 +551,22 @@ class InjPassSigner {
 
     return new Promise((resolve, reject) => {
       const timeout = setTimeout(() => {
+        cleanup();
         reject(new Error('Signing timeout'));
       }, 30000);
 
-      const handler = (event: MessageEvent) => {
-        if (event.data.type === 'INJPASS_SIGN_RESPONSE' && event.data.requestId === requestId) {
-          clearTimeout(timeout);
-          window.removeEventListener('message', handler);
+      let resolved = false;
+      const cleanup = () => {
+        clearTimeout(timeout);
+        window.removeEventListener('message', handler);
+        try { bc.close(); } catch {}
+      };
 
+      const handler = (event: MessageEvent) => {
+        if (resolved) return;
+        if (event.data.type === 'INJPASS_SIGN_RESPONSE' && event.data.requestId === requestId) {
+          resolved = true;
+          cleanup();
           if (event.data.error) {
             reject(new Error(event.data.error));
           } else {
@@ -387,6 +574,25 @@ class InjPassSigner {
           }
         }
       };
+
+      let bc: BroadcastChannel;
+      try {
+        bc = new BroadcastChannel('injpass_tx');
+        bc.onmessage = (event: MessageEvent) => {
+          if (resolved) return;
+          if (event.data.type === 'SIGN_RESPONSE' && event.data.requestId === requestId) {
+            resolved = true;
+            cleanup();
+            if (event.data.error) {
+              reject(new Error(event.data.error));
+            } else {
+              resolve(new Uint8Array(event.data.signature));
+            }
+          }
+        };
+      } catch {
+        bc = {} as BroadcastChannel;
+      }
 
       window.addEventListener('message', handler);
 
@@ -399,4 +605,105 @@ class InjPassSigner {
       }, this.targetOrigin);
     });
   }
+
+  /**
+   * Sign and broadcast an EVM transaction.
+   *
+   * The request travels iframe → secure popup, where the user approves with a
+   * passkey and the popup signs + broadcasts with the private key. Only the
+   * resulting transaction hash is returned — the key never leaves the popup.
+   *
+   * @param tx Transaction fields. `value`/`gas` are hex-quantity strings
+   *           (as ethers/wagmi produce them); `to`/`data` are 0x-hex.
+   * @returns The broadcast transaction hash (0x...).
+   */
+  async sendTransaction(tx: {
+    to: string;
+    data?: string;
+    value?: string;
+    gas?: string;
+  }): Promise<string> {
+    const requestId = `tx_${++this.requestCounter}_${Date.now()}`;
+
+    return new Promise((resolve, reject) => {
+      // Generous timeout: the user must approve with a passkey in the popup.
+      const timeout = setTimeout(() => {
+        cleanup();
+        reject(new Error('Transaction timeout'));
+      }, 120000);
+
+      let resolved = false;
+      const cleanup = () => {
+        clearTimeout(timeout);
+        window.removeEventListener('message', handler);
+        try { bc.close(); } catch {}
+      };
+
+      const handler = (event: MessageEvent) => {
+        if (resolved) return;
+        console.log('[INJ Pass SDK] TX message received:', {
+          type: event.data.type,
+          requestId: event.data.requestId,
+          expectedRequestId: requestId,
+          txHash: event.data.txHash,
+          error: event.data.error,
+          origin: event.origin,
+        });
+        if (event.data.type === 'INJPASS_TX_RESPONSE' && event.data.requestId === requestId) {
+          resolved = true;
+          cleanup();
+          if (event.data.error) {
+            console.error('[INJ Pass SDK] TX rejected:', event.data.error);
+            reject(new Error(event.data.error));
+          } else {
+            console.log('[INJ Pass SDK] TX resolved with hash:', event.data.txHash);
+            resolve(event.data.txHash as string);
+          }
+        }
+      };
+
+      // BroadcastChannel fallback: popup may send directly via BC
+      // when window.opener is cross-origin (iframe → popup scenario)
+      let bc: BroadcastChannel;
+      try {
+        bc = new BroadcastChannel('injpass_tx');
+        bc.onmessage = (event: MessageEvent) => {
+          if (resolved) return;
+          console.log('[INJ Pass SDK] TX BroadcastChannel message:', {
+            type: event.data.type,
+            requestId: event.data.requestId,
+            expectedRequestId: requestId,
+            txHash: event.data.txHash,
+            error: event.data.error,
+          });
+          if (event.data.type === 'TX_RESPONSE' && event.data.requestId === requestId) {
+            resolved = true;
+            cleanup();
+            if (event.data.error) {
+              console.error('[INJ Pass SDK] TX BroadcastChannel rejected:', event.data.error);
+              reject(new Error(event.data.error));
+            } else {
+              console.log('[INJ Pass SDK] TX BroadcastChannel resolved with hash:', event.data.txHash);
+              resolve(event.data.txHash as string);
+            }
+          }
+        };
+      } catch {
+        // BroadcastChannel not supported — rely on postMessage only
+        bc = {} as BroadcastChannel;
+      }
+
+      window.addEventListener('message', handler);
+
+      this.iframe.contentWindow?.postMessage({
+        type: 'INJPASS_TX_REQUEST',
+        data: {
+          id: requestId,
+          tx,
+        },
+      }, this.targetOrigin);
+    });
+  }
 }
+
+export type { InjPassSigner };
