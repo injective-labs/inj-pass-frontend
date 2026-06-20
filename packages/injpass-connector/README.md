@@ -17,6 +17,7 @@ Lightweight SDK for embedding INJ Pass wallet in your dApp via iframe.
 - 🔐 **Passkey Authentication** - Secure, passwordless wallet access using WebAuthn
 - 📱 **Mobile Support** - Works on iOS/Android browsers
 - 🎨 **Flexible UI** - Floating, modal, or inline modes
+- 🫧 **Smart Floating Widget** - The embed can expand into a full card or shrink into a small floating ball without blocking your app
 - 🔒 **Secure** - Private keys never leave the iframe, authentication via popup
 - ⚡ **Lightweight** - Zero dependencies, < 5KB gzipped
 - 🔄 **Cross-dApp** - One wallet works across all dApps
@@ -93,7 +94,16 @@ import { InjPassConnector } from '@injpass/cli';
 
 // Create connector instance - embedUrl is REQUIRED
 const connector = new InjPassConnector({
-  embedUrl: import.meta.env.VITE_INJPASS_EMBED_URL  // Vite
+  embedUrl: import.meta.env.VITE_INJPASS_EMBED_URL, // Vite
+
+  // Optional: floating (default), modal, or inline
+  mode: 'floating',
+
+  // Optional: where the floating widget should appear
+  position: { bottom: '20px', right: '20px' },
+
+  // Recommended: keep the widget visible after connect
+  autoHide: false,
   // or
   // embedUrl: process.env.REACT_APP_INJPASS_EMBED_URL  // Create React App
   // embedUrl: process.env.NEXT_PUBLIC_INJPASS_EMBED_URL  // Next.js
@@ -107,14 +117,42 @@ console.log('Connected:', wallet.address);
 const signature = await wallet.signer.signMessage('Hello World');
 console.log('Signature:', signature);
 
+// Send an EVM transaction (signed & broadcast inside the secure popup)
+const txHash = await wallet.signer.sendTransaction({
+  to: '0x...',
+  data: '0x...',      // contract calldata (optional)
+  value: '0x0',       // wei, hex string (optional)
+});
+console.log('Tx:', txHash);
+
 // Disconnect
 connector.disconnect();
+```
+
+### Drop-in `window.ethereum` (EVM dApps)
+
+For EVM dApps built on ethers/wagmi/viem, expose an EIP-1193 provider and assign
+it to `window.ethereum` — existing contract code then works unchanged. Read-only
+RPC calls are served from `rpcUrl`; account/signing/transaction calls route to the
+INJ Pass popup (passkey confirmation).
+
+```typescript
+const connector = new InjPassConnector({
+  embedUrl: import.meta.env.VITE_INJPASS_EMBED_URL,
+  rpcUrl: 'https://k8s.testnet.json-rpc.injective.network/', // required for reads
+  chainId: 1439,                                             // Injective inEVM testnet
+});
+
+await connector.connect();
+window.ethereum = connector.getEthereumProvider();
+// → new ethers.BrowserProvider(window.ethereum), wagmi injected(), etc.
 ```
 
 > **Important**: 
 > - `embedUrl` is now **REQUIRED** - you must provide it in the config
 > - Use environment variables to manage URLs across environments
 > - The SDK automatically adds Passkey permissions to the iframe
+> - For floating mode, the embed controls its own expanded card / minimized ball state via resize messages
 
 ## Configuration Options
 
@@ -143,10 +181,17 @@ const connector = new InjPassConnector({
   // Container ID (for inline mode)
   containerId: 'wallet-container',
 
-  // Auto-hide after connection
-  autoHide: true
+  // Whether the host app should hide the iframe after connection.
+  // Recommended: false for the current floating widget UX.
+  autoHide: false
 });
 ```
+
+### Notes on `autoHide`
+
+- `autoHide: false` is the recommended setting for the current floating widget experience.
+- In floating mode, INJ Pass can resize itself between a full session card and a minimized floating ball.
+- If you hide the iframe immediately after connect, users lose the persistent session surface and quick access to signing status.
 
 ### Environment Variables by Framework
 
@@ -177,14 +222,20 @@ embedUrl: process.env.NEXT_PUBLIC_INJPASS_EMBED_URL
 ## Display Modes
 
 ### Floating Mode (Default)
-Fixed position overlay that appears on top of your dApp:
+Fixed position widget that appears on top of your dApp:
 
 ```typescript
 const connector = new InjPassConnector({
   mode: 'floating',
-  position: { bottom: '20px', right: '20px' }
+  position: { bottom: '20px', right: '20px' },
+  autoHide: false
 });
 ```
+
+Behavior:
+- Starts hidden at `0x0` so it does not block the page before the embed is ready
+- Expands into the connect/session card when the embed requests it
+- Can shrink into a compact floating ball while keeping the session available
 
 ### Modal Mode
 Full-screen modal with backdrop:
@@ -215,12 +266,12 @@ const connector = new InjPassConnector({
 ### InjPassConnector
 
 #### `connect(): Promise<ConnectedWallet>`
-Displays the wallet iframe and waits for user to authenticate with Passkey.
+Creates the INJ Pass surface and waits for the user to authenticate with Passkey.
 
 **Returns:**
 ```typescript
 {
-  address: string;           // Injective wallet address (inj1...)
+  address: string;           // EVM-compatible wallet address (0x...)
   walletName?: string;       // User-defined wallet name
   signer: InjPassSigner;     // Signer instance for signing messages
 }
@@ -235,10 +286,10 @@ Displays the wallet iframe and waits for user to authenticate with Passkey.
 Disconnects wallet and removes iframe from DOM.
 
 #### `show(): void`
-Shows the iframe (if hidden).
+Shows the iframe if you previously hid it with `hide()`.
 
 #### `hide(): void`
-Hides the iframe.
+Hides the iframe from the DOM flow without disconnecting the wallet session.
 
 ### InjPassSigner
 
@@ -254,6 +305,28 @@ Signs a message using the wallet's private key (secp256k1).
 **Throws:**
 - `Error('Signing timeout')` - If signing takes > 30s
 - `Error(...)` - If user rejects or signing fails
+
+#### `sendTransaction(tx): Promise<string>` _(v2.4+)_
+Signs **and broadcasts** an EVM transaction inside the secure popup, returning the
+transaction hash. The private key never leaves the popup.
+
+**Parameters:**
+- `tx.to`: recipient / contract address (`0x...`)
+- `tx.data?`: calldata (`0x...`)
+- `tx.value?`: wei, hex-quantity string (`0x...`)
+- `tx.gas?`: gas limit, hex-quantity string (optional; auto-estimated if omitted)
+
+**Returns:**
+- `Promise<string>`: broadcast transaction hash (`0x...`)
+
+**Throws:**
+- `Error('Transaction timeout')` - If approval takes > 120s
+- `Error(...)` - If user rejects, or signing/broadcast fails
+
+### InjPassConnector — `getEthereumProvider()` _(v2.4+)_
+Returns an EIP-1193 provider (`window.ethereum`-compatible) backed by the connected
+wallet. Read-only methods are answered via `config.rpcUrl`; account/signing/transaction
+methods route to the popup. Requires `rpcUrl` (and `chainId`) in the connector config.
 ## Security Considerations
 
 ### 1. Content Security Policy (CSP)

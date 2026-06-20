@@ -5,7 +5,7 @@ import TrustPillBadge from '@/components/TrustPillBadge';
 import WelcomeThemeIconButton from '@/components/WelcomeThemeIconButton';
 import { WalletErrorToast } from '@/components/WalletErrorToast';
 import { useTheme } from '@/contexts/ThemeContext';
-import { triggerWalletConnect, isValidOrigin } from '@/lib/auth-bridge';
+import { triggerWalletConnect, triggerTxRequest, isValidOrigin } from '@/lib/auth-bridge';
 import { useWalletErrorToast } from '@/lib/useWalletErrorToast';
 import { creditNinja, debitNinja, getNinjaStatus } from '@/services/points';
 import { getAuthToken, refreshToken, verifyToken } from '@/services/passkey';
@@ -136,6 +136,7 @@ export default function EmbedPage() {
   const [walletName, setWalletName] = useState('');
   const [loading, setLoading] = useState(false);
   const [authPopup, setAuthPopup] = useState<Window | null>(null);
+  const authPopupRef = useRef<Window | null>(null);
   const [hasPendingSign, setHasPendingSign] = useState(false);
   const [minimized, setMinimized] = useState(false);
   const { errorToast, showErrorToast, dismissErrorToast } = useWalletErrorToast();
@@ -234,6 +235,7 @@ export default function EmbedPage() {
     }
 
     setAuthPopup(null);
+    authPopupRef.current = null;
     setAddress('');
     setWalletName('');
     setConnected(false);
@@ -245,7 +247,11 @@ export default function EmbedPage() {
   useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
       if (!isValidOrigin(event.origin)) return;
-      const { type, data } = event.data;
+      const { type } = event.data;
+      // Auth popup sends flat: { type, requestId, ... }
+      // SDK sends nested: { type, data: { id, ... } }
+      // Normalize: prefer event.data.data (SDK), fallback to event.data (popup)
+      const data = event.data.data || event.data;
       const postBack = (payload: Record<string, unknown>) => {
         event.source?.postMessage(payload, { targetOrigin: event.origin });
       };
@@ -260,8 +266,8 @@ export default function EmbedPage() {
           return;
         }
 
-        if (authPopup && !authPopup.closed) {
-          authPopup.postMessage(
+        if (authPopupRef.current && !authPopupRef.current.closed) {
+          authPopupRef.current.postMessage(
             {
               type: 'SIGN_REQUEST',
               requestId: data.id,
@@ -271,7 +277,7 @@ export default function EmbedPage() {
           );
 
           try {
-            authPopup.focus();
+            authPopupRef.current.focus();
           } catch {}
 
           setHasPendingSign(true);
@@ -281,6 +287,50 @@ export default function EmbedPage() {
             requestId: data.id,
             error: 'Auth popup is closed. Please reconnect.',
           });
+        }
+      }
+
+      if (type === 'INJPASS_TX_REQUEST') {
+        if (!connected) {
+          postBack({
+            type: 'INJPASS_TX_RESPONSE',
+            requestId: data.id,
+            error: 'Wallet not connected',
+          });
+          return;
+        }
+
+        if (authPopupRef.current && !authPopupRef.current.closed) {
+          authPopupRef.current.postMessage(
+            {
+              type: 'TX_REQUEST',
+              requestId: data.id,
+              tx: data.tx,
+            },
+            window.location.origin
+          );
+
+          try {
+            authPopupRef.current.focus();
+          } catch {}
+
+          setHasPendingSign(true);
+        } else {
+          // Popup was closed — auto-open a new one for this transaction
+          void (async () => {
+            try {
+              const { popup } = await triggerTxRequest(data.tx);
+              authPopupRef.current = popup;
+              setAuthPopup(popup);
+              setHasPendingSign(true);
+            } catch (err) {
+              postBack({
+                type: 'INJPASS_TX_RESPONSE',
+                requestId: data.id,
+                error: err instanceof Error ? err.message : 'Failed to open approval window',
+              });
+            }
+          })();
         }
       }
 
@@ -366,6 +416,26 @@ export default function EmbedPage() {
         );
       }
 
+      if (type === 'TX_RESPONSE') {
+        console.log('[INJ Pass /embed] TX_RESPONSE received from popup:', {
+          requestId: data.requestId,
+          txHash: data.txHash,
+          error: data.error,
+          rawData: event.data,
+        });
+        setHasPendingSign(false);
+        window.parent.postMessage(
+          {
+            type: 'INJPASS_TX_RESPONSE',
+            requestId: data.requestId,
+            txHash: data.txHash,
+            error: data.error,
+          },
+          '*'
+        );
+        console.log('[INJ Pass /embed] INJPASS_TX_RESPONSE forwarded to parent (dApp)');
+      }
+
       if (type === 'INJPASS_DISCONNECT') {
         handleDisconnect();
       }
@@ -373,7 +443,7 @@ export default function EmbedPage() {
 
     window.addEventListener('message', handleMessage);
     return () => window.removeEventListener('message', handleMessage);
-  }, [authPopup, connected, handleDisconnect]);
+  }, [connected, handleDisconnect]);
 
   const handleConnect = async () => {
     setLoading(true);
@@ -388,6 +458,7 @@ export default function EmbedPage() {
       setConnected(true);
 
       if (popup && !popup.closed) {
+        authPopupRef.current = popup;
         setAuthPopup(popup);
       }
 
@@ -410,7 +481,7 @@ export default function EmbedPage() {
 
   const cardTone = isLightMode
     ? 'border-[#c9d7ec] bg-[linear-gradient(180deg,rgba(255,255,255,0.92),rgba(244,247,252,0.88))] text-[#171b24] shadow-[0_24px_60px_rgba(92,104,126,0.18)]'
-    : 'border-white/10 bg-[linear-gradient(180deg,rgba(25,16,33,0.92),rgba(10,8,16,0.94))] text-white shadow-[0_28px_80px_rgba(8,6,13,0.5)]';
+    : 'border-white/10 bg-[linear-gradient(180deg,rgba(25,16,33,0.98),rgba(10,8,16,0.99))] text-white shadow-[0_28px_80px_rgba(8,6,13,0.5)]';
   const softSurfaceTone = isLightMode
     ? 'border-[#d5dfee] bg-white/72'
     : 'border-white/10 bg-white/[0.05]';

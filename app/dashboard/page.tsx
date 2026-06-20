@@ -7,6 +7,7 @@ import { useWallet } from '@/contexts/WalletContext';
 import { estimateGas, getBalance as getChainBalance, getCosmosTxHistory, getTxHistory, sendTransaction, waitForTransaction } from '@/wallet/chain';
 import { getBalance as getNinjaBalanceFromBackend } from '@/services/points';
 import { Balance, GasEstimate, INJECTIVE_MAINNET } from '@/types/chain';
+import { ACTIVE_NETWORK } from '@/config/network';
 import { getTokenPrice } from '@/services/price';
 import { executeSwap, getSwapQuote, ROUTER_ADDRESS } from '@/services/dex-swap';
 import { startQRScanner, stopQRScanner, clearQRScanner, isCameraSupported, isValidAddress } from '@/services/qr-scanner';
@@ -124,7 +125,6 @@ const MORE_CHANCE_PLANS: Array<{
   },
 ];
 
-const CHANCE_CONTRACT_ADDRESS = CHANCE_CONTRACT_ADDRESS_ENV as Address;
 const CHANCE_MANAGER_ABI = [
   {
     type: 'function',
@@ -172,6 +172,10 @@ const NETWORK_META: Record<WalletNetworkMode, { label: string; shortLabel: strin
     tokenSet: TOKENS_TESTNET as typeof TOKENS_MAINNET,
   },
 };
+
+const CHANCE_CONTRACT_ADDRESS = CHANCE_CONTRACT_ADDRESS_ENV as Address;
+const CHANCE_NETWORK_MODE: WalletNetworkMode = ACTIVE_NETWORK.chainId === 1439 ? 'testnet' : 'mainnet';
+const CHANCE_NETWORK_META = NETWORK_META[CHANCE_NETWORK_MODE];
 
 const FAUCET_ICON_BY_ID: Record<string, string> = {
   injective: '/injswap.png',
@@ -1497,18 +1501,8 @@ export default function DashboardPage() {
   };
 
   const executeChancePurchase = useCallback(async () => {
-    if (walletNetworkMode === 'testnet') {
-      setChanceError('Chance purchase is available on mainnet only.');
-      return;
-    }
-
     if (!privateKey || !address) {
       setChanceError('Signing key is not loaded. Verify with Passkey and try again.');
-      return;
-    }
-
-    if (!CHANCE_CONTRACT_ADDRESS || !CHANCE_CONTRACT_ADDRESS.startsWith('0x')) {
-      setChanceError('Chance contract is not configured. Set NEXT_PUBLIC_CHANCE_CONTRACT_ADDRESS.');
       return;
     }
 
@@ -1524,7 +1518,7 @@ export default function DashboardPage() {
 
     try {
       const chanceClient = createPublicClient({
-        transport: http(currentNetworkMeta.chain.rpcUrl),
+        transport: http(CHANCE_NETWORK_META.chain.rpcUrl),
       });
 
       const [planOnChain, cooldownEndsAt] = await Promise.all([
@@ -1568,14 +1562,14 @@ export default function DashboardPage() {
         CHANCE_CONTRACT_ADDRESS,
         formatEther(onChainPriceWei),
         data,
-        currentNetworkMeta.chain,
+        CHANCE_NETWORK_META.chain,
       );
 
       setChanceTxHash(hash);
       resetTxAuth();
 
       // Wait for on-chain confirmation so downstream profile sync does not read stale chance data.
-      await waitForTransaction(hash, currentNetworkMeta.chain, 1);
+      await waitForTransaction(hash, CHANCE_NETWORK_META.chain, 1);
 
       // Give backend worker a short window to ingest ChancePurchased and update profile.
       await new Promise((resolve) => window.setTimeout(resolve, 1600));
@@ -1592,7 +1586,7 @@ export default function DashboardPage() {
     } finally {
       setChanceSubmitting(false);
     }
-  }, [address, currentNetworkMeta.chain, privateKey, resetTxAuth, selectedChancePlan, walletNetworkMode]);
+  }, [address, privateKey, resetTxAuth, selectedChancePlan]);
 
   const handleChanceAction = () => {
     if (isPinLocked || autoLockMinutes === 0 || !privateKey) {
@@ -2033,13 +2027,23 @@ export default function DashboardPage() {
       copyValue: currentUsdtAddress,
       contractValue: currentUsdtAddress ? truncateMiddle(currentUsdtAddress, 8, 6) : 'No contract yet',
     },
+    {
+      symbol: 'XAUT',
+      icon: '/tether_logo.png',
+      balance: '0.00 XAUT',
+      usdValue: formatUnitValue(0, balanceDisplayUnit),
+      change: '+0.00%',
+      changeClass: 'text-gray-500',
+      copyValue: null,
+      contractValue: 'UI only',
+    },
   ] as const;
   const compactAssetCardHeight = 64;
-  const compactAssetCardGap = 12;
+  const compactAssetCardGap = 6;
   const renderCompactAssetSurface = (surface: 'left' | 'right') => {
     const shouldPromoteNinja = surface === 'left' && isAiStage && aiCompactNinjaPromoted;
     const compactDisplayOrder = shouldPromoteNinja
-      ? ['LAM', 'INJ', 'USDC', 'USDT']
+      ? ['LAM', 'INJ', 'USDC', 'USDT', 'XAUT']
       : dashboardTokenCards.map((token) => token.symbol);
     const compactListHeight = dashboardTokenCards.length * compactAssetCardHeight + (dashboardTokenCards.length - 1) * compactAssetCardGap;
 
@@ -3238,6 +3242,13 @@ export default function DashboardPage() {
                                 >
                                   {chanceSubmitting ? 'Submitting...' : 'Continue'}
                                 </button>
+                                <button
+                                  type="button"
+                                  onClick={() => router.push('/cat-mint')}
+                                  className="rounded-2xl border border-orange-300/20 bg-orange-300/10 px-5 py-3 text-sm font-semibold text-orange-100 transition-all hover:bg-orange-300/20"
+                                >
+                                  Mint NFT
+                                </button>
                               </div>
                               {chanceError && (
                                 <div className="mt-3 text-sm text-rose-300">{chanceError}</div>
@@ -3370,7 +3381,7 @@ export default function DashboardPage() {
               {isCardPanel ? (
                 renderCompactAssetSurface('right')
               ) : (
-              <div key={`asset-surface-${walletNetworkMode}-${assetSurfaceMotionKey}`} className="dashboard-surface-enter relative flex flex-1 flex-col">
+              <div key={`asset-surface-${walletNetworkMode}-${assetSurfaceMotionKey}`} className="dashboard-surface-enter relative flex min-h-0 flex-1 flex-col">
         {/* Asset Tabs - Smooth Sliding Background */}
         <div className="relative mb-3 rounded-xl bg-white/5 p-1 sm:mb-4">
           {/* Sliding Background */}
@@ -3444,7 +3455,7 @@ export default function DashboardPage() {
         {/* Asset List */}
         <div className="min-h-0 flex-1 overflow-y-auto pr-0 sm:pr-1">
           {assetTab === 'tokens' && (
-            <div className="space-y-3">
+            <div className="space-y-3 pb-4">
               {dashboardTokenCards.map((token) => (
                 <div key={token.symbol} className="relative" style={{ perspective: '1400px' }}>
                   <div
@@ -3574,6 +3585,23 @@ export default function DashboardPage() {
 
           {assetTab === 'nfts' && (
             <div className="space-y-3">
+              <button
+                type="button"
+                onClick={() => router.push('/cat-mint')}
+                className="flex w-full items-center gap-3 rounded-2xl border border-orange-300/20 bg-orange-300/[0.08] p-3 text-left transition-all hover:bg-orange-300/[0.14] sm:p-4"
+              >
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-gradient-to-br from-orange-300 to-amber-400 text-xl shadow-lg shadow-orange-500/10">
+                  😺
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="text-sm font-bold text-white">Mint Scribble Cyber Cat</div>
+                  <div className="mt-0.5 text-xs text-orange-100/65">Use one mint credit from LAM chance purchases</div>
+                </div>
+                <svg className="h-5 w-5 shrink-0 text-orange-100/70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
+              </button>
+
               {nftsLoading ? (
                 <div className="flex items-center justify-center py-16">
                   <div className="w-12 h-12 border-4 border-white/20 border-t-white rounded-full animate-spin"></div>
@@ -3588,6 +3616,12 @@ export default function DashboardPage() {
                   </div>
                   <p className="text-lg font-bold mb-1">No NFTs found</p>
                   <p className="text-xs text-gray-500">You don&apos;t own any N1NJ4 NFTs yet</p>
+                  <button
+                    onClick={() => router.push('/cat-mint')}
+                    className="mt-5 inline-flex items-center justify-center rounded-full border border-orange-300/20 bg-orange-300/10 px-4 py-2 text-sm font-semibold text-orange-100 transition hover:bg-orange-300/20"
+                  >
+                    Open Cat Mint
+                  </button>
                 </div>
               ) : (
                 <>

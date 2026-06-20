@@ -4,7 +4,7 @@
  */
 
 import { createPublicClient, http, type Address } from 'viem';
-import { INJECTIVE_MAINNET_CHAIN } from '@/types/chain';
+import { DEFAULT_CHAIN_VIEM } from '@/types/chain';
 import { PAIR_ABI, FACTORY_ABI } from './dex-abi';
 
 // Factory address - need to find this
@@ -18,7 +18,7 @@ export async function getPairAddress(
   tokenB: Address
 ): Promise<Address> {
   const client = createPublicClient({
-    chain: INJECTIVE_MAINNET_CHAIN,
+    chain: DEFAULT_CHAIN_VIEM,
     transport: http(),
   });
 
@@ -37,7 +37,7 @@ export async function getPairAddress(
  */
 export async function getPairReserves(pairAddress: Address) {
   const client = createPublicClient({
-    chain: INJECTIVE_MAINNET_CHAIN,
+    chain: DEFAULT_CHAIN_VIEM,
     transport: http(),
   });
 

@@ -4,6 +4,7 @@
 
 import { createPublicClient, http } from 'viem';
 import { TransactionHistory, ChainConfig, DEFAULT_CHAIN } from '@/types/chain';
+import { NETWORK_CONFIG } from '@/config/network';
 
 // Blockscout API Response Types
 interface BlockscoutAddressInfo {
@@ -47,7 +48,7 @@ export async function getTxHistory(
   chain: ChainConfig = DEFAULT_CHAIN
 ): Promise<TransactionHistory[]> {
   try {
-    const network = chain.id === 1439 ? 'testnet' : 'mainnet';
+    const network = NETWORK_CONFIG.isMainnet ? 'mainnet' : 'testnet';
     const apiUrl = `/api/transactions?address=${address}&network=${network}`;
     
     const response = await fetch(apiUrl, {

@@ -31,7 +31,7 @@ const getAuthPopupUrl = () => {
 };
 
 // 弹窗定位到屏幕右下角，连接完成后会缩小为悬浮球
-const getPopupFeatures = (width = 400, height = 600) => {
+const getPopupFeatures = (width = 400, height = 800) => {
   const left = Math.max(0, (screen.availWidth  || screen.width)  - width  - 20);
   const top  = Math.max(0, (screen.availHeight || screen.height) - height - 60);
   return `width=${width},height=${height},left=${left},top=${top},menubar=no,toolbar=no,location=no,status=no,resizable=yes,scrollbars=no`;
@@ -277,6 +277,79 @@ export function triggerWalletConnect(): Promise<{ address: string; walletName: s
         clearInterval(sendInterval);
       }
     }, 1000); // 增加到 1 秒
+  });
+}
+
+// ===== 4.5 弹窗授权函数 - 交易审批 =====
+export function triggerTxRequest(tx: {
+  to: string;
+  data?: string;
+  value?: string;
+  gas?: string;
+}): Promise<{ popup: Window }> {
+  return new Promise((resolve, reject) => {
+    const requestId = crypto.randomUUID();
+    const authUrl = getAuthPopupUrl();
+
+    const popup = window.open(
+      `${authUrl}?requestId=${requestId}&origin=${encodeURIComponent(window.location.origin)}&action=connect`,
+      'injpass_connect',
+      getPopupFeatures()
+    );
+
+    if (!popup) {
+      reject(new Error('Popup blocked. Please allow popups for this site.'));
+      return;
+    }
+
+    const handleMessage = (event: MessageEvent) => {
+      if (!isTrustedOrigin(event.origin)) return;
+
+      const { type, requestId: respId } = event.data;
+
+      if (type === 'AUTH_WINDOW_READY' && respId === requestId) {
+        clearInterval(sendInterval);
+        // Popup ready — send the TX_REQUEST
+        if (popup && !popup.closed) {
+          popup.postMessage(
+            { type: 'TX_REQUEST', requestId, tx },
+            authUrl.startsWith('http') ? new URL(authUrl).origin : window.location.origin
+          );
+        }
+        cleanup();
+        resolve({ popup });
+      }
+    };
+
+    const cleanup = () => {
+      clearTimeout(timeout);
+      clearInterval(sendInterval);
+      window.removeEventListener('message', handleMessage);
+    };
+
+    window.addEventListener('message', handleMessage);
+
+    const timeout = setTimeout(() => {
+      cleanup();
+      reject(new Error('Transaction approval timeout.'));
+    }, 30000);
+
+    // Poll until the popup is ready
+    let attempts = 0;
+    const maxAttempts = 10;
+    const sendInterval = setInterval(() => {
+      if (popup.closed) {
+        cleanup();
+        reject(new Error('Auth popup was closed'));
+        return;
+      }
+      // Nudge the popup to ensure it loads
+      try { popup.focus(); } catch {}
+      attempts++;
+      if (attempts >= maxAttempts) {
+        clearInterval(sendInterval);
+      }
+    }, 1000);
   });
 }
 

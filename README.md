@@ -4,7 +4,7 @@ This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-
 
 This project includes real NFC card integration using the Web NFC API.
 
-### Requirements
+### Requirements 
 
 - **Android device** with NFC capability
 - **Chrome browser** (version 89 or later)

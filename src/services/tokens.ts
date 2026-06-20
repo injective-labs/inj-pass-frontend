@@ -38,7 +38,7 @@ export const TOKENS_MAINNET: Record<string, TokenInfo> = {
   USDC: {
     symbol: 'USDC',
     name: 'USD Coin',
-    address: '0x2a25fbD67b3aE485e461fe55d9DbeF302B7D3989',
+    address: '0xa00C59fF5a080D2b954d0c75e46E22a0c371235a',
     decimals: 6,
     icon: '/USDC_Logo.png',
   },

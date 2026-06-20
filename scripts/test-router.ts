@@ -17,7 +17,7 @@ const INJECTIVE_MAINNET_CHAIN = {
 
 const ROUTER_ADDRESS = '0xC7247df0e97353D676d78f1cc55D3CE39eE32bE1' as Address;
 const WINJ = '0x0000000088827d2d103ee2d9A6b781773AE03FfB' as Address;
-const USDC = '0x2a25fbD67b3aE485e461fe55d9DbeF302B7D3989' as Address;
+const USDC = '0xa00C59fF5a080D2b954d0c75e46E22a0c371235a' as Address;
 const USDT = '0x88f7F2b685F9692caf8c478f5BADF09eE9B1Cc13' as Address;
 
 async function testRouter() {

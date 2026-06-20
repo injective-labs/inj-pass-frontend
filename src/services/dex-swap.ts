@@ -20,7 +20,7 @@ import {
   type Hash,
 } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
-import { INJECTIVE_MAINNET_CHAIN } from '@/types/chain';
+import { DEFAULT_CHAIN_VIEM } from '@/types/chain';
 import { ROUTER_ABI, ERC20_ABI } from './dex-abi';
 import { getTokenInfo, getTokenAddress, isNativeToken, getWrappedToken, getTokenInfoByAddress } from './tokens';
 
@@ -64,7 +64,7 @@ export interface SwapParams {
  */
 function createClient() {
   return createPublicClient({
-    chain: INJECTIVE_MAINNET_CHAIN,
+    chain: DEFAULT_CHAIN_VIEM,
     transport: http(),
   });
 }
@@ -240,7 +240,7 @@ export async function approveToken(
   
   const walletClient = createWalletClient({
     account,
-    chain: INJECTIVE_MAINNET_CHAIN,
+    chain: DEFAULT_CHAIN_VIEM,
     transport: http(),
   });
 
@@ -287,7 +287,7 @@ export async function executeSwap(params: SwapParams): Promise<Hash> {
     const account = privateKeyToAccount(privateKey);
     const walletClient = createWalletClient({
       account,
-      chain: INJECTIVE_MAINNET_CHAIN,
+      chain: DEFAULT_CHAIN_VIEM,
       transport: http(),
     });
 

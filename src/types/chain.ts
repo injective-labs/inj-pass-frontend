@@ -138,5 +138,6 @@ export const INJECTIVE_TESTNET_CHAIN: Chain = {
   },
 };
 
-// Default chain - USE MAINNET
-export const DEFAULT_CHAIN = INJECTIVE_MAINNET;
+// Dynamic chain selection — respects NEXT_PUBLIC_NETWORK env
+export const DEFAULT_CHAIN = NETWORK_CONFIG.isMainnet ? INJECTIVE_MAINNET : INJECTIVE_TESTNET;
+export const DEFAULT_CHAIN_VIEM: Chain = NETWORK_CONFIG.isMainnet ? INJECTIVE_MAINNET_CHAIN : INJECTIVE_TESTNET_CHAIN;
