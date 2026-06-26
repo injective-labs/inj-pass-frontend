@@ -145,6 +145,36 @@ export function removeAuthToken(): void {
 }
 
 /**
+ * Decode a JWT payload locally (base64url) WITHOUT verifying the signature.
+ * Used only for cheap, offline expiry checks to avoid blocking routing on a
+ * network round-trip. The authoritative check is still the backend verify-token.
+ */
+function decodeJwtPayload(token: string): { exp?: number } | null {
+  try {
+    const part = token.split('.')[1];
+    if (!part) return null;
+    let b64 = part.replace(/-/g, '+').replace(/_/g, '/');
+    while (b64.length % 4) b64 += '=';
+    return JSON.parse(atob(b64));
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Cheap, offline check: do we have a token whose `exp` is still in the future?
+ * Returns false when there is no token or it cannot be decoded. Does NOT hit the
+ * network — pair it with a background verifyToken() for the authoritative check.
+ */
+export function isTokenLocallyValid(token?: string): boolean {
+  const authToken = token || getAuthToken();
+  if (!authToken) return false;
+  const payload = decodeJwtPayload(authToken);
+  if (!payload?.exp) return false;
+  return payload.exp * 1000 > Date.now();
+}
+
+/**
  * Verify token with backend
  */
 export async function verifyToken(token?: string): Promise<TokenVerifyResponse> {
@@ -278,4 +308,28 @@ export async function autoRefreshToken(): Promise<void> {
   if (timeLeft < fiveMinutes && timeLeft > 0) {
     await refreshToken(token);
   }
+}
+
+/**
+ * Authoritative session check + opportunistic refresh in a SINGLE verify-token
+ * round-trip (replaces the old hasValidSession()+autoRefreshToken() pair, which
+ * verified twice). Returns whether the backend considers the token valid, so the
+ * caller can lock / redirect on `false`. Intended to run in the background after
+ * an optimistic local routing decision (see isTokenLocallyValid).
+ */
+export async function validateAndRefreshSession(): Promise<boolean> {
+  const token = getAuthToken();
+  if (!token) return false;
+
+  const result = await verifyToken(token);
+  if (!result.valid) return false;
+
+  if (result.expiresAt) {
+    const timeLeft = result.expiresAt - Date.now();
+    const fiveMinutes = 5 * 60 * 1000;
+    if (timeLeft > 0 && timeLeft < fiveMinutes) {
+      await refreshToken(token);
+    }
+  }
+  return true;
 }
