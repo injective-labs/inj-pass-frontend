@@ -7,12 +7,8 @@ import { useRouter } from 'next/navigation';
 import { sha256 } from '@noble/hashes/sha2.js';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useWallet } from '@/contexts/WalletContext';
+import { createByPasskey } from '@/wallet/key-management';
 import {
-  createByPasskey,
-  unlockByPasskey,
-} from '@/wallet/key-management';
-import {
-  decryptKey,
   hasWallet,
   loadWallet,
 } from '@/wallet/keystore';
@@ -487,13 +483,15 @@ function WelcomePageContent() {
     startScenarioLoopRef.current(0);
   }, [headlineStep]);
 
-  const unlockPasskeyWallet = async (keystore: LocalKeystore) => {
+  // Unlock with a private key the create/recover ceremony already derived.
+  // We deliberately do NOT run a second passkey ceremony here: createByPasskey /
+  // recoverFullWallet already authenticated and derived the key in-memory, so a
+  // second challenge+WebAuthn+verify round would only duplicate work (~doubling
+  // login latency) without adding security.
+  const unlockWithKey = (privateKey: Uint8Array, keystore: LocalKeystore) => {
     if (!keystore.credentialId) {
       throw new Error('Missing passkey credential for this wallet.');
     }
-
-    const entropy = await unlockByPasskey(keystore.credentialId);
-    const privateKey = await decryptKey(keystore.encryptedPrivateKey, entropy);
     unlock(privateKey, keystore);
   };
 
@@ -590,7 +588,7 @@ function WelcomePageContent() {
         throw new Error('Failed to load the created wallet.');
       }
 
-      await unlockPasskeyWallet({
+      unlockWithKey(result.privateKey, {
         ...createdWallet,
         credentialId: result.credentialId,
       });
@@ -622,7 +620,7 @@ function WelcomePageContent() {
         throw new Error('Failed to load recovered wallet.');
       }
 
-      await unlockPasskeyWallet({
+      unlockWithKey(recovered.privateKey, {
         ...recoveredWallet,
         credentialId: recovered.credentialId,
       });

@@ -20,6 +20,10 @@ export interface CreateByPasskeyResult {
   address: string;
   credentialId: string;
   walletName?: string;
+  // The freshly derived private key, returned so callers can unlock the wallet
+  // immediately without a second passkey ceremony. Use it in-memory and discard;
+  // never persist or log it.
+  privateKey: Uint8Array;
 }
 
 /**
@@ -122,6 +126,7 @@ export async function createByPasskey(
       address,
       credentialId: verifyResult.credentialId,
       walletName: verifyResult.walletName,
+      privateKey,
     };
   } catch (error) {
     throw new Error(

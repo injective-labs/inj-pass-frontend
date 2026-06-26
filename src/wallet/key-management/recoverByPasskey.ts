@@ -105,7 +105,9 @@ export async function recoverWalletAddress(): Promise<RecoverByPasskeyResult> {
  * Note: This assumes the private key was derived from credentialId
  * using the same deterministic method as in createByPasskey
  */
-export async function recoverFullWallet(): Promise<RecoverByPasskeyResult & { address: string }> {
+export async function recoverFullWallet(): Promise<
+  RecoverByPasskeyResult & { address: string; privateKey: Uint8Array }
+> {
   try {
     const { deriveSecp256k1 } = await import('./deriveSecp256k1');
     const { encryptKey } = await import('../keystore/encryptKey');
@@ -187,6 +189,9 @@ export async function recoverFullWallet(): Promise<RecoverByPasskeyResult & { ad
       credentialId: credentialIdBase64,
       address,
       walletName: verifyResult.walletName,
+      // Returned so the caller can unlock immediately without a second passkey
+      // ceremony. Use in-memory and discard; never persist or log.
+      privateKey,
     };
   } catch (error) {
     throw new Error(
