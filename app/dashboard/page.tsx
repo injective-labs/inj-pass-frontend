@@ -20,6 +20,7 @@ import Image from 'next/image';
 import NFTDetailModal from '@/components/NFTDetailModal';
 import TransactionAuthModal from '@/components/TransactionAuthModal';
 import WelcomeThemeIconButton from '@/components/WelcomeThemeIconButton';
+import { LegacyWalletBanner } from '@/components/LegacyWalletBanner';
 import NinjaMinerGame from '@/components/NinjaMinerGame';
 import EditableAccountIdentity from '@/components/EditableAccountIdentity';
 import { useTheme } from '@/contexts/ThemeContext';
@@ -2109,6 +2110,9 @@ export default function DashboardPage() {
   return (
         <>
         <div className="min-h-screen bg-black">
+          <div className="px-4 pt-4">
+            <LegacyWalletBanner />
+          </div>
           <div>
             {/* Modern Dashboard Header */}
             <div className="bg-gradient-to-b from-white/5 to-transparent border-b border-white/5 backdrop-blur-sm">

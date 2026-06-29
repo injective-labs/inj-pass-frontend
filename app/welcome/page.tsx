@@ -7,7 +7,12 @@ import { useRouter } from 'next/navigation';
 import { sha256 } from '@noble/hashes/sha2.js';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useWallet } from '@/contexts/WalletContext';
-import { createByPasskey } from '@/wallet/key-management';
+import {
+  createPrfWallet,
+  createByPassword,
+  unlockWalletKey,
+  PrfUnsupportedError,
+} from '@/wallet/key-management';
 import {
   hasWallet,
   loadWallet,
@@ -288,6 +293,9 @@ function WelcomePageContent() {
   const [inviteCodeInput, setInviteCodeInput] = useState('');
   const [isInviteCodeVisible, setIsInviteCodeVisible] = useState(false);
   const [createDialogError, setCreateDialogError] = useState<string | null>(null);
+  // Password fallback (only when the device/browser lacks WebAuthn PRF).
+  const [needsPasswordFallback, setNeedsPasswordFallback] = useState(false);
+  const [passwordFallback, setPasswordFallback] = useState('');
   const [walletExists, setWalletExists] = useState(false);
   const [isThemeTransitioning, setIsThemeTransitioning] = useState(false);
   const [hasHeaderEntered, setHasHeaderEntered] = useState(false);
@@ -566,6 +574,26 @@ function WelcomePageContent() {
         throw new Error('INJ Pass name must be 20 characters or fewer.');
       }
 
+      // Fallback mode: this device lacks WebAuthn PRF, so create a
+      // password-encrypted wallet instead (the only credential is the password).
+      if (needsPasswordFallback) {
+        if (passwordFallback.length < 8) {
+          throw new Error(
+            '请设置至少 8 位密码。此设备不支持安全 passkey 钱包，密码是唯一凭据，务必牢记——无法找回。'
+          );
+        }
+        const fallback = await createByPassword(walletName, passwordFallback);
+        const created = loadWallet();
+        if (!created) {
+          throw new Error('Failed to load the created wallet.');
+        }
+        unlockWithKey(fallback.privateKey, created);
+        setWalletExists(true);
+        setIsCreateDialogOpen(false);
+        router.push('/dashboard');
+        return;
+      }
+
       const normalizedInviteCode = inviteCodeInput.trim().toUpperCase();
       if (normalizedInviteCode.length > 0) {
         if (!INVITE_CODE_PATTERN.test(normalizedInviteCode)) {
@@ -578,7 +606,8 @@ function WelcomePageContent() {
         }
       }
 
-      const result = await createByPasskey(
+      // Secure path: derive the key from the WebAuthn PRF output.
+      const result = await createPrfWallet(
         walletName,
         normalizedInviteCode.length > 0 ? normalizedInviteCode : undefined
       );
@@ -588,18 +617,23 @@ function WelcomePageContent() {
         throw new Error('Failed to load the created wallet.');
       }
 
-      unlockWithKey(result.privateKey, {
-        ...createdWallet,
-        credentialId: result.credentialId,
-      });
+      unlockWithKey(result.privateKey, createdWallet);
 
       setWalletExists(true);
       setIsCreateDialogOpen(false);
       router.push('/dashboard');
     } catch (err) {
-      setCreateDialogError(
-        err instanceof Error ? err.message : 'Failed to create wallet.'
-      );
+      if (err instanceof PrfUnsupportedError) {
+        // Reveal the password fallback and ask the user to retry with a password.
+        setNeedsPasswordFallback(true);
+        setCreateDialogError(
+          '此设备/浏览器不支持安全的 passkey 钱包（PRF）。可设置一个密码作为备用方式继续（密码无法找回，请牢记）。'
+        );
+      } else {
+        setCreateDialogError(
+          err instanceof Error ? err.message : 'Failed to create wallet.'
+        );
+      }
     } finally {
       setPendingAction(null);
     }
@@ -610,6 +644,18 @@ function WelcomePageContent() {
     dismissErrorToast(true);
 
     try {
+      // Same-device re-login: unlock by the wallet's own scheme (prf-v1 or
+      // legacy). This also avoids the redundant recovery ceremony.
+      const existing = loadWallet();
+      if (existing?.credentialId) {
+        const privateKey = await unlockWalletKey(existing);
+        unlockWithKey(privateKey, existing);
+        setWalletExists(true);
+        router.push('/dashboard');
+        return;
+      }
+
+      // No local keystore (fresh device): legacy recovery path.
       const { recoverFullWallet } = await import(
         '@/wallet/key-management/recoverByPasskey'
       );
@@ -1277,6 +1323,22 @@ function WelcomePageContent() {
                 onChange={(event) => setInviteCodeInput(event.target.value.toUpperCase())}
                 placeholder="Enter invite code"
                 maxLength={8}
+                disabled={pendingAction === 'create'}
+                className={`mt-3 w-full rounded-2xl border px-4 py-4 text-base focus:outline-none focus:ring-2 focus:ring-[#d96eff]/18 disabled:cursor-not-allowed disabled:opacity-65 ${
+                  isLightMode
+                    ? 'border-[#151a27]/10 bg-white/78 text-[#171b24] placeholder:text-[#71798d] focus:border-[#d96eff]/22'
+                    : 'border-white/[0.12] bg-[rgba(255,255,255,0.04)] text-white placeholder:text-white/26 focus:border-[#d96eff]/34'
+                }`}
+                style={{ fontFamily: 'var(--font-space-grotesk)' }}
+              />
+            ) : null}
+            {needsPasswordFallback ? (
+              <input
+                id="fallback-password"
+                type="password"
+                value={passwordFallback}
+                onChange={(event) => setPasswordFallback(event.target.value)}
+                placeholder="设置钱包密码（≥8 位，无法找回）"
                 disabled={pendingAction === 'create'}
                 className={`mt-3 w-full rounded-2xl border px-4 py-4 text-base focus:outline-none focus:ring-2 focus:ring-[#d96eff]/18 disabled:cursor-not-allowed disabled:opacity-65 ${
                   isLightMode
